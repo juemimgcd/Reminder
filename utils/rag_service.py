@@ -6,12 +6,11 @@ from utils.prompt_builder import get_rag_prompt
 from utils.retriever import retrieve_documents
 
 
-async def format_docs(docs: list[LCDocument]) -> str:
+def format_docs(docs: list[LCDocument]) -> str:
+    sections: list[str] = []
 
-    section:list[str] = []
-
-    for index,doc in enumerate(docs):
-        section.append(
+    for index, doc in enumerate(docs, start=1):
+        sections.append(
             "\n".join(
                 [
                     f"[片段 {index}]",
@@ -24,15 +23,14 @@ async def format_docs(docs: list[LCDocument]) -> str:
             )
         )
 
-    return "\n\n".join(section)
+    return "\n\n".join(sections)
 
 
 
 
-async def build_sources(docs: list[LCDocument]) -> list[dict]:
-
-    sources:list[dict] = []
-    for index,doc in enumerate(docs):
+def build_sources(docs: list[LCDocument]) -> list[dict]:
+    sources: list[dict] = []
+    for doc in docs:
         sources.append(
             {
                 "document_id": doc.metadata.get("document_id"),
@@ -49,28 +47,28 @@ async def build_sources(docs: list[LCDocument]) -> list[dict]:
 
 async def generate_rag_answer(question: str, top_k: int = 4) -> dict:
 
-    res = await retrieve_documents(query=question,top_k=top_k)
-    if not res:
+    docs = await retrieve_documents(query=question, top_k=top_k)
+    if not docs:
         return {
             "answer": "我无法从已检索内容中找到相关答案。请先确认文档已经完成索引。",
             "sources": [],
         }
 
-    context = await format_docs(docs=res)
-    prompt = await get_rag_prompt()
+    context = format_docs(docs=docs)
+    prompt = get_rag_prompt()
     llm = get_llm()
     chain = prompt | llm | StrOutputParser()
 
     answer = await chain.ainvoke(
         {
-            "context":context,
-            "question":question
+            "context": context,
+            "question": question,
         }
     )
 
     return {
-        "answer":answer,
-        "sources":await build_sources(docs=res)
+        "answer": answer,
+        "sources": build_sources(docs=docs),
     }
 
 

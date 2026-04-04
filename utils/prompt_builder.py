@@ -1,9 +1,6 @@
 from langchain_core.prompts import ChatPromptTemplate
 
 
-
-
-
 # ```python
 # from langchain_core.prompts import ChatPromptTemplate
 #
@@ -35,8 +32,8 @@ from langchain_core.prompts import ChatPromptTemplate
 
 
 
-async def get_rag_prompt() -> ChatPromptTemplate:
-    return ChatPromptTemplate.from_messages(
+def get_rag_prompt() -> ChatPromptTemplate:
+    prompt = ChatPromptTemplate.from_messages(
         [
             (
                 "system",
@@ -50,6 +47,9 @@ async def get_rag_prompt() -> ChatPromptTemplate:
             ),
         ]
     )
+
+    return prompt
+
 
 
 

@@ -3,7 +3,7 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from conf.config import settings
 
 
-async def get_embeddings() -> HuggingFaceEmbeddings:
+def get_embeddings() -> HuggingFaceEmbeddings:
     return HuggingFaceEmbeddings(
         model_name=settings.EMBEDDING_MODEL_NAME,
         model_kwargs={"device": "cpu"},

@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from conf.config import settings
-from routers import health,documents
+from routers import documents, health, memory
 from utils.exceptions import BusinessException, business_exception_handler
 from utils.response import success_response
 from contextlib import asynccontextmanager
@@ -26,6 +26,7 @@ app.add_exception_handler(BusinessException, business_exception_handler)
 
 app.include_router(health.router)
 app.include_router(documents.router)
+app.include_router(memory.router)
 
 
 @app.get("/")
