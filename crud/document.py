@@ -59,6 +59,6 @@ async def update_document_status(
         return None
 
     doc.status = status
-
+    await db.flush()
     await db.refresh(doc)
     return doc

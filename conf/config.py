@@ -1,35 +1,49 @@
-import os
 from pathlib import Path
 
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-class Settings:
 
-    BASE_DIR = Path(__file__).resolve().parent.parent
+DEFAULT_BASE_DIR = Path(__file__).resolve().parent.parent
 
-    PROJECT_NAME = "Agentic RAG Assistant"
-    VERSION = "0.1.0"
-    DESCRIPTION = "一个基于 FastAPI 的 Agentic RAG 私有知识助手后端项目"
 
-    API_PREFIX = "/api/v1"
-
-    # Alembic 和应用本身都统一从这里拿数据库地址，避免两边各写各的。
-    DATABASE_URL = os.getenv(
-        "DATABASE_URL",
-        "postgresql+asyncpg://postgres:123456@localhost:5432/agentic",
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=(
+            DEFAULT_BASE_DIR / ".env",
+            DEFAULT_BASE_DIR / ".venv" / ".env",
+        ),
+        env_file_encoding="utf-8",
+        extra="ignore",
     )
 
-    # 先把存储目录约定好，后面 Day 3 上传文件时直接复用。
-    STORAGE_DIR = BASE_DIR / "storage"
-    RAW_FILE_DIR = STORAGE_DIR / "raw"
+    BASE_DIR: Path = DEFAULT_BASE_DIR
 
-    # 这里先把允许的上传类型和大小写死，后面再改成环境变量也不迟。
-    ALLOWED_EXTENSIONS = {".pdf", ".txt", ".md"}
-    MAX_FILE_SIZE = 10 * 1024 * 1024
+    PROJECT_NAME: str = "Agentic RAG Assistant"
+    VERSION: str = "0.1.0"
+    DESCRIPTION: str = "一个基于 FastAPI 的 Agentic RAG 私有知识助手后端项目"
 
-    EMBEDDING_MODEL_NAME = "sentence-transformers/all-mpnet-base-v2"
-    CHROMA_COLLECTION_NAME = "document_chunks"
-    CHROMA_PERSIST_DIR = STORAGE_DIR / "vector_store"
+    API_PREFIX: str = "/api/v1"
 
+    # 数据库地址默认给出本地开发值，同时允许通过 .env 完整覆盖。
+    DATABASE_URL: str = "postgresql+asyncpg://postgres:123456@localhost:5432/agentic"
+
+    # 这几个路径字段都可以在 .env 里单独改；如果不配，就用项目默认目录。
+    STORAGE_DIR: Path = DEFAULT_BASE_DIR / "storage"
+    RAW_FILE_DIR: Path = DEFAULT_BASE_DIR / "storage" / "raw"
+
+    # 如果你要在 .env 里覆盖 set/list 这类复杂类型，推荐写成 JSON：
+    # ALLOWED_EXTENSIONS=[".pdf",".txt",".md"]
+    ALLOWED_EXTENSIONS: set[str] = {".pdf", ".txt", ".md"}
+    MAX_FILE_SIZE: int = 10 * 1024 * 1024
+
+    EMBEDDING_MODEL_NAME: str = "sentence-transformers/all-mpnet-base-v2"
+    CHROMA_COLLECTION_NAME: str = "document_chunks"
+    CHROMA_PERSIST_DIR: Path = DEFAULT_BASE_DIR / "storage" / "vector_store"
+
+    DASHSCOPE_API_KEY: str = ""
+    LLM_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    LLM_MODEL_NAME: str = "qwen-plus"
+    LLM_TEMPERATURE: float = 0.0
 
 
 settings = Settings()

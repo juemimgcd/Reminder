@@ -1,5 +1,4 @@
 from pathlib import Path
-from fastapi import HTTPException
 from langchain_core.documents import Document as LCDocument
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 

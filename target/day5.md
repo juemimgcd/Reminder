@@ -17,6 +17,354 @@
 
 ---
 
+## Day 5 一图总览
+
+如果把 Day 5 压缩成一句话，它做的就是：
+
+> 把 Day 3 上传进来的文件、Day 4 切出来的文本块，真正变成“可检索的向量知识库”。
+
+你今天做的事情虽然看起来多，但本质上可以浓缩成这条主链路：
+
+```text
+find document
+-> load file
+-> split text
+-> save chunks
+-> embed chunks
+-> store vectors
+-> update status
+```
+
+也就是你说的这种思路：
+
+- `load`
+- `split`
+- `save`
+- `embed`
+- `store`
+- `update`
+
+如果再翻译成更工程化的说法，就是：
+
+- 路由层收请求
+- 编排层串流程
+- 基础能力层做具体工作
+- 数据层和向量层分别落库
+
+---
+
+## Day 5 整体架构
+
+### 先看最粗粒度的三层结构
+
+```mermaid
+flowchart TD
+    A[Router 层\nrouters/documents.py\nindex_document_api] --> B[Service 编排层\nutils/index_service.py\nindex_document]
+    B --> C1[Loader 层\nutils/file_loader.py\nload_langchain_documents]
+    B --> C2[Splitter 层\nutils/text_splitter.py\nsplit_documents]
+    B --> C3[Chunk 数据层\ncrud/chunk.py\ncreate_chunks]
+    B --> C4[Embedding 层\nutils/embeddings.py\nget_embeddings]
+    B --> C5[Vector Store 层\nutils/vector_store.py\nget_vector_store / add_documents_to_vector_store]
+    B --> C6[Document 数据层\ncrud/document.py\nget_document_by_id / update_document_status]
+```
+
+### 你要怎么理解这三层
+
+#### 第 1 层：Router 层
+
+只负责：
+
+- 接收 HTTP 请求
+- 校验最基本参数
+- 决定是否调用索引流程
+- 返回响应
+
+不负责：
+
+- 真正读文件
+- 真正切文本
+- 真正写向量库
+
+白话理解：
+
+Router 像前台接待，不像后厨。
+
+#### 第 2 层：Service 编排层
+
+只负责：
+
+- 按固定顺序把各个步骤串起来
+
+比如：
+
+- 先更新状态为 `indexing`
+- 再读文件
+- 再切 chunk
+- 再写 chunks 表
+- 再写向量库
+- 最后更新为 `indexed`
+
+白话理解：
+
+`utils/index_service.py` 就像总调度台。
+
+#### 第 3 层：能力层 / 数据层
+
+这些文件各自只做一件事：
+
+- `utils/file_loader.py`
+  - 负责读文件
+- `utils/text_splitter.py`
+  - 负责切 chunk
+- `crud/chunk.py`
+  - 负责写 chunk 表
+- `utils/embeddings.py`
+  - 负责提供 embedding 模型
+- `utils/vector_store.py`
+  - 负责向量库接入
+- `crud/document.py`
+  - 负责查文档、改状态
+
+这层的关键词是：
+
+> 各干各的，不互相越界
+
+---
+
+## Day 5 主链路流程图
+
+### 先看高层版
+
+```mermaid
+flowchart LR
+    A[POST /kb/documents/{document_id}/index] --> B[查 documents 表]
+    B --> C[load 文件正文]
+    C --> D[split 切分 chunk]
+    D --> E[写 chunks 表]
+    E --> F[生成 embedding]
+    F --> G[写入 Chroma]
+    G --> H[更新 documents.status = indexed]
+    H --> I[返回 chunk_count]
+```
+
+这张图对应的主线非常简单：
+
+- `load`
+- `split`
+- `save chunk`
+- `embed`
+- `store vector`
+- `update status`
+
+你现在可以把 Day 5 先看成是：
+
+> 从“文件存在”走到“文件可检索”
+
+---
+
+## Day 5 详细流程图
+
+### 这一版把函数也标出来
+
+```mermaid
+flowchart TD
+    A[客户端调用\nPOST /kb/documents/{document_id}/index] --> B[index_document_api\nrouters/documents.py]
+    B --> C[get_document_by_id\ncrud/document.py]
+    C --> D{文档存在吗?}
+    D -- 否 --> E[抛 404 业务异常]
+    D -- 是 --> F{状态允许索引吗?}
+    F -- 否 --> G[返回重复索引/处理中提示]
+    F -- 是 --> H[index_document\nutils/index_service.py]
+
+    H --> I[update_document_status('indexing')\ncrud/document.py]
+    H --> J[load_langchain_documents\nutils/file_loader.py]
+    J --> K[得到 LangChain Document 列表]
+    H --> L[split_documents\nutils/text_splitter.py]
+    L --> M[得到 chunk Document 列表]
+    H --> N[create_chunks\ncrud/chunk.py]
+    N --> O[chunks 表落库]
+    H --> P[add_documents_to_vector_store\nutils/vector_store.py]
+    P --> Q[get_vector_store\nutils/vector_store.py]
+    Q --> R[get_embeddings\nutils/embeddings.py]
+    R --> S[embedding 模型把 chunk 变向量]
+    S --> T[Chroma collection 落库]
+    H --> U[update_document_status('indexed')\ncrud/document.py]
+    U --> V[返回 document_id / chunk_count / status]
+    V --> W[success_response\n返回给客户端]
+```
+
+---
+
+## 每个函数在整个流程里到底干什么
+
+### 入口函数
+
+- 文件：[documents.py](/e:/python_files/agentic_rag/routers/documents.py)
+- 函数：`index_document_api`
+- 作用：
+  - 收到索引请求
+  - 查文档是否存在
+  - 判断能不能开始索引
+  - 调用 `index_document`
+  - 把结果包装成 API 响应
+
+### 流程总控函数
+
+- 文件：[index_service.py](/e:/python_files/agentic_rag/utils/index_service.py)
+- 函数：`index_document`
+- 作用：
+  - 这是 Day 5 最核心的函数
+  - 它不直接实现所有细节
+  - 它只是按顺序“调度别人干活”
+
+你可以把它记成：
+
+```text
+index_document
+-> update indexing
+-> load
+-> split
+-> save chunks
+-> add vector store
+-> update indexed
+```
+
+### 文件读取函数
+
+- 文件：[file_loader.py](/e:/python_files/agentic_rag/utils/file_loader.py)
+- 函数：`load_langchain_documents`
+- 作用：
+  - 根据 `file_type` 选 loader
+  - 读取原始文件
+  - 变成 LangChain `Document`
+  - 给 `metadata` 补上业务字段
+
+### 文本切分函数
+
+- 文件：[text_splitter.py](/e:/python_files/agentic_rag/utils/text_splitter.py)
+- 函数：`build_text_splitter`
+- 作用：
+  - 配置 chunk 大小
+  - 配置 overlap
+  - 配置中文分隔符
+
+- 文件：[text_splitter.py](/e:/python_files/agentic_rag/utils/text_splitter.py)
+- 函数：`split_documents`
+- 作用：
+  - 把 LangChain `Document` 切成 chunk
+  - 给 chunk 补 `chunk_id`、`chunk_index`、`page_no`、`start_offset`
+
+### chunk 数据落库函数
+
+- 文件：[chunk.py](/e:/python_files/agentic_rag/crud/chunk.py)
+- 函数：`create_chunks`
+- 作用：
+  - 把 chunk Document 变成 ORM `Chunk`
+  - 写入 `chunks` 表
+
+### embedding 提供函数
+
+- 文件：[embeddings.py](/e:/python_files/agentic_rag/utils/embeddings.py)
+- 函数：`get_embeddings`
+- 作用：
+  - 提供一个可复用的 embedding 模型实例
+
+### 向量库函数
+
+- 文件：[vector_store.py](/e:/python_files/agentic_rag/utils/vector_store.py)
+- 函数：`get_vector_store`
+- 作用：
+  - 创建或获取 Chroma collection
+
+- 文件：[vector_store.py](/e:/python_files/agentic_rag/utils/vector_store.py)
+- 函数：`add_documents_to_vector_store`
+- 作用：
+  - 把 chunk 文本交给 Chroma
+  - Chroma 再调用 embedding_function 生成向量并存储
+
+### 文档状态函数
+
+- 文件：[document.py](/e:/python_files/agentic_rag/crud/document.py)
+- 函数：`get_document_by_id`
+- 作用：
+  - 查文档是否存在
+
+- 文件：[document.py](/e:/python_files/agentic_rag/crud/document.py)
+- 函数：`update_document_status`
+- 作用：
+  - 把文档状态改成 `indexing`、`indexed` 或 `failed`
+
+---
+
+## Day 5 的双轨存储图
+
+### 这一张图专门解释“为什么要存两份”
+
+```mermaid
+flowchart TD
+    A[chunk Document 列表] --> B1[写入 chunks 表]
+    A --> B2[写入 Chroma]
+
+    B1 --> C1[给业务查原文]
+    B1 --> C2[给引用返回]
+    B1 --> C3[给 debug 排查]
+
+    B2 --> D1[给语义检索]
+    B2 --> D2[给 similarity_search]
+    B2 --> D3[给 retriever]
+```
+
+这张图你一定要看懂。
+
+同一份 chunk，会走两条轨道：
+
+- 轨道 1：落到 `chunks` 表
+- 轨道 2：落到向量库
+
+它们不是重复建设，而是职责不同。
+
+---
+
+## Day 5 的异常分支图
+
+### 这一张图帮你理解为什么要更新状态
+
+```mermaid
+flowchart TD
+    A[开始索引] --> B[status = indexing]
+    B --> C{中途是否失败?}
+    C -- 否 --> D[status = indexed]
+    C -- 是 --> E[status = failed]
+    D --> F[返回成功响应]
+    E --> G[返回失败响应]
+```
+
+这张图背后的核心思想是：
+
+- `uploaded`
+  - 只是上传完成
+- `indexing`
+  - 正在处理
+- `indexed`
+  - 真正可检索
+- `failed`
+  - 处理失败，等待重试或排查
+
+这就是为什么 Day 5 不只是“接个 embedding”那么简单。  
+它已经开始具备“像系统一样管理流程状态”的味道了。
+
+---
+
+## 你可以把 Day 5 背成这 5 句话
+
+1. Day 5 的核心不是模型回答问题，而是把 chunk 变成可检索的向量。
+2. `index_document_api` 是入口，`index_document` 是总调度。
+3. `load` 和 `split` 负责把原始文件变成标准 chunk。
+4. `chunks` 表和 Chroma 是两条并行存储轨道。
+5. `indexed` 这个状态，代表文档已经从“上传完成”升级成“可检索完成”。
+
+---
+
 ## 今天的 LangChain，要加倍详细地讲
 
 ## 第 1 层：先把 3 个角色彻底分开

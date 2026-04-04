@@ -107,13 +107,7 @@ async def index_document_api(
         document_id: str,
         db: AsyncSession = Depends(get_database),
 ):
-    # 你要做的事：
-    # 1. 根据 document_id 查文档
-    # 2. 如果文档不存在，抛 404
-    # 3. 如果文档已经是 indexed，可以选择直接返回或提示重复索引
-    # 4. 调用 index_document(db, document)
-    # 5. 如果索引出错，把状态改成 failed
-    # 6. 返回 success_response(...)
+
     doc = await get_document_by_id(db,document_id=document_id)
     if not doc:
         raise BusinessException(message="document not fund",status_code=404)

@@ -30,6 +30,7 @@ async def create_chunks(
             id=chunk.metadata["chunk_id"],
             document_id=document_id,
             chunk_index=chunk.metadata["chunk_index"],
+            content=content,
             page_no=chunk.metadata["page_no"],
             start_offset=start_offset,
             end_offset=end_offset
@@ -37,7 +38,7 @@ async def create_chunks(
         chunks.append(chunk_obj)
 
     db.add_all(chunks)
-    await db.refresh(chunks)
+    await db.flush()
 
     return chunks
 
