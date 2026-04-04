@@ -3,8 +3,7 @@ from pathlib import Path
 
 
 class Settings:
-    # `__file__` 是当前这个文件自己的路径。
-    # `parent.parent` 往上退两层，就能拿到项目根目录。
+
     BASE_DIR = Path(__file__).resolve().parent.parent
 
     PROJECT_NAME = "Agentic RAG Assistant"
@@ -26,6 +25,11 @@ class Settings:
     # 这里先把允许的上传类型和大小写死，后面再改成环境变量也不迟。
     ALLOWED_EXTENSIONS = {".pdf", ".txt", ".md"}
     MAX_FILE_SIZE = 10 * 1024 * 1024
+
+    EMBEDDING_MODEL_NAME = "sentence-transformers/all-mpnet-base-v2"
+    CHROMA_COLLECTION_NAME = "document_chunks"
+    CHROMA_PERSIST_DIR = STORAGE_DIR / "vector_store"
+
 
 
 settings = Settings()

@@ -38,3 +38,15 @@ class DocumentDetailItem(BaseModel):
 class DocumentListData(BaseModel):
     items: list[DocumentListItem]
     total: int
+
+
+
+class DocumentIndexData(BaseModel):
+    document_id: str
+    chunk_count: int
+    status: str
+
+
+
+
+
