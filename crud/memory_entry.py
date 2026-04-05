@@ -34,6 +34,34 @@ async def list_memory_entries_by_document_id(
     return list(res.scalars().all())
 
 
+async def list_memory_entries_by_knowledge_base_id(
+        db: AsyncSession,
+        *,
+        knowledge_base_id: str,
+) -> list[MemoryEntry]:
+    sql = (
+        select(MemoryEntry)
+        .where(MemoryEntry.knowledge_base_id == knowledge_base_id)
+        .order_by(MemoryEntry.created_at.asc())
+    )
+    res = await db.execute(sql)
+    return list(res.scalars().all())
+
+
+async def list_memory_entries_by_user_id(
+        db: AsyncSession,
+        *,
+        user_id: int,
+) -> list[MemoryEntry]:
+    sql = (
+        select(MemoryEntry)
+        .where(MemoryEntry.user_id == user_id)
+        .order_by(MemoryEntry.created_at.asc())
+    )
+    res = await db.execute(sql)
+    return list(res.scalars().all())
+
+
 
 
 

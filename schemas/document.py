@@ -4,6 +4,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class DocumentUploadData(BaseModel):
     document_id: str = Field(..., description="上传成功后的文档 ID")
+    user_id: int = Field(..., description="所属用户 ID")
+    knowledge_base_id: str = Field(..., description="所属知识库 ID")
     file_name: str
     file_type: str
     file_size: int
@@ -14,6 +16,8 @@ class DocumentListItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
+    user_id: int
+    knowledge_base_id: str
     file_name: str
     file_type: str
     status: str
@@ -24,7 +28,8 @@ class DocumentDetailItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
-    knowledge_base_id: str | None = None
+    user_id: int
+    knowledge_base_id: str
     file_name: str
     file_path: str
     file_type: str
@@ -43,6 +48,7 @@ class DocumentListData(BaseModel):
 
 class DocumentIndexData(BaseModel):
     document_id: str
+    knowledge_base_id: str
     chunk_count: int
     status: str
 

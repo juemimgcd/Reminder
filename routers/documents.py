@@ -2,11 +2,13 @@ from datetime import datetime
 from pathlib import Path
 import shutil
 import uuid
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, Form, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from conf.config import settings
 from conf.database import get_database
-from crud.document import create_document, list_documents,get_document_by_id,update_document_status
+from crud.document import create_document, get_document_by_id, list_documents, update_document_status
+from crud.knowledge_base import get_knowledge_base_by_id, get_or_create_default_knowledge_base
+from crud.user import get_user_by_id
 from schemas.document import DocumentListData, DocumentListItem, DocumentUploadData, DocumentIndexData
 from utils.exceptions import BusinessException
 from utils.response import success_response
@@ -27,9 +29,25 @@ async def ensure_storage_dir() -> Path:
 
 @router.post("/upload")
 async def upload_document(
+        user_id: int = Form(...),
+        knowledge_base_id: str | None = Form(default=None),
         file: UploadFile = File(...),
         db: AsyncSession = Depends(get_database),
 ):
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        raise BusinessException(message="用户不存在", code=4041, status_code=404)
+
+    knowledge_base = None
+    if knowledge_base_id:
+        knowledge_base = await get_knowledge_base_by_id(db, knowledge_base_id)
+        if not knowledge_base:
+            raise BusinessException(message="知识库不存在", code=4042, status_code=404)
+        if knowledge_base.user_id != user_id:
+            raise BusinessException(message="知识库不属于该用户", code=4007)
+    else:
+        knowledge_base = await get_or_create_default_knowledge_base(db, user_id=user_id)
+
     if not file.filename:
         raise BusinessException(message="上传失败，文件名不能为空", code=4001)
 
@@ -63,7 +81,8 @@ async def upload_document(
         document = await create_document(
             db,
             document_id=document_id,
-            knowledge_base_id=None,
+            user_id=user_id,
+            knowledge_base_id=knowledge_base.id,
             file_name=file_name,
             file_path=str(save_path),
             file_type=file_ext.lstrip("."),
@@ -78,6 +97,8 @@ async def upload_document(
     return success_response(
         data=DocumentUploadData(
             document_id=document.id,
+            user_id=document.user_id,
+            knowledge_base_id=document.knowledge_base_id,
             file_name=document.file_name,
             file_type=document.file_type,
             file_size=document.file_size,
@@ -88,8 +109,28 @@ async def upload_document(
 
 
 @router.get("")
-async def get_document_list(db: AsyncSession = Depends(get_database)):
-    documents = await list_documents(db)
+async def get_document_list(
+        user_id: int | None = None,
+        knowledge_base_id: str | None = None,
+        db: AsyncSession = Depends(get_database),
+):
+    if user_id:
+        user = await get_user_by_id(db, user_id)
+        if not user:
+            raise BusinessException(message="用户不存在", code=4041, status_code=404)
+
+    if knowledge_base_id:
+        knowledge_base = await get_knowledge_base_by_id(db, knowledge_base_id)
+        if not knowledge_base:
+            raise BusinessException(message="知识库不存在", code=4042, status_code=404)
+        if user_id and knowledge_base.user_id != user_id:
+            raise BusinessException(message="知识库不属于该用户", code=4007)
+
+    documents = await list_documents(
+        db,
+        user_id=user_id,
+        knowledge_base_id=knowledge_base_id,
+    )
     document_items = [
         DocumentListItem.model_validate(u)
         for u in documents
@@ -110,10 +151,13 @@ async def index_document_api(
 
     doc = await get_document_by_id(db,document_id=document_id)
     if not doc:
-        raise BusinessException(message="document not fund",status_code=404)
+        raise BusinessException(message="文档不存在", code=4043, status_code=404)
+
+    if doc.status == "indexing":
+        raise BusinessException(message="文档正在索引中，请稍后再试", code=4005)
 
     if doc.status == "indexed":
-        raise BusinessException(message="文档正在索引中，请稍后再试", code=4005)
+        raise BusinessException(message="文档已经完成索引", code=4008)
 
     try:
         result = await index_document(db, doc)

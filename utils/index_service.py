@@ -15,6 +15,8 @@ async def index_document(db: AsyncSession, document: Document) -> dict:
     docs = await load_langchain_documents(
         file_path=doc.file_path,
         file_type=doc.file_type,
+        user_id=doc.user_id,
+        knowledge_base_id=doc.knowledge_base_id,
         file_name=doc.file_name,
         document_id=doc.id
     )
@@ -31,6 +33,7 @@ async def index_document(db: AsyncSession, document: Document) -> dict:
 
     return {
         "document_id": document.id,
+        "knowledge_base_id": document.knowledge_base_id,
         "chunk_count": len(chunk_docs),
         "status": "indexed",
     }

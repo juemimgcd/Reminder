@@ -1,4 +1,4 @@
-from sqlalchemy import Float, ForeignKey, Index, String, Text
+from sqlalchemy import BigInteger, Float, ForeignKey, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from models.base import Base
@@ -7,12 +7,24 @@ from models.base import Base
 class MemoryEntry(Base):
     __tablename__ = "memory_entries"
     __table_args__ = (
+        Index("idx_memory_entries_user_id", "user_id"),
+        Index("idx_memory_entries_knowledge_base_id", "knowledge_base_id"),
         Index("idx_memory_entries_document_id", "document_id"),
         Index("idx_memory_entries_entry_type", "entry_type"),
         Index("idx_memory_entries_chunk_id", "chunk_id"),
     )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("users.id"),
+        nullable=False,
+    )
+    knowledge_base_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("knowledge_bases.id"),
+        nullable=False,
+    )
     document_id: Mapped[str] = mapped_column(
         String(64),
         ForeignKey("documents.id"),

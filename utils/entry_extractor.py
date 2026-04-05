@@ -31,6 +31,8 @@ async def extract_entries_from_chunk(doc: LCDocument) -> list[dict]:
         entries.append(
             {
                 "id": f"entry_{uuid.uuid4().hex[:12]}",
+                "user_id": doc.metadata.get("user_id"),
+                "knowledge_base_id": doc.metadata.get("knowledge_base_id"),
                 "document_id": doc.metadata.get("document_id"),
                 "chunk_id": doc.metadata.get("chunk_id"),
                 "page_no": doc.metadata.get("page_no"),

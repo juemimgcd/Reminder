@@ -14,6 +14,7 @@ def format_docs(docs: list[LCDocument]) -> str:
             "\n".join(
                 [
                     f"[片段 {index}]",
+                    f"knowledge_base_id={doc.metadata.get('knowledge_base_id')}",
                     f"document_id={doc.metadata.get('document_id')}",
                     f"chunk_id={doc.metadata.get('chunk_id')}",
                     f"page_no={doc.metadata.get('page_no')}",
@@ -33,6 +34,7 @@ def build_sources(docs: list[LCDocument]) -> list[dict]:
     for doc in docs:
         sources.append(
             {
+                "knowledge_base_id": doc.metadata.get("knowledge_base_id"),
                 "document_id": doc.metadata.get("document_id"),
                 "chunk_id": doc.metadata.get("chunk_id"),
                 "page_no": doc.metadata.get("page_no"),
@@ -45,9 +47,20 @@ def build_sources(docs: list[LCDocument]) -> list[dict]:
 
 
 
-async def generate_rag_answer(question: str, top_k: int = 4) -> dict:
+async def generate_rag_answer(
+        question: str,
+        *,
+        knowledge_base_id: str,
+        user_id: int | None = None,
+        top_k: int = 4,
+) -> dict:
 
-    docs = await retrieve_documents(query=question, top_k=top_k)
+    docs = await retrieve_documents(
+        query=question,
+        top_k=top_k,
+        user_id=user_id,
+        knowledge_base_id=knowledge_base_id,
+    )
     if not docs:
         return {
             "answer": "我无法从已检索内容中找到相关答案。请先确认文档已经完成索引。",
