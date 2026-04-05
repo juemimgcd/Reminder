@@ -265,6 +265,98 @@ flowchart LR
 
 ---
 
+## 环境变量
+
+项目配置现在统一从仓库根目录的 `.env` 读取。  
+你可以先复制一份示例文件：
+
+```bash
+cp .env-example .env
+```
+
+Windows PowerShell 可以用：
+
+```powershell
+Copy-Item .env-example .env
+```
+
+最关键的变量包括：
+
+- `DATABASE_URL`
+- `DASHSCOPE_API_KEY`
+- `JWT_SECRET`
+- `CHROMA_PERSIST_DIR`
+- `RAW_FILE_DIR`
+
+如果你使用 `docker compose`，Compose 也会读取同一个 `.env`，并为应用容器自动把数据库主机改成 `postgres` 服务名。
+
+如果 Docker 构建时下载 Python 依赖不稳定，还可以在 `.env` 里额外调整：
+
+- `PYTHON_VERSION=3.12`
+- `PIP_INDEX_URL=https://pypi.org/simple`
+- `PIP_EXTRA_INDEX_URL=`
+
+如果你当前网络访问 PyPI 不稳定，可以把 `PIP_INDEX_URL` 改成你更顺手的镜像源。
+
+---
+
+## 本地启动
+
+1. 创建并激活虚拟环境
+2. 安装依赖：`pip install -r requirements.txt`
+3. 复制 `.env-example` 为 `.env` 并补齐你的真实配置
+4. 准备 PostgreSQL 数据库
+5. 执行迁移：`alembic upgrade head`
+6. 启动服务：`uvicorn main:app --reload`
+
+服务启动后，默认访问地址：
+
+- API: `http://127.0.0.1:8000`
+- Swagger: `http://127.0.0.1:8000/docs`
+
+---
+
+## Docker 部署
+
+项目已经补齐了容器化文件：
+
+- `Dockerfile`
+- `docker-compose.yml`
+- `.dockerignore`
+
+启动方式：
+
+```bash
+docker compose up --build
+```
+
+如果构建阶段下载依赖频繁中断，可以先在 `.env` 里设置镜像源后再重试，例如：
+
+```env
+PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+```
+
+这会启动：
+
+- `mneme-postgres`：PostgreSQL 数据库
+- `mneme-app`：FastAPI 应用服务
+
+默认端口：
+
+- 应用：`8000`
+- 数据库：`${POSTGRES_PORT}`
+
+容器启动时会先执行：
+
+```bash
+alembic upgrade head
+```
+
+然后再启动 `uvicorn`。  
+向量库和原始文件目录会通过 `./storage` 挂载到容器内，避免重建镜像时丢失数据。
+
+---
+
 ## 项目愿景
 
 如果未来这个项目真的能长成它应该长成的样子，  

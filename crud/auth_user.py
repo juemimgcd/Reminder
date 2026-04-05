@@ -6,6 +6,12 @@ from crud.user import get_user_by_id
 from models.user import DEFAULT_USER_AVATAR_URL, User
 
 
+def ensure_utc_datetime(value: datetime) -> datetime:
+    if value.tzinfo is None or value.utcoffset() is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
 async def create_user_account(
         db: AsyncSession,
         *,
@@ -37,7 +43,8 @@ async def update_user_last_login_at(
     if not user:
         return None
 
-    user.last_login_at = login_at or datetime.now(UTC)
+    current_login_at = login_at or datetime.now(UTC)
+    user.last_login_at = ensure_utc_datetime(current_login_at)
 
     await db.flush()
     await db.refresh(user)

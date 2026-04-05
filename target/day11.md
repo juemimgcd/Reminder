@@ -344,7 +344,25 @@ class GrowthReportResult(BaseModel):
 - 明确要求看最近变化
 - 明确要求控制结论强度
 
-推荐骨架：
+### `utils/growth_prompt.py` 练手骨架版
+
+```python
+from langchain_core.prompts import ChatPromptTemplate
+
+
+def get_growth_report_prompt(format_instructions: str) -> ChatPromptTemplate:
+    # 你要做的事：
+    # 1. 用 ChatPromptTemplate.from_messages(...)
+    # 2. 准备一个 system 消息
+    # 3. 明确告诉模型：输入包含长期画像、较早阶段、最近阶段
+    # 4. 明确告诉模型：重点看变化，不要只做重复总结
+    # 5. 明确告诉模型：不能编造经历，不能下过重结论
+    # 6. 在 human 消息里至少包含 user_id、knowledge_base_id、growth_input_text
+    # 7. 把 format_instructions 拼进去，约束输出结构
+    raise NotImplementedError("先自己实现 get_growth_report_prompt")
+```
+
+### `utils/growth_prompt.py` 参考答案
 
 ```python
 from langchain_core.prompts import ChatPromptTemplate
@@ -382,7 +400,14 @@ def split_timeline_by_recent_days(
         timeline: list[dict],
         recent_days: int = 30,
 ) -> tuple[list[dict], list[dict]]:
-    ...
+    # 你要做的事：
+    # 1. 如果 timeline 为空，直接返回两个空列表
+    # 2. 找到最新时间点 latest_time
+    # 3. 计算 cutoff = latest_time - timedelta(days=recent_days)
+    # 4. 把 timeline 切成 earlier / recent 两段
+    # 5. 如果 earlier 为空且样本够多，就退化成前半段 / 后半段
+    # 6. 返回 (earlier, recent)
+    raise NotImplementedError("先自己实现 split_timeline_by_recent_days")
 ```
 
 ### 第二段：构造输入
@@ -395,7 +420,14 @@ def build_growth_input(
         profile: dict,
         recent_days: int,
 ) -> str:
-    ...
+    # 你要做的事：
+    # 1. 调 split_timeline_by_recent_days(...)
+    # 2. 组装一个统一 payload，至少包含 knowledge_base_id、recent_days、profile、earlier_timeline、recent_timeline
+    # 3. 用 json.dumps(...) 转成字符串
+    # 4. ensure_ascii=False，保证中文可读
+    # 5. default=str，避免 datetime 序列化报错
+    # 6. indent=2，方便调试
+    raise NotImplementedError("先自己实现 build_growth_input")
 ```
 
 ### 第三段：生成报告
@@ -409,7 +441,16 @@ async def build_growth_report(
         profile: dict,
         recent_days: int = 30,
 ) -> dict:
-    ...
+    # 你要做的事：
+    # 1. 创建 PydanticOutputParser
+    # 2. 获取 format_instructions
+    # 3. 调 get_growth_report_prompt(...)
+    # 4. 调 build_growth_input(...)
+    # 5. 获取 llm
+    # 6. 组装 chain = prompt | llm | parser
+    # 7. 调 chain.ainvoke({...})，传入 user_id、knowledge_base_id、growth_input_text
+    # 8. 返回 result.model_dump()
+    raise NotImplementedError("先自己实现 build_growth_report")
 ```
 
 推荐主流程：
@@ -419,6 +460,101 @@ async def build_growth_report(
 3. `json.dumps(..., ensure_ascii=False, default=str, indent=2)`
 4. `prompt | llm | parser`
 5. 返回 `result.model_dump()`
+
+### `utils/growth_analyzer.py` 参考答案
+
+```python
+import json
+from datetime import timedelta
+
+from langchain_core.output_parsers import PydanticOutputParser
+
+from schemas.growth_report import GrowthReportResult
+from utils.growth_prompt import get_growth_report_prompt
+from utils.llm import get_llm
+
+
+def split_timeline_by_recent_days(
+        timeline: list[dict],
+        recent_days: int = 30,
+) -> tuple[list[dict], list[dict]]:
+    if not timeline:
+        return [], []
+
+    latest_time = max(item["created_at"] for item in timeline)
+    cutoff = latest_time - timedelta(days=recent_days)
+
+    earlier = [item for item in timeline if item["created_at"] < cutoff]
+    recent = [item for item in timeline if item["created_at"] >= cutoff]
+
+    if not earlier and len(timeline) >= 4:
+        middle = len(timeline) // 2
+        earlier = timeline[:middle]
+        recent = timeline[middle:]
+
+    return earlier, recent
+
+
+def build_growth_input(
+        *,
+        knowledge_base_id: str,
+        memory_library: dict,
+        profile: dict,
+        recent_days: int,
+) -> str:
+    earlier, recent = split_timeline_by_recent_days(
+        memory_library["timeline"],
+        recent_days=recent_days,
+    )
+
+    payload = {
+        "knowledge_base_id": knowledge_base_id,
+        "recent_days": recent_days,
+        "profile": profile,
+        "earlier_timeline": earlier,
+        "recent_timeline": recent,
+    }
+
+    return json.dumps(
+        payload,
+        ensure_ascii=False,
+        default=str,
+        indent=2,
+    )
+
+
+async def build_growth_report(
+        *,
+        user_id: int,
+        knowledge_base_id: str,
+        memory_library: dict,
+        profile: dict,
+        recent_days: int = 30,
+) -> dict:
+    parser = PydanticOutputParser(pydantic_object=GrowthReportResult)
+    instructions = parser.get_format_instructions()
+
+    prompt = get_growth_report_prompt(format_instructions=instructions)
+    llm = get_llm()
+    chain = prompt | llm | parser
+
+    result = await chain.ainvoke(
+        {
+            "user_id": user_id,
+            "knowledge_base_id": knowledge_base_id,
+            "growth_input_text": build_growth_input(
+                knowledge_base_id=knowledge_base_id,
+                memory_library=memory_library,
+                profile=profile,
+                recent_days=recent_days,
+            ),
+        }
+    )
+
+    payload = result.model_dump()
+    payload["knowledge_base_id"] = knowledge_base_id
+    return payload
+```
 
 ## 16:20 - 17:00：补阶段分析路由
 
@@ -433,6 +569,48 @@ GET /analysis/knowledge-bases/{knowledge_base_id}/growth?recent_days=30
 Authorization: Bearer <token>
 ```
 
+### `routers/analysis.py` 练手骨架版
+
+```python
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from conf.database import get_database
+from crud.knowledge_base import get_knowledge_base_by_id
+from crud.memory_entry import list_memory_entries_by_knowledge_base_id
+from models.user import User
+from schemas.growth_report import GrowthReportResult
+from utils.auth import get_current_user
+from utils.growth_analyzer import build_growth_report
+from utils.memory_organizer import build_memory_library
+from utils.profile_builder import build_personal_profile
+from utils.response import success_response
+
+
+router = APIRouter(prefix="/analysis", tags=["analysis"])
+
+
+@router.get("/knowledge-bases/{knowledge_base_id}/growth")
+async def get_growth_report(
+        knowledge_base_id: str,
+        recent_days: int = 30,
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_database),
+):
+    # 你要做的事：
+    # 1. 查询 knowledge_base
+    # 2. 判断 knowledge_base 是否存在
+    # 3. 校验 knowledge_base.user_id == current_user.id
+    # 4. 读取该知识库下的 memory entries
+    # 5. 转成 build_memory_library(...) 需要的 dict 列表
+    # 6. 调 build_memory_library(entries)
+    # 7. 调 await build_personal_profile(...)
+    # 8. 调 await build_growth_report(...)
+    # 9. 用 GrowthReportResult 校验结果
+    # 10. return success_response(data=data)
+    raise NotImplementedError("先自己实现 get_growth_report")
+```
+
 推荐内部流程：
 
 1. `Depends(get_current_user)`
@@ -442,6 +620,75 @@ Authorization: Bearer <token>
 5. `build_personal_profile(...)`
 6. `build_growth_report(...)`
 7. 返回 `GrowthReportResult`
+
+### `routers/analysis.py` 参考答案
+
+```python
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from conf.database import get_database
+from crud.knowledge_base import get_knowledge_base_by_id
+from crud.memory_entry import list_memory_entries_by_knowledge_base_id
+from models.user import User
+from schemas.growth_report import GrowthReportResult
+from utils.auth import get_current_user
+from utils.exceptions import BusinessException
+from utils.growth_analyzer import build_growth_report
+from utils.memory_organizer import build_memory_library
+from utils.profile_builder import build_personal_profile
+from utils.response import success_response
+
+
+router = APIRouter(prefix="/analysis", tags=["analysis"])
+
+
+@router.get("/knowledge-bases/{knowledge_base_id}/growth")
+async def get_growth_report(
+        knowledge_base_id: str,
+        recent_days: int = 30,
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_database),
+):
+    knowledge_base = await get_knowledge_base_by_id(db, knowledge_base_id)
+    if not knowledge_base:
+        raise BusinessException(message="知识库不存在", code=4042, status_code=404)
+    if knowledge_base.user_id != current_user.id:
+        raise BusinessException(message="知识库不属于当前用户", code=4007)
+
+    rows = await list_memory_entries_by_knowledge_base_id(
+        db,
+        knowledge_base_id=knowledge_base_id,
+    )
+
+    entries = [
+        {
+            "id": item.id,
+            "entry_name": item.entry_name,
+            "entry_type": item.entry_type,
+            "summary": item.summary,
+            "created_at": item.created_at,
+        }
+        for item in rows
+    ]
+
+    memory_library = build_memory_library(entries)
+    profile = await build_personal_profile(
+        user_id=current_user.id,
+        knowledge_base_id=knowledge_base_id,
+        memory_library=memory_library,
+    )
+    report = await build_growth_report(
+        user_id=current_user.id,
+        knowledge_base_id=knowledge_base_id,
+        memory_library=memory_library,
+        profile=profile,
+        recent_days=recent_days,
+    )
+    data = GrowthReportResult(**report)
+
+    return success_response(data=data)
+```
 
 ## 17:00 - 17:40：做一个最小调试脚本
 
@@ -456,6 +703,32 @@ Authorization: Bearer <token>
 - `theme_changes` 是否站得住
 - `highlights` 和 `blockers` 是否真的贴着输入内容
 
+### `scripts/debug_day11.py` 练手骨架版
+
+```python
+import asyncio
+
+from utils.growth_analyzer import build_growth_report
+from utils.profile_builder import build_personal_profile
+
+
+async def main():
+    # 你要做的事：
+    # 1. 准备一个最小 memory_library 模拟对象
+    # 2. 先调 build_personal_profile(...) 拿到长期画像
+    # 3. 再调 build_growth_report(...)
+    # 4. 打印 analysis_window
+    # 5. 打印 stage_summary
+    # 6. 打印 theme_changes
+    # 7. 打印 highlights
+    # 8. 打印 next_actions
+    raise NotImplementedError("先自己实现 main")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
 建议至少打印：
 
 - `analysis_window`
@@ -463,6 +736,107 @@ Authorization: Bearer <token>
 - `theme_changes`
 - `highlights`
 - `next_actions`
+
+### `scripts/debug_day11.py` 参考答案
+
+```python
+import asyncio
+from datetime import datetime
+
+from utils.growth_analyzer import build_growth_report
+from utils.profile_builder import build_personal_profile
+
+
+memory_library = {
+    "timeline": [
+        {
+            "entry_id": "entry_001",
+            "entry_name": "Java 后端开发",
+            "entry_type": "ability",
+            "summary": "早期主要在 Java 后端方向积累经验",
+            "created_at": datetime(2026, 2, 1, 10, 0, 0),
+        },
+        {
+            "entry_id": "entry_002",
+            "entry_name": "个人成长记录",
+            "entry_type": "theme",
+            "summary": "持续进行成长复盘与阶段总结",
+            "created_at": datetime(2026, 2, 15, 10, 0, 0),
+        },
+        {
+            "entry_id": "entry_003",
+            "entry_name": "FastAPI 后端开发",
+            "entry_type": "ability",
+            "summary": "最近开始深入使用 FastAPI 构建 AI 后端",
+            "created_at": datetime(2026, 3, 25, 10, 0, 0),
+        },
+        {
+            "entry_id": "entry_004",
+            "entry_name": "Agentic RAG",
+            "entry_type": "theme",
+            "summary": "最近持续关注 Agentic RAG 与记忆系统",
+            "created_at": datetime(2026, 4, 2, 10, 0, 0),
+        },
+    ],
+    "by_type": {
+        "ability": ["Java 后端开发", "FastAPI 后端开发"],
+        "theme": ["个人成长记录", "Agentic RAG"],
+    },
+    "by_theme": [
+        {
+            "theme_name": "个人成长记录",
+            "entries": ["持续进行成长复盘与阶段总结"],
+            "count": 1,
+        },
+        {
+            "theme_name": "Agentic RAG",
+            "entries": ["最近持续关注 Agentic RAG 与记忆系统"],
+            "count": 1,
+        },
+    ],
+}
+
+
+async def main():
+    profile = await build_personal_profile(
+        user_id=1,
+        knowledge_base_id="kb_demo_001",
+        memory_library=memory_library,
+    )
+    report = await build_growth_report(
+        user_id=1,
+        knowledge_base_id="kb_demo_001",
+        memory_library=memory_library,
+        profile=profile,
+        recent_days=30,
+    )
+
+    print("analysis_window")
+    print(report["analysis_window"])
+    print()
+
+    print("stage_summary")
+    print(report["stage_summary"])
+    print()
+
+    print("theme_changes")
+    for item in report["theme_changes"]:
+        print(item)
+    print()
+
+    print("highlights")
+    for item in report["highlights"]:
+        print(item)
+    print()
+
+    print("next_actions")
+    for item in report["next_actions"]:
+        print(item)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
 
 ## 17:40 - 18:00：给 Day 12 留下产品化入口
 

@@ -15,6 +15,7 @@ async def build_text_splitter() -> RecursiveCharacterTextSplitter:
     )
 
 
+
 async def split_documents(
         *,
         document_id: str,

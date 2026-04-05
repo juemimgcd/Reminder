@@ -30,7 +30,11 @@ class User(Base):
         default=DEFAULT_USER_AVATAR_URL,
         comment="头像地址",
     )
-    last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="最近登录时间")
+    last_login_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="最近登录时间",
+    )
 
     def __repr__(self) -> str:
         return f"<User(id={self.id}, username='{self.username}')>"

@@ -4,7 +4,7 @@ from fastapi import FastAPI
 
 from conf.config import settings
 from conf.database import engine
-from routers import auth, chat, documents, health, memory, users
+from routers import auth, chat, documents, health, memory, users,advice,companion,profile,analysis
 from utils.exceptions import BusinessException, business_exception_handler
 from utils.response import success_response
 
@@ -32,6 +32,12 @@ app.include_router(users.router)
 app.include_router(documents.router)
 app.include_router(chat.router)
 app.include_router(memory.router)
+app.include_router(advice.router)
+app.include_router(analysis.router)
+app.include_router(profile.router)
+app.include_router(companion.router)
+
+
 
 
 @app.get("/")

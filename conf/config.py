@@ -9,10 +9,9 @@ DEFAULT_BASE_DIR = Path(__file__).resolve().parent.parent
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=(
-            DEFAULT_BASE_DIR / ".env",
-            DEFAULT_BASE_DIR / ".venv" / ".env",
-        ),
+        # 本地开发统一从项目根目录 .env 读取；
+        # 容器环境下则优先读取注入进进程的环境变量。
+        env_file=DEFAULT_BASE_DIR / ".env",
         env_file_encoding="utf-8",
         extra="ignore",
     )

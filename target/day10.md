@@ -78,7 +78,7 @@ flowchart TD
     F --> G[get_llm]
     G --> H[PydanticOutputParser]
     H --> I[PersonalProfileResult]
-    I --> J[/profile 路由返回]
+    I --> J[profile 路由返回]
 ```
 
 ### 你要怎么理解这张图
@@ -364,7 +364,24 @@ class PersonalProfileResult(BaseModel):
 - 先看长期主题，再看能力轮廓
 - 输出必须严格结构化
 
-推荐骨架：
+### `utils/profile_prompt.py` 练手骨架版
+
+```python
+from langchain_core.prompts import ChatPromptTemplate
+
+
+def get_profile_prompt(format_instructions: str) -> ChatPromptTemplate:
+    # 你要做的事：
+    # 1. 用 ChatPromptTemplate.from_messages(...)
+    # 2. 准备一个 system 消息
+    # 3. 明确告诉模型：输入是知识库级 memory library
+    # 4. 明确告诉模型：只能基于输入内容做判断，不能编造
+    # 5. 在 human 消息里至少包含 user_id、knowledge_base_id、memory_library_text
+    # 6. 把 format_instructions 拼进去，约束输出结构
+    raise NotImplementedError("先自己实现 get_profile_prompt")
+```
+
+### `utils/profile_prompt.py` 参考答案
 
 ```python
 from langchain_core.prompts import ChatPromptTemplate
@@ -400,7 +417,12 @@ def get_profile_prompt(format_instructions: str) -> ChatPromptTemplate:
 
 ```python
 def build_profile_input(memory_library: dict) -> str:
-    ...
+    # 你要做的事：
+    # 1. 把 memory_library 转成 json 字符串
+    # 2. ensure_ascii=False，保证中文可读
+    # 3. default=str，避免 datetime 序列化报错
+    # 4. indent=2，方便调试时肉眼检查
+    raise NotImplementedError("先自己实现 build_profile_input")
 
 
 async def build_personal_profile(
@@ -409,7 +431,16 @@ async def build_personal_profile(
         knowledge_base_id: str,
         memory_library: dict,
 ) -> dict:
-    ...
+    # 你要做的事：
+    # 1. 创建 PydanticOutputParser
+    # 2. 获取 format_instructions
+    # 3. 调 get_profile_prompt(...)
+    # 4. 调 build_profile_input(memory_library)
+    # 5. 获取 llm
+    # 6. 组装 chain = prompt | llm | parser
+    # 7. 调 chain.ainvoke({...})，传入 user_id、knowledge_base_id、memory_library_text
+    # 8. 返回 result.model_dump()
+    raise NotImplementedError("先自己实现 build_personal_profile")
 ```
 
 推荐主流程：
@@ -419,6 +450,54 @@ async def build_personal_profile(
 3. `json.dumps(memory_library, ensure_ascii=False, default=str, indent=2)`
 4. `prompt | llm | parser`
 5. 返回 `result.model_dump()`
+
+### `utils/profile_builder.py` 参考答案
+
+```python
+import json
+
+from langchain_core.output_parsers import PydanticOutputParser
+
+from schemas.profile import PersonalProfileResult
+from utils.llm import get_llm
+from utils.profile_prompt import get_profile_prompt
+
+
+def build_profile_input(memory_library: dict) -> str:
+    return json.dumps(
+        memory_library,
+        ensure_ascii=False,
+        default=str,
+        indent=2,
+    )
+
+
+async def build_personal_profile(
+        *,
+        user_id: int,
+        knowledge_base_id: str,
+        memory_library: dict,
+) -> dict:
+    parser = PydanticOutputParser(pydantic_object=PersonalProfileResult)
+    instructions = parser.get_format_instructions()
+
+    prompt = get_profile_prompt(format_instructions=instructions)
+    llm = get_llm()
+    chain = prompt | llm | parser
+
+    result = await chain.ainvoke(
+        {
+            "user_id": user_id,
+            "knowledge_base_id": knowledge_base_id,
+            "memory_library_text": build_profile_input(memory_library),
+        }
+    )
+
+    payload = result.model_dump()
+    payload["knowledge_base_id"] = knowledge_base_id
+    payload["entry_count"] = len(memory_library.get("timeline", []))
+    return payload
+```
 
 ## 16:20 - 17:00：补画像路由
 
@@ -452,7 +531,17 @@ async def get_personal_profile(
         current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_database),
 ):
-    ...
+    # 你要做的事：
+    # 1. 查询 knowledge_base
+    # 2. 判断 knowledge_base 是否存在
+    # 3. 校验 knowledge_base.user_id == current_user.id
+    # 4. 读取该知识库下的 memory entries
+    # 5. 转成 build_memory_library(...) 需要的 dict 列表
+    # 6. 调 build_memory_library(entries)
+    # 7. 调 await build_personal_profile(...)
+    # 8. 用 PersonalProfileResult 校验结果
+    # 9. return success_response(data=data)
+    raise NotImplementedError("先自己实现 get_personal_profile")
 ```
 
 路由里你今天一定要做的事：
@@ -464,6 +553,66 @@ async def get_personal_profile(
 5. `await build_personal_profile(...)`
 6. 返回 `PersonalProfileResult`
 
+### `routers/profile.py` 参考答案
+
+```python
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from conf.database import get_database
+from crud.knowledge_base import get_knowledge_base_by_id
+from crud.memory_entry import list_memory_entries_by_knowledge_base_id
+from models.user import User
+from schemas.profile import PersonalProfileResult
+from utils.auth import get_current_user
+from utils.exceptions import BusinessException
+from utils.memory_organizer import build_memory_library
+from utils.profile_builder import build_personal_profile
+from utils.response import success_response
+
+
+router = APIRouter(prefix="/profile", tags=["profile"])
+
+
+@router.get("/knowledge-bases/{knowledge_base_id}")
+async def get_personal_profile(
+        knowledge_base_id: str,
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_database),
+):
+    knowledge_base = await get_knowledge_base_by_id(db, knowledge_base_id)
+    if not knowledge_base:
+        raise BusinessException(message="知识库不存在", code=4042, status_code=404)
+    if knowledge_base.user_id != current_user.id:
+        raise BusinessException(message="知识库不属于当前用户", code=4007)
+
+    rows = await list_memory_entries_by_knowledge_base_id(
+        db,
+        knowledge_base_id=knowledge_base_id,
+    )
+
+    entries = [
+        {
+            "id": item.id,
+            "entry_name": item.entry_name,
+            "entry_type": item.entry_type,
+            "summary": item.summary,
+            "created_at": item.created_at,
+        }
+        for item in rows
+    ]
+
+    memory_library = build_memory_library(entries)
+    profile = await build_personal_profile(
+        user_id=current_user.id,
+        knowledge_base_id=knowledge_base_id,
+        memory_library=memory_library,
+    )
+    data = PersonalProfileResult(**profile)
+
+    return success_response(data=data)
+```
+
 ## 17:00 - 17:40：做一个最小调试脚本
 
 建议文件：
@@ -473,12 +622,117 @@ async def get_personal_profile(
 今天脚本不要再喂“单文档输入”了，  
 而要喂一个“知识库级 memory library 模拟对象”。
 
+### `scripts/debug_day10.py` 练手骨架版
+
+```python
+import asyncio
+
+from utils.profile_builder import build_personal_profile
+
+
+async def main():
+    # 你要做的事：
+    # 1. 准备一个最小 memory_library 模拟对象
+    # 2. 传入 user_id、knowledge_base_id
+    # 3. 调 build_personal_profile(...)
+    # 4. 打印 profile_summary
+    # 5. 打印 main_themes
+    # 6. 打印 ability_tags
+    # 7. 打印 growth_focus
+    raise NotImplementedError("先自己实现 main")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
 建议至少打印：
 
 - `profile_summary`
 - `main_themes`
 - `ability_tags`
 - `growth_focus`
+
+### `scripts/debug_day10.py` 参考答案
+
+```python
+import asyncio
+from datetime import datetime
+
+from utils.profile_builder import build_personal_profile
+
+
+memory_library = {
+    "timeline": [
+        {
+            "entry_id": "entry_001",
+            "entry_name": "FastAPI 后端开发",
+            "entry_type": "ability",
+            "summary": "有 FastAPI 后端开发经验",
+            "created_at": datetime(2026, 4, 1, 10, 0, 0),
+        },
+        {
+            "entry_id": "entry_002",
+            "entry_name": "个人成长记录",
+            "entry_type": "theme",
+            "summary": "长期关注成长、复盘与记录",
+            "created_at": datetime(2026, 4, 2, 10, 0, 0),
+        },
+        {
+            "entry_id": "entry_003",
+            "entry_name": "知识管理",
+            "entry_type": "theme",
+            "summary": "希望把个人内容沉淀为长期可用的记忆库",
+            "created_at": datetime(2026, 4, 3, 10, 0, 0),
+        },
+    ],
+    "by_type": {
+        "ability": ["FastAPI 后端开发"],
+        "theme": ["个人成长记录", "知识管理"],
+    },
+    "by_theme": [
+        {
+            "theme_name": "个人成长记录",
+            "entries": ["长期关注成长、复盘与记录"],
+            "count": 1,
+        },
+        {
+            "theme_name": "知识管理",
+            "entries": ["希望把个人内容沉淀为长期可用的记忆库"],
+            "count": 1,
+        },
+    ],
+}
+
+
+async def main():
+    profile = await build_personal_profile(
+        user_id=1,
+        knowledge_base_id="kb_demo_001",
+        memory_library=memory_library,
+    )
+
+    print("profile_summary")
+    print(profile["profile_summary"])
+    print()
+
+    print("main_themes")
+    for item in profile["main_themes"]:
+        print(item)
+    print()
+
+    print("ability_tags")
+    for item in profile["ability_tags"]:
+        print(item)
+    print()
+
+    print("growth_focus")
+    print(profile["growth_focus"])
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
 
 ## 17:40 - 18:00：给 Day 11 留下明确交接
 
