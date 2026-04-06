@@ -33,7 +33,9 @@ async def extract_entries_from_chunk(doc: LCDocument) -> list[dict]:
                 "id": f"entry_{uuid.uuid4().hex[:12]}",
                 "user_id": doc.metadata.get("user_id"),
                 "knowledge_base_id": doc.metadata.get("knowledge_base_id"),
+                "knowledge_base_pk": doc.metadata.get("knowledge_base_pk"),
                 "document_id": doc.metadata.get("document_id"),
+                "document_pk": doc.metadata.get("document_pk"),
                 "chunk_id": doc.metadata.get("chunk_id"),
                 "page_no": doc.metadata.get("page_no"),
                 "entry_name": item.entry_name,
@@ -43,6 +45,7 @@ async def extract_entries_from_chunk(doc: LCDocument) -> list[dict]:
                 "importance_score": item.importance_score,
             }
         )
+        
     return entries
 
 

@@ -11,7 +11,9 @@ async def load_langchain_documents(
         file_type: str,
         user_id: int,
         knowledge_base_id: str,
+        knowledge_base_pk: int,
         document_id: str,
+        document_pk: int,
         file_name: str,
 ) -> list[LCDocument]:
 
@@ -33,7 +35,9 @@ async def load_langchain_documents(
     for doc in docs:
         doc.metadata["user_id"] = user_id
         doc.metadata["knowledge_base_id"] = knowledge_base_id
+        doc.metadata["knowledge_base_pk"] = knowledge_base_pk
         doc.metadata["document_id"] = document_id
+        doc.metadata["document_pk"] = document_pk
         doc.metadata["file_name"] = file_name
         doc.metadata["file_type"] = file_type
         doc.metadata["source"] = str(file_path)

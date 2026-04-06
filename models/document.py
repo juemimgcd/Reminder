@@ -1,4 +1,4 @@
-from sqlalchemy import BigInteger, ForeignKey, Index, Integer, String
+from sqlalchemy import BigInteger, ForeignKey, Identity, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from models.base import Base
@@ -8,11 +8,19 @@ class Document(Base):
     __tablename__ = "documents"
     __table_args__ = (
         Index("idx_documents_user_id", "user_id"),
-        Index("idx_documents_knowledge_base_id", "knowledge_base_id"),
+        Index("idx_documents_knowledge_base_pk", "knowledge_base_pk"),
         Index("idx_documents_status", "status"),
+        Index("idx_documents_user_created_at", "user_id", "created_at"),
+        Index("idx_documents_knowledge_base_pk_created_at", "knowledge_base_pk", "created_at"),
     )
 
-    id: Mapped[str] = mapped_column(String(64), primary_key=True, comment="文档ID")
+    pk: Mapped[int] = mapped_column(
+        BigInteger,
+        Identity(always=False),
+        primary_key=True,
+        comment="内部主键",
+    )
+    id: Mapped[str] = mapped_column(String(64), nullable=False, comment="文档公开ID")
     user_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey("users.id"),
@@ -21,9 +29,14 @@ class Document(Base):
     )
     knowledge_base_id: Mapped[str] = mapped_column(
         String(64),
-        ForeignKey("knowledge_bases.id"),
         nullable=False,
-        comment="所属知识库ID",
+        comment="所属知识库公开ID",
+    )
+    knowledge_base_pk: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("knowledge_bases.pk"),
+        nullable=False,
+        comment="所属知识库内部主键",
     )
     file_name: Mapped[str] = mapped_column(String(255), nullable=False, comment="原始文件名")
     file_path: Mapped[str] = mapped_column(String(500), nullable=False, comment="文件存储路径")
@@ -37,4 +50,4 @@ class Document(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<Document(id={self.id}, file_name='{self.file_name}', status='{self.status}')>"
+        return f"<Document(pk={self.pk}, id={self.id}, file_name='{self.file_name}', status='{self.status}')>"

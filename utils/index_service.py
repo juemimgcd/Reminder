@@ -17,8 +17,10 @@ async def index_document(db: AsyncSession, document: Document) -> dict:
         file_type=doc.file_type,
         user_id=doc.user_id,
         knowledge_base_id=doc.knowledge_base_id,
+        knowledge_base_pk=doc.knowledge_base_pk,
         file_name=doc.file_name,
-        document_id=doc.id
+        document_id=doc.id,
+        document_pk=doc.pk,
     )
 
     chunk_docs = await split_documents(
@@ -26,7 +28,12 @@ async def index_document(db: AsyncSession, document: Document) -> dict:
         documents=docs,
     )
 
-    chunks = await create_chunks(db,document_id=doc.id,chunk_docs=chunk_docs)
+    chunks = await create_chunks(
+        db,
+        document_id=doc.id,
+        document_pk=doc.pk,
+        chunk_docs=chunk_docs,
+    )
 
     await add_documents_to_vector_store(chunk_docs=chunk_docs)
     await update_document_status(db, document_id=document.id, status="indexed")

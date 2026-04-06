@@ -83,6 +83,7 @@ async def upload_document(
             document_id=document_id,
             user_id=user_id,
             knowledge_base_id=knowledge_base.id,
+            knowledge_base_pk=knowledge_base.pk,
             file_name=file_name,
             file_path=str(save_path),
             file_type=file_ext.lstrip("."),
@@ -129,7 +130,7 @@ async def get_document_list(
     documents = await list_documents(
         db,
         user_id=user_id,
-        knowledge_base_id=knowledge_base_id,
+        knowledge_base_pk=knowledge_base.pk if knowledge_base else None,
     )
     document_items = [
         DocumentListItem.model_validate(u)

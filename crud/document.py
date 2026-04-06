@@ -9,6 +9,7 @@ async def create_document(
         document_id: str,
         user_id: int,
         knowledge_base_id: str,
+        knowledge_base_pk: int,
         file_name: str,
         file_path: str,
         file_type: str,
@@ -19,6 +20,7 @@ async def create_document(
         id=document_id,
         user_id=user_id,
         knowledge_base_id=knowledge_base_id,
+        knowledge_base_pk=knowledge_base_pk,
         file_name=file_name,
         file_path=file_path,
         file_type=file_type,
@@ -36,15 +38,15 @@ async def list_documents(
         db: AsyncSession,
         *,
         user_id: int | None = None,
-        knowledge_base_id: str | None = None,
+        knowledge_base_pk: int | None = None,
 ) -> list[Document]:
     sql = select(Document)
 
     if user_id:
         sql = sql.where(Document.user_id == user_id)
 
-    if knowledge_base_id:
-        sql = sql.where(Document.knowledge_base_id == knowledge_base_id)
+    if knowledge_base_pk:
+        sql = sql.where(Document.knowledge_base_pk == knowledge_base_pk)
 
     sql = sql.order_by(Document.created_at.desc())
     res = await db.execute(sql)
@@ -57,15 +59,15 @@ async def get_document_by_id(
         document_id: str,
         *,
         user_id: int | None = None,
-        knowledge_base_id: str | None = None,
+        knowledge_base_pk: int | None = None,
 ) -> Document | None:
     sql = select(Document).where(Document.id == document_id)
 
     if user_id:
         sql = sql.where(Document.user_id == user_id)
 
-    if knowledge_base_id:
-        sql = sql.where(Document.knowledge_base_id == knowledge_base_id)
+    if knowledge_base_pk:
+        sql = sql.where(Document.knowledge_base_pk == knowledge_base_pk)
 
     res = await db.execute(sql)
     document = res.scalar_one_or_none()

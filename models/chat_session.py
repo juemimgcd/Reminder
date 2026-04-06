@@ -8,7 +8,7 @@ class ChatSession(Base):
     __tablename__ = "chat_sessions"
     __table_args__ = (
         Index("idx_chat_sessions_user_id", "user_id"),
-        Index("idx_chat_sessions_knowledge_base_id", "knowledge_base_id"),
+        Index("idx_chat_sessions_knowledge_base_pk", "knowledge_base_pk"),
     )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, comment="会话ID")
@@ -20,9 +20,14 @@ class ChatSession(Base):
     )
     knowledge_base_id: Mapped[str] = mapped_column(
         String(64),
-        ForeignKey("knowledge_bases.id"),
         nullable=False,
-        comment="所属知识库ID",
+        comment="所属知识库公开ID",
+    )
+    knowledge_base_pk: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("knowledge_bases.pk"),
+        nullable=False,
+        comment="所属知识库内部主键",
     )
     title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, comment="会话标题")
 

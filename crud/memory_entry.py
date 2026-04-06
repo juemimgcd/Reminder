@@ -1,6 +1,8 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from crud.document import get_document_by_id
+from crud.knowledge_base import get_knowledge_base_by_id
 from models.memory_entry import MemoryEntry
 
 
@@ -25,9 +27,13 @@ async def list_memory_entries_by_document_id(
         *,
         document_id: str,
 ) -> list[MemoryEntry]:
+    document = await get_document_by_id(db, document_id=document_id)
+    if not document:
+        return []
+
     sql = (
         select(MemoryEntry)
-        .where(MemoryEntry.document_id == document_id)
+        .where(MemoryEntry.document_pk == document.pk)
         .order_by(MemoryEntry.created_at.asc())
     )
     res = await db.execute(sql)
@@ -39,9 +45,13 @@ async def list_memory_entries_by_knowledge_base_id(
         *,
         knowledge_base_id: str,
 ) -> list[MemoryEntry]:
+    knowledge_base = await get_knowledge_base_by_id(db, knowledge_base_id=knowledge_base_id)
+    if not knowledge_base:
+        return []
+
     sql = (
         select(MemoryEntry)
-        .where(MemoryEntry.knowledge_base_id == knowledge_base_id)
+        .where(MemoryEntry.knowledge_base_pk == knowledge_base.pk)
         .order_by(MemoryEntry.created_at.asc())
     )
     res = await db.execute(sql)

@@ -8,6 +8,7 @@ async def create_chunks(
         db: AsyncSession,
         *,
         document_id: str,
+        document_pk: int,
         chunk_docs: list[LCDocument],
 ) -> list[Chunk]:
 
@@ -29,6 +30,7 @@ async def create_chunks(
         chunk_obj = Chunk(
             id=chunk.metadata["chunk_id"],
             document_id=document_id,
+            document_pk=document_pk,
             chunk_index=chunk.metadata["chunk_index"],
             content=content,
             page_no=chunk.metadata["page_no"],
