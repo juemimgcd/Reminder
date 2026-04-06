@@ -37,8 +37,16 @@ class Settings(BaseSettings):
     MAX_FILE_SIZE: int = 10 * 1024 * 1024
 
     EMBEDDING_MODEL_NAME: str = "sentence-transformers/all-mpnet-base-v2"
-    CHROMA_COLLECTION_NAME: str = "document_chunks"
-    CHROMA_PERSIST_DIR: Path = DEFAULT_BASE_DIR / "storage" / "vector_store"
+    VECTOR_BACKEND: str = "milvus"
+    MILVUS_URI: str = str(DEFAULT_BASE_DIR / "storage" / "milvus.db")
+    MILVUS_TOKEN: str = ""
+    MILVUS_DB_NAME: str = "default"
+    MILVUS_COLLECTION_NAME: str = "document_chunks"
+    MILVUS_INDEX_TYPE: str = "FLAT"
+    MILVUS_METRIC_TYPE: str = "IP"
+    MILVUS_SEARCH_PARAMS: str = '{"metric_type":"IP"}'
+    MILVUS_CONSISTENCY_LEVEL: str = "Strong"
+    MILVUS_DROP_OLD: bool = False
 
     DASHSCOPE_API_KEY: str = ""
     LLM_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"

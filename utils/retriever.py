@@ -1,19 +1,39 @@
+from typing import Any
+
 from langchain_core.documents import Document as LCDocument
 
 from utils.vector_store import get_vector_store
+
+
+MetadataFilter = dict[str, int | str]
 
 
 def build_metadata_filter(
         *,
         user_id: int | None = None,
         knowledge_base_id: str | None = None,
-) -> dict:
-    metadata_filter: dict[str, int | str] = {}
+) -> MetadataFilter:
+    metadata_filter: MetadataFilter = {}
     if user_id:
         metadata_filter["user_id"] = user_id
     if knowledge_base_id:
         metadata_filter["knowledge_base_id"] = knowledge_base_id
     return metadata_filter
+
+
+
+def build_milvus_expr(metadata_filter: MetadataFilter) -> str | None:
+    if not metadata_filter:
+        return None
+
+    expr_parts: list[str] = []
+    for key, value in metadata_filter.items():
+        if isinstance(value, str):
+            escaped_value = value.replace('\\', '\\\\').replace('"', '\\"')
+            expr_parts.append(f'{key} == "{escaped_value}"')
+        else:
+            expr_parts.append(f"{key} == {value}")
+    return " and ".join(expr_parts)
 
 
 async def get_retriever(
@@ -23,13 +43,14 @@ async def get_retriever(
         knowledge_base_id: str | None = None,
 ):
     vector_store = get_vector_store()
-    search_kwargs = {"k": top_k}
+    search_kwargs: dict[str, Any] = {"k": top_k}
     metadata_filter = build_metadata_filter(
         user_id=user_id,
         knowledge_base_id=knowledge_base_id,
     )
-    if metadata_filter:
-        search_kwargs["filter"] = metadata_filter
+    expr = build_milvus_expr(metadata_filter)
+    if expr:
+        search_kwargs["expr"] = expr
 
     retriever = vector_store.as_retriever(
         search_type="similarity",
@@ -37,7 +58,6 @@ async def get_retriever(
     )
 
     return retriever
-
 
 
 async def retrieve_documents(
@@ -67,11 +87,15 @@ async def retrieve_documents_with_scores(
         user_id=user_id,
         knowledge_base_id=knowledge_base_id,
     )
-    return vector_store.similarity_search_with_score(
-        query=query,
-        k=top_k,
-        filter=metadata_filter or None,
-    )
+    expr = build_milvus_expr(metadata_filter)
+    search_kwargs: dict[str, Any] = {
+        "query": query,
+        "k": top_k,
+    }
+    if expr:
+        search_kwargs["expr"] = expr
+    return vector_store.similarity_search_with_score(**search_kwargs)
+
 
 
 def build_retrieval_result(docs: list[LCDocument]) -> list[dict]:
@@ -98,7 +122,7 @@ async def get_mmr_retriever(
         knowledge_base_id: str | None = None,
 ):
     vector_store = get_vector_store()
-    search_kwargs = {
+    search_kwargs: dict[str, Any] = {
         "k": top_k,
         "fetch_k": fetch_k,
         "lambda_mult": 0.5,
@@ -107,8 +131,9 @@ async def get_mmr_retriever(
         user_id=user_id,
         knowledge_base_id=knowledge_base_id,
     )
-    if metadata_filter:
-        search_kwargs["filter"] = metadata_filter
+    expr = build_milvus_expr(metadata_filter)
+    if expr:
+        search_kwargs["expr"] = expr
 
     retriever = vector_store.as_retriever(
         search_type="mmr",
@@ -116,6 +141,7 @@ async def get_mmr_retriever(
     )
 
     return retriever
+
 
 
 

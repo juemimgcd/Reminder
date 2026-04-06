@@ -1,11 +1,14 @@
 .git
 .gitignore
 .idea
+.kilo
 .venv
 __pycache__
 *.pyc
 *.pyo
 *.pyd
+.pytest_cache
+.mypy_cache
 .env
 storage
 target
