@@ -114,33 +114,6 @@ def build_retrieval_result(docs: list[LCDocument]) -> list[dict]:
     return results
 
 
-async def get_mmr_retriever(
-        top_k: int = 4,
-        fetch_k: int = 20,
-        *,
-        user_id: int | None = None,
-        knowledge_base_id: str | None = None,
-):
-    vector_store = get_vector_store()
-    search_kwargs: dict[str, Any] = {
-        "k": top_k,
-        "fetch_k": fetch_k,
-        "lambda_mult": 0.5,
-    }
-    metadata_filter = build_metadata_filter(
-        user_id=user_id,
-        knowledge_base_id=knowledge_base_id,
-    )
-    expr = build_milvus_expr(metadata_filter)
-    if expr:
-        search_kwargs["expr"] = expr
-
-    retriever = vector_store.as_retriever(
-        search_type="mmr",
-        search_kwargs=search_kwargs,
-    )
-
-    return retriever
 
 
 

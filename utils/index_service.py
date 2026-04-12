@@ -28,7 +28,7 @@ async def index_document(db: AsyncSession, document: Document) -> dict:
         documents=docs,
     )
 
-    chunks = await create_chunks(
+    await create_chunks(
         db,
         document_id=doc.id,
         document_pk=doc.pk,

@@ -9,3 +9,27 @@ GET http://127.0.0.1:8000/hello/User
 Accept: application/json
 
 ###
+
+POST http://127.0.0.1:8000/auth/register
+Content-Type: application/json
+
+{
+  "username": "testuser",
+  "password": "12345678"
+
+}
+
+
+###
+
+POST http://127.0.0.1:8000/auth/login
+
+Content-Type: application/json
+
+{
+  "username": "testuser",
+  "password": "12345678"
+}
+
+
+

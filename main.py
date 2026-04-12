@@ -7,12 +7,20 @@ from conf.database import engine
 from routers import auth, chat, documents, health, memory, users,advice,companion,profile,analysis
 from utils.exceptions import BusinessException, business_exception_handler
 from utils.response import success_response
-
+from conf.logging import setup_logger, app_logger
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    yield
-    await engine.dispose()
+    setup_logger()
+    app_logger.bind(module="system").info("application start")
+    try:
+        yield
+    finally:
+        app_logger.bind(module="system").info("application start")
+        logger_complete = app_logger.complete()
+        if logger_complete:
+            await logger_complete
+        await engine.dispose()
 
 
 app = FastAPI(

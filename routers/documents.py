@@ -120,6 +120,7 @@ async def get_document_list(
         if not user:
             raise BusinessException(message="用户不存在", code=4041, status_code=404)
 
+    knowledge_base = None
     if knowledge_base_id:
         knowledge_base = await get_knowledge_base_by_id(db, knowledge_base_id)
         if not knowledge_base:

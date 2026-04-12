@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from conf.database import get_database
+from conf.logging import app_logger
 from crud.auth_user import create_user_account, update_user_last_login_at
 from crud.knowledge_base import get_or_create_default_knowledge_base
 from crud.user import get_user_by_username
@@ -51,30 +52,47 @@ async def login_user(
         payload: LoginRequest,
         db: AsyncSession = Depends(get_database),
 ):
+    log = app_logger.bind(module="auth")
+
     user = await get_user_by_username(db, username=payload.username)
+
     if not user:
+        log.warning("auth.login.failed username={} reason=user_not_found", payload.username)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
         )
 
-    if not verify_password(password=payload.password, password_hash=user.password_hash):
+    if not verify_password(payload.password, user.password_hash):
+        log.warning(
+            "auth.login.failed username={} user_id={} reason=wrong_password",
+            payload.username,
+            user.id,
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
         )
 
-    user = await update_user_last_login_at(
-        db,
-        user_id=user.id,
-    )
+    user = await update_user_last_login_at(db, user_id=user.id)
     if not user:
+        log.error(
+            "auth.login.failed username={} reason=user_missing_after_update",
+            payload.username,
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
         )
 
     token = await create_access_token(subject=str(user.id))
+
+    log.info(
+        "auth.login.succeeded user_id={} username={}",
+        user.id,
+        user.username,
+    )
+
     data = UserAuthResponse(access_token=token)
     return success_response(data=data, message="login success")
 

@@ -1,7 +1,10 @@
 from langchain_core.documents import Document as LCDocument
+from sqlalchemy import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.chunk import Chunk
+
+BULK_INSERT_BATCH_SIZE = 5000
 
 
 async def create_chunks(
@@ -10,9 +13,10 @@ async def create_chunks(
         document_id: str,
         document_pk: int,
         chunk_docs: list[LCDocument],
-) -> list[Chunk]:
+) -> None:
 
-    chunks = []
+    rows: list[dict] = []
+    stmt = insert(Chunk).execution_options(render_nulls=True)
 
     for chunk in chunk_docs:
         content = chunk.page_content.strip()
@@ -27,22 +31,25 @@ async def create_chunks(
         )
 
 
-        chunk_obj = Chunk(
-            id=chunk.metadata["chunk_id"],
-            document_id=document_id,
-            document_pk=document_pk,
-            chunk_index=chunk.metadata["chunk_index"],
-            content=content,
-            page_no=chunk.metadata["page_no"],
-            start_offset=start_offset,
-            end_offset=end_offset
+        rows.append(
+            {
+                "id": chunk.metadata["chunk_id"],
+                "document_id": document_id,
+                "document_pk": document_pk,
+                "chunk_index": chunk.metadata["chunk_index"],
+                "content": content,
+                "page_no": chunk.metadata["page_no"],
+                "start_offset": start_offset,
+                "end_offset": end_offset,
+            }
         )
-        chunks.append(chunk_obj)
 
-    db.add_all(chunks)
-    await db.flush()
+        if len(rows) >= BULK_INSERT_BATCH_SIZE:
+            await db.execute(stmt, rows)
+            rows.clear()
 
-    return chunks
+    if rows:
+        await db.execute(stmt, rows)
 
 
 
