@@ -5,10 +5,10 @@ from crud.document import update_document_status
 from models.document import Document
 from utils.file_loader import load_langchain_documents
 from utils.text_splitter import split_documents
-from utils.vector_store import add_documents_to_vector_store
+from clients.vector_store_client import add_documents_to_vector_store
 
 
-async def index_document(db: AsyncSession, document: Document) -> dict:
+async def run_document_index_pipeline(db: AsyncSession, document: Document) -> dict:
 
     doc = await update_document_status(db,document_id=document.id,status="indexing")
 

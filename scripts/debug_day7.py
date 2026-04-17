@@ -10,7 +10,7 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(errors="replace")
 
 from conf.config import settings
-from utils.rag_service import generate_rag_answer
+from services.query_service import generate_rag_answer
 
 
 async def main():

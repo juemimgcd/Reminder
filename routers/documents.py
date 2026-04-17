@@ -9,10 +9,12 @@ from conf.database import get_database
 from crud.document import create_document, get_document_by_id, list_documents, update_document_status
 from crud.knowledge_base import get_knowledge_base_by_id, get_or_create_default_knowledge_base
 from crud.user import get_user_by_id
-from schemas.document import DocumentListData, DocumentListItem, DocumentUploadData, DocumentIndexData
+from schemas.document import DocumentListData, DocumentListItem, DocumentUploadData, DocumentIndexData, \
+    DocumentIndexTaskData
+from services.document_service import submit_document_index_task
 from utils.exceptions import BusinessException
 from utils.response import success_response
-from utils.index_service import index_document
+from pipelines.document_index_pipeline import index_document
 
 router = APIRouter(prefix="/kb/documents", tags=["documents"])
 
@@ -150,27 +152,15 @@ async def index_document_api(
         document_id: str,
         db: AsyncSession = Depends(get_database),
 ):
-
-    doc = await get_document_by_id(db,document_id=document_id)
-    if not doc:
-        raise BusinessException(message="文档不存在", code=4043, status_code=404)
-
-    if doc.status == "indexing":
-        raise BusinessException(message="文档正在索引中，请稍后再试", code=4005)
-
-    if doc.status == "indexed":
-        raise BusinessException(message="文档已经完成索引", code=4008)
-
-    try:
-        result = await index_document(db, doc)
-    except Exception as exc:
-        await update_document_status(db, document_id=document_id, status="failed")
-        await db.commit()
-        raise BusinessException(message=f"建立索引失败：{exc}", code=5002, status_code=500)
+    result = await submit_document_index_task(
+        db,
+        document_id=document_id,
+    )
+    await db.commit()
 
     return success_response(
-        data=DocumentIndexData(**result),
-        message="index successfully"
+        data=DocumentIndexTaskData(**result),
+        message="index task submitted",
     )
 
 

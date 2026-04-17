@@ -732,25 +732,25 @@ from langchain_core.documents import Document as LCDocument
 from langchain_chroma import Chroma
 
 from conf.config import settings
-from utils.embeddings import get_embeddings
+from clients.embedding_client import get_embeddings
 
 
 def get_vector_store() -> Chroma:
-    # 你要做的事：
-    # 1. 返回一个 Chroma 实例
-    # 2. collection_name 从 settings 里拿
-    # 3. persist_directory 从 settings 里拿
-    # 4. embedding_function 用 get_embeddings()
-    raise NotImplementedError("先自己实现 get_vector_store")
+  # 你要做的事：
+  # 1. 返回一个 Chroma 实例
+  # 2. collection_name 从 settings 里拿
+  # 3. persist_directory 从 settings 里拿
+  # 4. embedding_function 用 get_embeddings()
+  raise NotImplementedError("先自己实现 get_vector_store")
 
 
 def add_documents_to_vector_store(chunk_docs: list[LCDocument]) -> None:
-    # 你要做的事：
-    # 1. 先拿到 vector_store
-    # 2. 从每个 chunk 的 metadata 里取出 chunk_id 作为 ids
-    # 3. 调用 add_documents(documents=..., ids=...)
-    # 4. 这里不用自己手动写 persist()
-    raise NotImplementedError("先自己实现 add_documents_to_vector_store")
+  # 你要做的事：
+  # 1. 先拿到 vector_store
+  # 2. 从每个 chunk 的 metadata 里取出 chunk_id 作为 ids
+  # 3. 调用 add_documents(documents=..., ids=...)
+  # 4. 这里不用自己手动写 persist()
+  raise NotImplementedError("先自己实现 add_documents_to_vector_store")
 ```
 
 ### `utils/vector_store.py` 参考答案
@@ -760,21 +760,21 @@ from langchain_core.documents import Document as LCDocument
 from langchain_chroma import Chroma
 
 from conf.config import settings
-from utils.embeddings import get_embeddings
+from clients.embedding_client import get_embeddings
 
 
 def get_vector_store() -> Chroma:
-    return Chroma(
-        collection_name=settings.CHROMA_COLLECTION_NAME,
-        embedding_function=get_embeddings(),
-        persist_directory=str(settings.CHROMA_PERSIST_DIR),
-    )
+  return Chroma(
+    collection_name=settings.CHROMA_COLLECTION_NAME,
+    embedding_function=get_embeddings(),
+    persist_directory=str(settings.CHROMA_PERSIST_DIR),
+  )
 
 
 def add_documents_to_vector_store(chunk_docs: list[LCDocument]) -> None:
-    vector_store = get_vector_store()
-    ids = [chunk.metadata["chunk_id"] for chunk in chunk_docs]
-    vector_store.add_documents(documents=chunk_docs, ids=ids)
+  vector_store = get_vector_store()
+  ids = [chunk.metadata["chunk_id"] for chunk in chunk_docs]
+  vector_store.add_documents(documents=chunk_docs, ids=ids)
 ```
 
 ### 这里最关键的理解
@@ -874,19 +874,19 @@ from crud.document import update_document_status
 from models.document import Document
 from utils.file_loader import load_langchain_documents
 from utils.text_splitter import split_documents
-from utils.vector_store import add_documents_to_vector_store
+from clients.vector_store_client import add_documents_to_vector_store
 
 
 async def index_document(db: AsyncSession, document: Document) -> dict:
-    # 你要做的事：
-    # 1. 把 document.status 更新为 indexing
-    # 2. 调 load_langchain_documents 读出正文
-    # 3. 调 split_documents 切 chunk
-    # 4. 调 create_chunks 写 chunks 表
-    # 5. 调 add_documents_to_vector_store 写向量库
-    # 6. 把 document.status 更新为 indexed
-    # 7. 返回 document_id / chunk_count / status
-    raise NotImplementedError("先自己实现 index_document")
+  # 你要做的事：
+  # 1. 把 document.status 更新为 indexing
+  # 2. 调 load_langchain_documents 读出正文
+  # 3. 调 split_documents 切 chunk
+  # 4. 调 create_chunks 写 chunks 表
+  # 5. 调 add_documents_to_vector_store 写向量库
+  # 6. 把 document.status 更新为 indexed
+  # 7. 返回 document_id / chunk_count / status
+  raise NotImplementedError("先自己实现 index_document")
 ```
 
 ### `utils/index_service.py` 参考答案
@@ -899,39 +899,39 @@ from crud.document import update_document_status
 from models.document import Document
 from utils.file_loader import load_langchain_documents
 from utils.text_splitter import split_documents
-from utils.vector_store import add_documents_to_vector_store
+from clients.vector_store_client import add_documents_to_vector_store
 
 
 async def index_document(db: AsyncSession, document: Document) -> dict:
-    await update_document_status(db, document_id=document.id, status="indexing")
+  await update_document_status(db, document_id=document.id, status="indexing")
 
-    loaded_docs = load_langchain_documents(
-        file_path=document.file_path,
-        file_type=document.file_type,
-        document_id=document.id,
-        file_name=document.file_name,
-    )
+  loaded_docs = load_langchain_documents(
+    file_path=document.file_path,
+    file_type=document.file_type,
+    document_id=document.id,
+    file_name=document.file_name,
+  )
 
-    chunk_docs = split_documents(
-        document_id=document.id,
-        documents=loaded_docs,
-    )
+  chunk_docs = split_documents(
+    document_id=document.id,
+    documents=loaded_docs,
+  )
 
-    await create_chunks(
-        db,
-        document_id=document.id,
-        chunk_docs=chunk_docs,
-    )
+  await create_chunks(
+    db,
+    document_id=document.id,
+    chunk_docs=chunk_docs,
+  )
 
-    add_documents_to_vector_store(chunk_docs)
+  add_documents_to_vector_store(chunk_docs)
 
-    await update_document_status(db, document_id=document.id, status="indexed")
+  await update_document_status(db, document_id=document.id, status="indexed")
 
-    return {
-        "document_id": document.id,
-        "chunk_count": len(chunk_docs),
-        "status": "indexed",
-    }
+  return {
+    "document_id": document.id,
+    "chunk_count": len(chunk_docs),
+    "status": "indexed",
+  }
 ```
 
 ### 这里你一定要看懂
@@ -972,7 +972,7 @@ from conf.database import get_database
 from crud.document import get_document_by_id, update_document_status
 from schemas.document import DocumentIndexData
 from utils.exceptions import BusinessException
-from utils.index_service import index_document
+from pipelines.document_index_pipeline import index_document
 from utils.response import success_response
 
 router = APIRouter(prefix="/kb/documents", tags=["documents"])
@@ -980,17 +980,17 @@ router = APIRouter(prefix="/kb/documents", tags=["documents"])
 
 @router.post("/{document_id}/index")
 async def index_document_api(
-    document_id: str,
-    db: AsyncSession = Depends(get_database),
+        document_id: str,
+        db: AsyncSession = Depends(get_database),
 ):
-    # 你要做的事：
-    # 1. 根据 document_id 查文档
-    # 2. 如果文档不存在，抛 404
-    # 3. 如果文档已经是 indexed，可以选择直接返回或提示重复索引
-    # 4. 调用 index_document(db, document)
-    # 5. 如果索引出错，把状态改成 failed
-    # 6. 返回 success_response(...)
-    raise NotImplementedError("先自己实现 index_document_api")
+  # 你要做的事：
+  # 1. 根据 document_id 查文档
+  # 2. 如果文档不存在，抛 404
+  # 3. 如果文档已经是 indexed，可以选择直接返回或提示重复索引
+  # 4. 调用 index_document(db, document)
+  # 5. 如果索引出错，把状态改成 failed
+  # 6. 返回 success_response(...)
+  raise NotImplementedError("先自己实现 index_document_api")
 ```
 
 ### `routers/documents.py` 参考答案
@@ -1003,7 +1003,7 @@ from conf.database import get_database
 from crud.document import get_document_by_id, update_document_status
 from schemas.document import DocumentIndexData
 from utils.exceptions import BusinessException
-from utils.index_service import index_document
+from pipelines.document_index_pipeline import index_document
 from utils.response import success_response
 
 router = APIRouter(prefix="/kb/documents", tags=["documents"])
@@ -1011,27 +1011,27 @@ router = APIRouter(prefix="/kb/documents", tags=["documents"])
 
 @router.post("/{document_id}/index")
 async def index_document_api(
-    document_id: str,
-    db: AsyncSession = Depends(get_database),
+        document_id: str,
+        db: AsyncSession = Depends(get_database),
 ):
-    document = await get_document_by_id(db, document_id)
-    if document is None:
-        raise BusinessException(message="文档不存在", code=4041, status_code=404)
+  document = await get_document_by_id(db, document_id)
+  if document is None:
+    raise BusinessException(message="文档不存在", code=4041, status_code=404)
 
-    if document.status == "indexing":
-        raise BusinessException(message="文档正在索引中，请稍后再试", code=4005)
+  if document.status == "indexing":
+    raise BusinessException(message="文档正在索引中，请稍后再试", code=4005)
 
-    try:
-        result = await index_document(db, document)
-    except Exception as exc:
-        await update_document_status(db, document_id=document_id, status="failed")
-        await db.commit()
-        raise BusinessException(message=f"建立索引失败：{exc}", code=5002, status_code=500)
+  try:
+    result = await index_document(db, document)
+  except Exception as exc:
+    await update_document_status(db, document_id=document_id, status="failed")
+    await db.commit()
+    raise BusinessException(message=f"建立索引失败：{exc}", code=5002, status_code=500)
 
-    return success_response(
-        data=DocumentIndexData(**result),
-        message="index success",
-    )
+  return success_response(
+    data=DocumentIndexData(**result),
+    message="index success",
+  )
 ```
 
 ### 为什么失败时这里显式 `await db.commit()`

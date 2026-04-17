@@ -9,7 +9,7 @@ if str(PROJECT_ROOT) not in sys.path:
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(errors="replace")
 
-from utils.retriever import retrieve_documents_with_scores
+from services.context_service import retrieve_documents_with_scores
 
 
 async def main():

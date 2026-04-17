@@ -2,7 +2,7 @@ from typing import Any
 
 from langchain_core.documents import Document as LCDocument
 
-from utils.vector_store import get_vector_store
+from clients.vector_store_client import get_vector_store
 
 
 MetadataFilter = dict[str, int | str]

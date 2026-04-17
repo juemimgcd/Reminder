@@ -4,10 +4,11 @@ from fastapi import FastAPI
 
 from conf.config import settings
 from conf.database import engine
-from routers import auth, chat, documents, health, memory, users,advice,companion,profile,analysis
+from routers import auth, chat, documents, health, memory, users, advice, companion, profile, analysis
 from utils.exceptions import BusinessException, business_exception_handler
 from utils.response import success_response
 from conf.logging import setup_logger, app_logger
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -30,9 +31,7 @@ app = FastAPI(
     description=settings.DESCRIPTION,
 )
 
-
 app.add_exception_handler(BusinessException, business_exception_handler)
-
 
 app.include_router(health.router)
 app.include_router(auth.router)
@@ -44,8 +43,6 @@ app.include_router(advice.router)
 app.include_router(analysis.router)
 app.include_router(profile.router)
 app.include_router(companion.router)
-
-
 
 
 @app.get("/")

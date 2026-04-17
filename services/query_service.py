@@ -1,9 +1,9 @@
 from langchain_core.documents import Document as LCDocument
 from langchain_core.output_parsers import StrOutputParser
 
-from utils.llm import get_llm
+from clients.llm_client import get_llm
 from utils.prompt_builder import get_rag_prompt
-from utils.retriever import retrieve_documents
+from services.context_service import retrieve_documents
 
 
 def format_docs(docs: list[LCDocument]) -> str:

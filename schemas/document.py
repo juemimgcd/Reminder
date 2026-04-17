@@ -55,4 +55,26 @@ class DocumentIndexData(BaseModel):
 
 
 
+class DocumentIndexTaskData(BaseModel):
+    task_id: str = Field(..., description="索引任务 ID")
+    document_id: str = Field(..., description="文档 ID")
+    knowledge_base_id: str = Field(..., description="知识库 ID")
+    status: str = Field(..., description="任务当前状态")
+    message: str = Field(default="index task submitted", description="任务提交说明")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

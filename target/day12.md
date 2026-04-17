@@ -508,7 +508,7 @@ from langchain_core.output_parsers import PydanticOutputParser
 
 from schemas.companion import CompanionAnswerResult
 from utils.companion_prompt import get_companion_prompt
-from utils.llm import get_llm
+from clients.llm_client import get_llm
 
 
 def build_companion_input(
@@ -518,19 +518,19 @@ def build_companion_input(
         profile: dict,
         growth_report: dict,
 ) -> str:
-    payload = {
-        "question": question,
-        "rag_result": rag_result,
-        "profile": profile,
-        "growth_report": growth_report,
-    }
+  payload = {
+    "question": question,
+    "rag_result": rag_result,
+    "profile": profile,
+    "growth_report": growth_report,
+  }
 
-    return json.dumps(
-        payload,
-        ensure_ascii=False,
-        default=str,
-        indent=2,
-    )
+  return json.dumps(
+    payload,
+    ensure_ascii=False,
+    default=str,
+    indent=2,
+  )
 
 
 async def build_companion_response(
@@ -542,30 +542,30 @@ async def build_companion_response(
         profile: dict,
         growth_report: dict,
 ) -> dict:
-    parser = PydanticOutputParser(pydantic_object=CompanionAnswerResult)
-    instructions = parser.get_format_instructions()
+  parser = PydanticOutputParser(pydantic_object=CompanionAnswerResult)
+  instructions = parser.get_format_instructions()
 
-    prompt = get_companion_prompt(format_instructions=instructions)
-    llm = get_llm()
-    chain = prompt | llm | parser
+  prompt = get_companion_prompt(format_instructions=instructions)
+  llm = get_llm()
+  chain = prompt | llm | parser
 
-    result = await chain.ainvoke(
-        {
-            "user_id": user_id,
-            "knowledge_base_id": knowledge_base_id,
-            "companion_input_text": build_companion_input(
-                question=question,
-                rag_result=rag_result,
-                profile=profile,
-                growth_report=growth_report,
-            ),
-        }
-    )
+  result = await chain.ainvoke(
+    {
+      "user_id": user_id,
+      "knowledge_base_id": knowledge_base_id,
+      "companion_input_text": build_companion_input(
+        question=question,
+        rag_result=rag_result,
+        profile=profile,
+        growth_report=growth_report,
+      ),
+    }
+  )
 
-    payload = result.model_dump()
-    payload["knowledge_base_id"] = knowledge_base_id
-    payload["question"] = question
-    return payload
+  payload = result.model_dump()
+  payload["knowledge_base_id"] = knowledge_base_id
+  payload["question"] = question
+  return payload
 ```
 
 ## 16:20 - 17:00：补产品化输出路由
@@ -597,9 +597,8 @@ from utils.companion_builder import build_companion_response
 from utils.growth_analyzer import build_growth_report
 from utils.memory_organizer import build_memory_library
 from utils.profile_builder import build_personal_profile
-from utils.rag_service import generate_rag_answer
+from services.query_service import generate_rag_answer
 from utils.response import success_response
-
 
 router = APIRouter(prefix="/companion", tags=["companion"])
 
@@ -611,20 +610,20 @@ async def get_companion_reply(
         current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_database),
 ):
-    # 你要做的事：
-    # 1. 查询 knowledge_base
-    # 2. 判断 knowledge_base 是否存在
-    # 3. 校验 knowledge_base.user_id == current_user.id
-    # 4. 调 generate_rag_answer(...)
-    # 5. 读取该知识库下的 memory entries
-    # 6. 转成 build_memory_library(...) 需要的 dict 列表
-    # 7. 调 build_memory_library(entries)
-    # 8. 调 await build_personal_profile(...)
-    # 9. 调 await build_growth_report(...)
-    # 10. 调 await build_companion_response(...)
-    # 11. 用 CompanionAnswerResult 校验结果
-    # 12. return success_response(data=data)
-    raise NotImplementedError("先自己实现 get_companion_reply")
+  # 你要做的事：
+  # 1. 查询 knowledge_base
+  # 2. 判断 knowledge_base 是否存在
+  # 3. 校验 knowledge_base.user_id == current_user.id
+  # 4. 调 generate_rag_answer(...)
+  # 5. 读取该知识库下的 memory entries
+  # 6. 转成 build_memory_library(...) 需要的 dict 列表
+  # 7. 调 build_memory_library(entries)
+  # 8. 调 await build_personal_profile(...)
+  # 9. 调 await build_growth_report(...)
+  # 10. 调 await build_companion_response(...)
+  # 11. 用 CompanionAnswerResult 校验结果
+  # 12. return success_response(data=data)
+  raise NotImplementedError("先自己实现 get_companion_reply")
 ```
 
 今天路由里你一定要做的事：
@@ -652,9 +651,8 @@ from utils.exceptions import BusinessException
 from utils.growth_analyzer import build_growth_report
 from utils.memory_organizer import build_memory_library
 from utils.profile_builder import build_personal_profile
-from utils.rag_service import generate_rag_answer
+from services.query_service import generate_rag_answer
 from utils.response import success_response
-
 
 router = APIRouter(prefix="/companion", tags=["companion"])
 
@@ -666,59 +664,59 @@ async def get_companion_reply(
         current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_database),
 ):
-    knowledge_base = await get_knowledge_base_by_id(db, knowledge_base_id)
-    if not knowledge_base:
-        raise BusinessException(message="知识库不存在", code=4042, status_code=404)
-    if knowledge_base.user_id != current_user.id:
-        raise BusinessException(message="知识库不属于当前用户", code=4007)
+  knowledge_base = await get_knowledge_base_by_id(db, knowledge_base_id)
+  if not knowledge_base:
+    raise BusinessException(message="知识库不存在", code=4042, status_code=404)
+  if knowledge_base.user_id != current_user.id:
+    raise BusinessException(message="知识库不属于当前用户", code=4007)
 
-    rag_result = await generate_rag_answer(
-        question=payload.question,
-        knowledge_base_id=knowledge_base_id,
-        user_id=current_user.id,
-        top_k=payload.top_k,
-    )
+  rag_result = await generate_rag_answer(
+    question=payload.question,
+    knowledge_base_id=knowledge_base_id,
+    user_id=current_user.id,
+    top_k=payload.top_k,
+  )
 
-    rows = await list_memory_entries_by_knowledge_base_id(
-        db,
-        knowledge_base_id=knowledge_base_id,
-    )
+  rows = await list_memory_entries_by_knowledge_base_id(
+    db,
+    knowledge_base_id=knowledge_base_id,
+  )
 
-    entries = [
-        {
-            "id": item.id,
-            "entry_name": item.entry_name,
-            "entry_type": item.entry_type,
-            "summary": item.summary,
-            "created_at": item.created_at,
-        }
-        for item in rows
-    ]
+  entries = [
+    {
+      "id": item.id,
+      "entry_name": item.entry_name,
+      "entry_type": item.entry_type,
+      "summary": item.summary,
+      "created_at": item.created_at,
+    }
+    for item in rows
+  ]
 
-    memory_library = build_memory_library(entries)
-    profile = await build_personal_profile(
-        user_id=current_user.id,
-        knowledge_base_id=knowledge_base_id,
-        memory_library=memory_library,
-    )
-    growth_report = await build_growth_report(
-        user_id=current_user.id,
-        knowledge_base_id=knowledge_base_id,
-        memory_library=memory_library,
-        profile=profile,
-        recent_days=30,
-    )
-    result = await build_companion_response(
-        user_id=current_user.id,
-        knowledge_base_id=knowledge_base_id,
-        question=payload.question,
-        rag_result=rag_result,
-        profile=profile,
-        growth_report=growth_report,
-    )
-    data = CompanionAnswerResult(**result)
+  memory_library = build_memory_library(entries)
+  profile = await build_personal_profile(
+    user_id=current_user.id,
+    knowledge_base_id=knowledge_base_id,
+    memory_library=memory_library,
+  )
+  growth_report = await build_growth_report(
+    user_id=current_user.id,
+    knowledge_base_id=knowledge_base_id,
+    memory_library=memory_library,
+    profile=profile,
+    recent_days=30,
+  )
+  result = await build_companion_response(
+    user_id=current_user.id,
+    knowledge_base_id=knowledge_base_id,
+    question=payload.question,
+    rag_result=rag_result,
+    profile=profile,
+    growth_report=growth_report,
+  )
+  data = CompanionAnswerResult(**result)
 
-    return success_response(data=data)
+  return success_response(data=data)
 ```
 
 ## 17:00 - 17:40：做一个最小调试脚本

@@ -28,5 +28,5 @@ async def get_database():
             await session.close()
 
 
-# 兼容前面已经写过的示例命名，避免后面导入时报错。
+
 get_db = get_database

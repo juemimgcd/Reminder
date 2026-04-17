@@ -5,7 +5,7 @@ from langchain_core.output_parsers import PydanticOutputParser
 
 from schemas.memory_entry import MemoryEntryExtractionResult
 from utils.entry_prompt import get_entry_extraction_prompt
-from utils.llm import get_llm
+from clients.llm_client import get_llm
 
 
 async def extract_entries_from_chunk(doc: LCDocument) -> list[dict]:

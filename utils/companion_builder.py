@@ -4,7 +4,7 @@ from langchain_core.output_parsers import PydanticOutputParser
 
 from schemas.companion import CompanionAnswerResult
 from utils.companion_prompt import get_companion_prompt
-from utils.llm import get_llm
+from clients.llm_client import get_llm
 
 
 def build_companion_input(

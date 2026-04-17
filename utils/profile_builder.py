@@ -2,7 +2,7 @@ import json
 from langchain_core.output_parsers import PydanticOutputParser
 
 from schemas.profile import PersonalProfileResult
-from utils.llm import get_llm
+from clients.llm_client import get_llm
 from utils.profile_prompt import get_profile_prompt
 
 

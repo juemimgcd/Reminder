@@ -6,7 +6,7 @@ from crud.knowledge_base import get_knowledge_base_by_id
 from crud.user import get_user_by_id
 from schemas.chat import ChatQueryData, ChatQueryRequest
 from utils.exceptions import BusinessException
-from utils.rag_service import generate_rag_answer
+from services.query_service import generate_rag_answer
 from utils.response import success_response
 
 

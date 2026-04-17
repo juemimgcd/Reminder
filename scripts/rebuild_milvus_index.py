@@ -17,7 +17,7 @@ if callable(stdout_reconfigure):
 from conf.database import AsyncSessionLocal
 from models.chunk import Chunk
 from models.document import Document
-from utils.vector_store import (
+from clients.vector_store_client import (
     add_documents_to_vector_store,
     delete_documents_from_vector_store,
     drop_vector_collection,

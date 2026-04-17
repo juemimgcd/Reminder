@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException,status
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from conf.database import get_database
 from crud.knowledge_base import get_knowledge_base_by_id
-from crud.memory_entry import list_memory_entries_by_knowledge_base_id, list_memory_entries_by_user_id
+from crud.memory_entry import list_memory_entries_by_user_id
 from crud.user import get_user_by_id
 from models.user import User
 from schemas.companion import CompanionAnswerResult, CompanionQueryRequest
@@ -13,7 +13,7 @@ from utils.exceptions import BusinessException
 from utils.growth_analyzer import build_growth_report
 from utils.memory_organizer import build_memory_library
 from utils.profile_builder import build_personal_profile
-from utils.rag_service import generate_rag_answer
+from services.query_service import generate_rag_answer
 from utils.response import success_response
 
 

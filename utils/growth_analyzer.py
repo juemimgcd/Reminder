@@ -4,8 +4,8 @@ from langchain_core.output_parsers import PydanticOutputParser
 
 from schemas.growth_report import GrowthReportResult
 from utils.growth_prompt import get_growth_report_prompt
-from utils.llm import get_llm
-from utils.profile_prompt import get_profile_prompt
+from clients.llm_client import get_llm
+
 
 def split_timeline_by_recent_days(
         timeline: list[dict],

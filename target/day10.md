@@ -459,17 +459,17 @@ import json
 from langchain_core.output_parsers import PydanticOutputParser
 
 from schemas.profile import PersonalProfileResult
-from utils.llm import get_llm
+from clients.llm_client import get_llm
 from utils.profile_prompt import get_profile_prompt
 
 
 def build_profile_input(memory_library: dict) -> str:
-    return json.dumps(
-        memory_library,
-        ensure_ascii=False,
-        default=str,
-        indent=2,
-    )
+  return json.dumps(
+    memory_library,
+    ensure_ascii=False,
+    default=str,
+    indent=2,
+  )
 
 
 async def build_personal_profile(
@@ -478,25 +478,25 @@ async def build_personal_profile(
         knowledge_base_id: str,
         memory_library: dict,
 ) -> dict:
-    parser = PydanticOutputParser(pydantic_object=PersonalProfileResult)
-    instructions = parser.get_format_instructions()
+  parser = PydanticOutputParser(pydantic_object=PersonalProfileResult)
+  instructions = parser.get_format_instructions()
 
-    prompt = get_profile_prompt(format_instructions=instructions)
-    llm = get_llm()
-    chain = prompt | llm | parser
+  prompt = get_profile_prompt(format_instructions=instructions)
+  llm = get_llm()
+  chain = prompt | llm | parser
 
-    result = await chain.ainvoke(
-        {
-            "user_id": user_id,
-            "knowledge_base_id": knowledge_base_id,
-            "memory_library_text": build_profile_input(memory_library),
-        }
-    )
+  result = await chain.ainvoke(
+    {
+      "user_id": user_id,
+      "knowledge_base_id": knowledge_base_id,
+      "memory_library_text": build_profile_input(memory_library),
+    }
+  )
 
-    payload = result.model_dump()
-    payload["knowledge_base_id"] = knowledge_base_id
-    payload["entry_count"] = len(memory_library.get("timeline", []))
-    return payload
+  payload = result.model_dump()
+  payload["knowledge_base_id"] = knowledge_base_id
+  payload["entry_count"] = len(memory_library.get("timeline", []))
+  return payload
 ```
 
 ## 16:20 - 17:00：补画像路由

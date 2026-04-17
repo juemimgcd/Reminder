@@ -4,7 +4,7 @@ from langchain_core.output_parsers import PydanticOutputParser
 
 from schemas.advice import GrowthAdviceResult
 from utils.advice_prompt import get_growth_advice_prompt
-from utils.llm import get_llm
+from clients.llm_client import get_llm
 
 
 def build_advice_input(

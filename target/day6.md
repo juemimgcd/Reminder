@@ -515,33 +515,33 @@ retriever = vector_store.as_retriever(search_kwargs={"k": 4})
 ```python
 from langchain_core.documents import Document as LCDocument
 
-from utils.vector_store import get_vector_store
+from clients.vector_store_client import get_vector_store
 
 
 def get_retriever(top_k: int = 4):
-    # 你要做的事：
-    # 1. 先拿到 vector_store
-    # 2. 调用 as_retriever(...)
-    # 3. search_type 先用默认的 similarity
-    # 4. search_kwargs 至少传 {"k": top_k}
-    # 5. 返回 retriever
-    raise NotImplementedError("先自己实现 get_retriever")
+  # 你要做的事：
+  # 1. 先拿到 vector_store
+  # 2. 调用 as_retriever(...)
+  # 3. search_type 先用默认的 similarity
+  # 4. search_kwargs 至少传 {"k": top_k}
+  # 5. 返回 retriever
+  raise NotImplementedError("先自己实现 get_retriever")
 
 
 def retrieve_documents(query: str, top_k: int = 4) -> list[LCDocument]:
-    # 你要做的事：
-    # 1. 调 get_retriever(top_k)
-    # 2. 调 retriever.invoke(query)
-    # 3. 返回文档列表
-    raise NotImplementedError("先自己实现 retrieve_documents")
+  # 你要做的事：
+  # 1. 调 get_retriever(top_k)
+  # 2. 调 retriever.invoke(query)
+  # 3. 返回文档列表
+  raise NotImplementedError("先自己实现 retrieve_documents")
 
 
 def retrieve_documents_with_scores(query: str, top_k: int = 4):
-    # 你要做的事：
-    # 1. 直接拿 vector_store
-    # 2. 调 similarity_search_with_score(query=..., k=top_k)
-    # 3. 返回 [(doc, score), ...]
-    raise NotImplementedError("先自己实现 retrieve_documents_with_scores")
+  # 你要做的事：
+  # 1. 直接拿 vector_store
+  # 2. 调 similarity_search_with_score(query=..., k=top_k)
+  # 3. 返回 [(doc, score), ...]
+  raise NotImplementedError("先自己实现 retrieve_documents_with_scores")
 ```
 
 ### `utils/retriever.py` 参考答案
@@ -549,27 +549,27 @@ def retrieve_documents_with_scores(query: str, top_k: int = 4):
 ```python
 from langchain_core.documents import Document as LCDocument
 
-from utils.vector_store import get_vector_store
+from clients.vector_store_client import get_vector_store
 
 
 def get_retriever(top_k: int = 4):
-    vector_store = get_vector_store()
-    retriever = vector_store.as_retriever(
-        search_type="similarity",
-        search_kwargs={"k": top_k},
-    )
-    return retriever
+  vector_store = get_vector_store()
+  retriever = vector_store.as_retriever(
+    search_type="similarity",
+    search_kwargs={"k": top_k},
+  )
+  return retriever
 
 
 def retrieve_documents(query: str, top_k: int = 4) -> list[LCDocument]:
-    retriever = get_retriever(top_k=top_k)
-    docs = retriever.invoke(query)
-    return docs
+  retriever = get_retriever(top_k=top_k)
+  docs = retriever.invoke(query)
+  return docs
 
 
 def retrieve_documents_with_scores(query: str, top_k: int = 4):
-    vector_store = get_vector_store()
-    return vector_store.similarity_search_with_score(query=query, k=top_k)
+  vector_store = get_vector_store()
+  return vector_store.similarity_search_with_score(query=query, k=top_k)
 ```
 
 ### 这里你一定要看懂
@@ -589,47 +589,47 @@ def retrieve_documents_with_scores(query: str, top_k: int = 4):
 ### `scripts/debug_day6.py` 练手骨架版
 
 ```python
-from utils.retriever import retrieve_documents_with_scores
+from services.context_service import retrieve_documents_with_scores
 
 
 def main():
-    query = "请替换成一个你测试文档里真实存在的信息问题"
+  query = "请替换成一个你测试文档里真实存在的信息问题"
 
-    # 你要做的事：
-    # 1. 调用 retrieve_documents_with_scores(query, top_k=4)
-    # 2. 打印返回结果总数
-    # 3. 遍历每个 (doc, score)
-    # 4. 打印 score、metadata、正文前 120 个字符
-    raise NotImplementedError("先自己实现 main")
+  # 你要做的事：
+  # 1. 调用 retrieve_documents_with_scores(query, top_k=4)
+  # 2. 打印返回结果总数
+  # 3. 遍历每个 (doc, score)
+  # 4. 打印 score、metadata、正文前 120 个字符
+  raise NotImplementedError("先自己实现 main")
 
 
 if __name__ == "__main__":
-    main()
+  main()
 ```
 
 ### `scripts/debug_day6.py` 参考答案
 
 ```python
-from utils.retriever import retrieve_documents_with_scores
+from services.context_service import retrieve_documents_with_scores
 
 
 def main():
-    query = "Agentic RAG 私有知识助手的核心目标是什么？"
-    results = retrieve_documents_with_scores(query, top_k=4)
+  query = "Agentic RAG 私有知识助手的核心目标是什么？"
+  results = retrieve_documents_with_scores(query, top_k=4)
 
-    print(f"query={query}")
-    print(f"result_count={len(results)}")
+  print(f"query={query}")
+  print(f"result_count={len(results)}")
 
-    for index, (doc, score) in enumerate(results, start=1):
-        print("=" * 60)
-        print(f"rank={index}")
-        print(f"score={score}")
-        print(f"metadata={doc.metadata}")
-        print(f"content_preview={doc.page_content[:120]}")
+  for index, (doc, score) in enumerate(results, start=1):
+    print("=" * 60)
+    print(f"rank={index}")
+    print(f"score={score}")
+    print(f"metadata={doc.metadata}")
+    print(f"content_preview={doc.page_content[:120]}")
 
 
 if __name__ == "__main__":
-    main()
+  main()
 ```
 
 ### 为什么 Day 6 强烈建议你单独写调试脚本

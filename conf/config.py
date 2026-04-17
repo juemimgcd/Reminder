@@ -63,5 +63,9 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("ACCESS_TOKEN_EXPIRE_MINUTES", "JWT_ACCESS_TOKEN_EXPIRE_MINUTES"),
     )
 
+    CELERY_BROKER_URL: str = "redis://localhost:6379/0"
+    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"
+    CELERY_INDEX_QUEUE: str = "document_index"
+
 
 settings = Settings()

@@ -5,7 +5,7 @@ from langchain_core.documents import Document as LCDocument
 from langchain_milvus import Milvus
 
 from conf.config import settings
-from utils.embeddings import get_embeddings
+from clients.embedding_client import get_embeddings
 
 
 def _build_connection_args() -> dict[str, str]:

@@ -491,7 +491,7 @@ from langchain_core.output_parsers import PydanticOutputParser
 
 from schemas.advice import GrowthAdviceResult
 from utils.advice_prompt import get_growth_advice_prompt
-from utils.llm import get_llm
+from clients.llm_client import get_llm
 
 
 def build_advice_input(
@@ -501,19 +501,19 @@ def build_advice_input(
         growth_report: dict,
         focus_goal: str | None,
 ) -> str:
-    payload = {
-        "knowledge_base_id": knowledge_base_id,
-        "focus_goal": focus_goal,
-        "profile": profile,
-        "growth_report": growth_report,
-    }
+  payload = {
+    "knowledge_base_id": knowledge_base_id,
+    "focus_goal": focus_goal,
+    "profile": profile,
+    "growth_report": growth_report,
+  }
 
-    return json.dumps(
-        payload,
-        ensure_ascii=False,
-        default=str,
-        indent=2,
-    )
+  return json.dumps(
+    payload,
+    ensure_ascii=False,
+    default=str,
+    indent=2,
+  )
 
 
 async def build_growth_advice(
@@ -524,30 +524,30 @@ async def build_growth_advice(
         growth_report: dict,
         focus_goal: str | None = None,
 ) -> dict:
-    parser = PydanticOutputParser(pydantic_object=GrowthAdviceResult)
-    instructions = parser.get_format_instructions()
+  parser = PydanticOutputParser(pydantic_object=GrowthAdviceResult)
+  instructions = parser.get_format_instructions()
 
-    prompt = get_growth_advice_prompt(format_instructions=instructions)
-    llm = get_llm()
-    chain = prompt | llm | parser
+  prompt = get_growth_advice_prompt(format_instructions=instructions)
+  llm = get_llm()
+  chain = prompt | llm | parser
 
-    result = await chain.ainvoke(
-        {
-            "user_id": user_id,
-            "knowledge_base_id": knowledge_base_id,
-            "advice_input_text": build_advice_input(
-                knowledge_base_id=knowledge_base_id,
-                profile=profile,
-                growth_report=growth_report,
-                focus_goal=focus_goal,
-            ),
-        }
-    )
+  result = await chain.ainvoke(
+    {
+      "user_id": user_id,
+      "knowledge_base_id": knowledge_base_id,
+      "advice_input_text": build_advice_input(
+        knowledge_base_id=knowledge_base_id,
+        profile=profile,
+        growth_report=growth_report,
+        focus_goal=focus_goal,
+      ),
+    }
+  )
 
-    payload = result.model_dump()
-    payload["knowledge_base_id"] = knowledge_base_id
-    payload["focus_goal"] = focus_goal
-    return payload
+  payload = result.model_dump()
+  payload["knowledge_base_id"] = knowledge_base_id
+  payload["focus_goal"] = focus_goal
+  return payload
 ```
 
 ## 16:20 - 17:00：补建议路由

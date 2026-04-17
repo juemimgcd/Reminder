@@ -773,39 +773,39 @@ def get_rag_prompt() -> ChatPromptTemplate:
 from langchain_core.documents import Document as LCDocument
 from langchain_core.output_parsers import StrOutputParser
 
-from utils.llm import get_llm
+from clients.llm_client import get_llm
 from utils.prompt_builder import get_rag_prompt
-from utils.retriever import retrieve_documents
+from services.context_service import retrieve_documents
 
 
 def format_docs(docs: list[LCDocument]) -> str:
-    # 你要做的事：
-    # 1. 遍历 docs
-    # 2. 取出 page_content
-    # 3. 最好顺手把 document_id / chunk_id / page_no 也格式化进去
-    # 4. 用 \n\n 拼成一大段上下文字符串
-    raise NotImplementedError("先自己实现 format_docs")
+  # 你要做的事：
+  # 1. 遍历 docs
+  # 2. 取出 page_content
+  # 3. 最好顺手把 document_id / chunk_id / page_no 也格式化进去
+  # 4. 用 \n\n 拼成一大段上下文字符串
+  raise NotImplementedError("先自己实现 format_docs")
 
 
 def build_sources(docs: list[LCDocument]) -> list[dict]:
-    # 你要做的事：
-    # 1. 遍历 docs
-    # 2. 从 metadata 里提取 document_id / chunk_id / page_no
-    # 3. 带上原始文本
-    # 4. 返回 sources 列表
-    raise NotImplementedError("先自己实现 build_sources")
+  # 你要做的事：
+  # 1. 遍历 docs
+  # 2. 从 metadata 里提取 document_id / chunk_id / page_no
+  # 3. 带上原始文本
+  # 4. 返回 sources 列表
+  raise NotImplementedError("先自己实现 build_sources")
 
 
 async def generate_rag_answer(question: str, top_k: int = 4) -> dict:
-    # 你要做的事：
-    # 1. 先调 retrieve_documents(question, top_k)
-    # 2. 如果没有召回内容，直接返回一个“未检索到相关内容”的结果
-    # 3. 调 format_docs(docs) 得到 context
-    # 4. 构造 chain = prompt | llm | StrOutputParser()
-    # 5. 用 chain.ainvoke({"context": context, "question": question}) 拿 answer
-    # 6. 同时用 build_sources(docs) 组装 sources
-    # 7. 返回 {"answer": ..., "sources": ...}
-    raise NotImplementedError("先自己实现 generate_rag_answer")
+  # 你要做的事：
+  # 1. 先调 retrieve_documents(question, top_k)
+  # 2. 如果没有召回内容，直接返回一个“未检索到相关内容”的结果
+  # 3. 调 format_docs(docs) 得到 context
+  # 4. 构造 chain = prompt | llm | StrOutputParser()
+  # 5. 用 chain.ainvoke({"context": context, "question": question}) 拿 answer
+  # 6. 同时用 build_sources(docs) 组装 sources
+  # 7. 返回 {"answer": ..., "sources": ...}
+  raise NotImplementedError("先自己实现 generate_rag_answer")
 ```
 
 ### `utils/rag_service.py` 参考答案
@@ -814,71 +814,71 @@ async def generate_rag_answer(question: str, top_k: int = 4) -> dict:
 from langchain_core.documents import Document as LCDocument
 from langchain_core.output_parsers import StrOutputParser
 
-from utils.llm import get_llm
+from clients.llm_client import get_llm
 from utils.prompt_builder import get_rag_prompt
-from utils.retriever import retrieve_documents
+from services.context_service import retrieve_documents
 
 
 def format_docs(docs: list[LCDocument]) -> str:
-    sections: list[str] = []
+  sections: list[str] = []
 
-    for index, doc in enumerate(docs, start=1):
-        sections.append(
-            "\n".join(
-                [
-                    f"[片段 {index}]",
-                    f"document_id={doc.metadata.get('document_id')}",
-                    f"chunk_id={doc.metadata.get('chunk_id')}",
-                    f"page_no={doc.metadata.get('page_no')}",
-                    f"text={doc.page_content}",
-                ]
-            )
-        )
+  for index, doc in enumerate(docs, start=1):
+    sections.append(
+      "\n".join(
+        [
+          f"[片段 {index}]",
+          f"document_id={doc.metadata.get('document_id')}",
+          f"chunk_id={doc.metadata.get('chunk_id')}",
+          f"page_no={doc.metadata.get('page_no')}",
+          f"text={doc.page_content}",
+        ]
+      )
+    )
 
-    return "\n\n".join(sections)
+  return "\n\n".join(sections)
 
 
 def build_sources(docs: list[LCDocument]) -> list[dict]:
-    sources: list[dict] = []
+  sources: list[dict] = []
 
-    for doc in docs:
-        sources.append(
-            {
-                "document_id": doc.metadata.get("document_id"),
-                "chunk_id": doc.metadata.get("chunk_id"),
-                "page_no": doc.metadata.get("page_no"),
-                "text": doc.page_content,
-            }
-        )
+  for doc in docs:
+    sources.append(
+      {
+        "document_id": doc.metadata.get("document_id"),
+        "chunk_id": doc.metadata.get("chunk_id"),
+        "page_no": doc.metadata.get("page_no"),
+        "text": doc.page_content,
+      }
+    )
 
-    return sources
+  return sources
 
 
 async def generate_rag_answer(question: str, top_k: int = 4) -> dict:
-    docs = retrieve_documents(question, top_k=top_k)
+  docs = retrieve_documents(question, top_k=top_k)
 
-    if not docs:
-        return {
-            "answer": "我无法从已检索内容中找到相关答案。",
-            "sources": [],
-        }
-
-    context = format_docs(docs)
-    prompt = get_rag_prompt()
-    llm = get_llm()
-    chain = prompt | llm | StrOutputParser()
-
-    answer = await chain.ainvoke(
-        {
-            "context": context,
-            "question": question,
-        }
-    )
-
+  if not docs:
     return {
-        "answer": answer,
-        "sources": build_sources(docs),
+      "answer": "我无法从已检索内容中找到相关答案。",
+      "sources": [],
     }
+
+  context = format_docs(docs)
+  prompt = get_rag_prompt()
+  llm = get_llm()
+  chain = prompt | llm | StrOutputParser()
+
+  answer = await chain.ainvoke(
+    {
+      "context": context,
+      "question": question,
+    }
+  )
+
+  return {
+    "answer": answer,
+    "sources": build_sources(docs),
+  }
 ```
 
 ### 这一段你一定要看懂
@@ -901,22 +901,22 @@ async def generate_rag_answer(question: str, top_k: int = 4) -> dict:
 ```python
 import asyncio
 
-from utils.rag_service import generate_rag_answer
+from services.query_service import generate_rag_answer
 
 
 async def main():
-    question = "请替换成一个你的文档里真实能回答的问题"
+  question = "请替换成一个你的文档里真实能回答的问题"
 
-    # 你要做的事：
-    # 1. 调 generate_rag_answer(question, top_k=4)
-    # 2. 打印 answer
-    # 3. 打印 sources 数量
-    # 4. 打印前 2 条 source 预览
-    raise NotImplementedError("先自己实现 main")
+  # 你要做的事：
+  # 1. 调 generate_rag_answer(question, top_k=4)
+  # 2. 打印 answer
+  # 3. 打印 sources 数量
+  # 4. 打印前 2 条 source 预览
+  raise NotImplementedError("先自己实现 main")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+  asyncio.run(main())
 ```
 
 ### `scripts/debug_day7.py` 参考答案
@@ -924,27 +924,27 @@ if __name__ == "__main__":
 ```python
 import asyncio
 
-from utils.rag_service import generate_rag_answer
+from services.query_service import generate_rag_answer
 
 
 async def main():
-    question = "Agentic RAG 私有知识助手的核心目标是什么？"
-    result = await generate_rag_answer(question, top_k=4)
+  question = "Agentic RAG 私有知识助手的核心目标是什么？"
+  result = await generate_rag_answer(question, top_k=4)
 
-    print("=" * 60)
-    print("answer:")
-    print(result["answer"])
-    print("=" * 60)
-    print(f"source_count={len(result['sources'])}")
+  print("=" * 60)
+  print("answer:")
+  print(result["answer"])
+  print("=" * 60)
+  print(f"source_count={len(result['sources'])}")
 
-    for source in result["sources"][:2]:
-        print("-" * 40)
-        print(source["document_id"], source["chunk_id"], source["page_no"])
-        print(source["text"][:120])
+  for source in result["sources"][:2]:
+    print("-" * 40)
+    print(source["document_id"], source["chunk_id"], source["page_no"])
+    print(source["text"][:120])
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+  asyncio.run(main())
 ```
 
 ### 为什么 Day 7 仍然建议先用脚本调试

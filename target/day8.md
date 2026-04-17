@@ -543,26 +543,26 @@ from langchain_core.output_parsers import PydanticOutputParser
 
 from schemas.memory_entry import MemoryEntryExtractionResult
 from utils.entry_prompt import get_entry_extraction_prompt
-from utils.llm import get_llm
+from clients.llm_client import get_llm
 
 
 async def extract_entries_from_chunk(doc: LCDocument) -> list[dict]:
-    # 你要做的事：
-    # 1. 创建 PydanticOutputParser
-    # 2. 获取 format_instructions
-    # 3. 构造 prompt
-    # 4. 调 llm 做结构化抽取
-    # 5. 把 parser 解析出的 entries 补齐 id / document_id / chunk_id / page_no
-    # 6. 返回统一字典列表
-    raise NotImplementedError("先自己实现 extract_entries_from_chunk")
+  # 你要做的事：
+  # 1. 创建 PydanticOutputParser
+  # 2. 获取 format_instructions
+  # 3. 构造 prompt
+  # 4. 调 llm 做结构化抽取
+  # 5. 把 parser 解析出的 entries 补齐 id / document_id / chunk_id / page_no
+  # 6. 返回统一字典列表
+  raise NotImplementedError("先自己实现 extract_entries_from_chunk")
 
 
 async def extract_entries_from_chunks(chunk_docs: list[LCDocument]) -> list[dict]:
-    # 你要做的事：
-    # 1. 遍历所有 chunk_docs
-    # 2. 逐个调用 extract_entries_from_chunk
-    # 3. 合并成一个总列表
-    raise NotImplementedError("先自己实现 extract_entries_from_chunks")
+  # 你要做的事：
+  # 1. 遍历所有 chunk_docs
+  # 2. 逐个调用 extract_entries_from_chunk
+  # 3. 合并成一个总列表
+  raise NotImplementedError("先自己实现 extract_entries_from_chunks")
 ```
 
 ### `utils/entry_extractor.py` 参考答案
@@ -575,52 +575,52 @@ from langchain_core.output_parsers import PydanticOutputParser
 
 from schemas.memory_entry import MemoryEntryExtractionResult
 from utils.entry_prompt import get_entry_extraction_prompt
-from utils.llm import get_llm
+from clients.llm_client import get_llm
 
 
 async def extract_entries_from_chunk(doc: LCDocument) -> list[dict]:
-    parser = PydanticOutputParser(pydantic_object=MemoryEntryExtractionResult)
-    prompt = get_entry_extraction_prompt(parser.get_format_instructions())
-    llm = get_llm()
-    chain = prompt | llm | parser
+  parser = PydanticOutputParser(pydantic_object=MemoryEntryExtractionResult)
+  prompt = get_entry_extraction_prompt(parser.get_format_instructions())
+  llm = get_llm()
+  chain = prompt | llm | parser
 
-    result = await chain.ainvoke(
-        {
-            "document_id": doc.metadata.get("document_id"),
-            "chunk_id": doc.metadata.get("chunk_id"),
-            "page_no": doc.metadata.get("page_no"),
-            "chunk_text": doc.page_content,
-        }
+  result = await chain.ainvoke(
+    {
+      "document_id": doc.metadata.get("document_id"),
+      "chunk_id": doc.metadata.get("chunk_id"),
+      "page_no": doc.metadata.get("page_no"),
+      "chunk_text": doc.page_content,
+    }
+  )
+
+  entries: list[dict] = []
+
+  for item in result.entries:
+    entries.append(
+      {
+        "id": f"entry_{uuid.uuid4().hex[:12]}",
+        "document_id": doc.metadata.get("document_id"),
+        "chunk_id": doc.metadata.get("chunk_id"),
+        "page_no": doc.metadata.get("page_no"),
+        "entry_name": item.entry_name,
+        "entry_type": item.entry_type,
+        "summary": item.summary,
+        "evidence_text": item.evidence_text,
+        "importance_score": item.importance_score,
+      }
     )
 
-    entries: list[dict] = []
-
-    for item in result.entries:
-        entries.append(
-            {
-                "id": f"entry_{uuid.uuid4().hex[:12]}",
-                "document_id": doc.metadata.get("document_id"),
-                "chunk_id": doc.metadata.get("chunk_id"),
-                "page_no": doc.metadata.get("page_no"),
-                "entry_name": item.entry_name,
-                "entry_type": item.entry_type,
-                "summary": item.summary,
-                "evidence_text": item.evidence_text,
-                "importance_score": item.importance_score,
-            }
-        )
-
-    return entries
+  return entries
 
 
 async def extract_entries_from_chunks(chunk_docs: list[LCDocument]) -> list[dict]:
-    all_entries: list[dict] = []
+  all_entries: list[dict] = []
 
-    for doc in chunk_docs:
-        entries = await extract_entries_from_chunk(doc)
-        all_entries.extend(entries)
+  for doc in chunk_docs:
+    entries = await extract_entries_from_chunk(doc)
+    all_entries.extend(entries)
 
-    return all_entries
+  return all_entries
 ```
 
 ### 这里你一定要看懂
