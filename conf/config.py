@@ -3,7 +3,6 @@ from pathlib import Path
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
 DEFAULT_BASE_DIR = Path(__file__).resolve().parent.parent
 
 
@@ -36,9 +35,11 @@ class Settings(BaseSettings):
     ALLOWED_EXTENSIONS: set[str] = {".pdf", ".txt", ".md"}
     MAX_FILE_SIZE: int = 10 * 1024 * 1024
 
-    EMBEDDING_MODEL_NAME: str = "sentence-transformers/all-mpnet-base-v2"
+    EMBEDDING_MODEL_NAME: str = "BAAI/bge-m3"
     VECTOR_BACKEND: str = "milvus"
-    MILVUS_URI: str = str(DEFAULT_BASE_DIR / "storage" / "milvus.db")
+    # 本机直接启动应用时默认连宿主机映射端口；
+    # Docker Compose 中 app 容器会被环境变量覆盖为 http://milvus:19530。
+    MILVUS_URI: str = "http://127.0.0.1:19530"
     MILVUS_TOKEN: str = ""
     MILVUS_DB_NAME: str = "default"
     MILVUS_COLLECTION_NAME: str = "document_chunks"
@@ -66,6 +67,13 @@ class Settings(BaseSettings):
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"
     CELERY_INDEX_QUEUE: str = "document_index"
+
+    INDEX_VECTOR_BATCH_SIZE: int = 64
+
+
+
+
+
 
 
 settings = Settings()

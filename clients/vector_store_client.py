@@ -1,3 +1,4 @@
+import asyncio
 import json
 from typing import Any
 
@@ -18,7 +19,6 @@ def _build_connection_args() -> dict[str, str]:
     return connection_args
 
 
-
 def _build_search_params() -> dict[str, Any]:
     try:
         parsed = json.loads(settings.MILVUS_SEARCH_PARAMS)
@@ -30,7 +30,6 @@ def _build_search_params() -> dict[str, Any]:
     return {}
 
 
-
 def _build_index_params() -> dict[str, Any]:
     search_params = _build_search_params()
     metric_type = search_params.get("metric_type", settings.MILVUS_METRIC_TYPE)
@@ -38,7 +37,6 @@ def _build_index_params() -> dict[str, Any]:
         "index_type": settings.MILVUS_INDEX_TYPE,
         "metric_type": metric_type,
     }
-
 
 
 def get_vector_store() -> Milvus:
@@ -78,3 +76,44 @@ async def drop_vector_collection() -> None:
     vector_store = get_vector_store()
     vector_store.drop()
 
+
+def build_document_batches(
+        chunk_docs: list[LCDocument],
+        *,
+        batch_size: int,
+) -> list[list[LCDocument]]:
+    # 你要做的事：
+    # 1. 校验 batch_size > 0
+    # 2. 按 batch_size 切片
+    # 3. 返回二维列表
+    if batch_size <= 0:
+        raise ValueError("batch_size must be greater than 0")
+
+    return [
+        chunk_docs[index:index + batch_size]
+        for index in range(0, len(chunk_docs), batch_size)
+    ]
+
+
+async def add_documents_to_vector_store_in_batches(
+        *,
+        chunk_docs: list[LCDocument],
+        batch_size: int,
+) -> dict:
+    vector_store = get_vector_store()
+    batches = build_document_batches(
+        chunk_docs,
+        batch_size=batch_size,
+    )
+
+    total_count = 0
+    for batch_docs in batches:
+        ids = [str(chunk.metadata["chunk_id"]) for chunk in batch_docs]
+        await asyncio.to_thread(lambda: vector_store.add_documents(documents=batch_docs, ids=ids))
+        total_count += len(batch_docs)
+
+    return {
+        "batch_count": len(batches),
+        "total_count": total_count,
+        "batch_size": batch_size,
+    }

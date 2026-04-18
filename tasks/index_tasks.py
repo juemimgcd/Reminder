@@ -1,12 +1,13 @@
 import asyncio
 from conf.database import AsyncSessionLocal
+from conf.logging import app_logger
 from crud.document import update_document_status
 from crud.task_record import update_task_record_status
 from infra.celery_app import celery_app
 from crud.document import get_document_by_id
 from pipelines.document_index_pipeline import run_document_index_pipeline
+from services.task_state_service import transition_task_status
 from utils.exceptions import BusinessException
-
 
 
 @celery_app.task(name="tasks.index_document_task")
@@ -26,11 +27,6 @@ def index_document_task(
     )
 
 
-
-
-
-
-
 async def run_index_document_task_async(
         *,
         task_id: str,
@@ -46,65 +42,37 @@ async def run_index_document_task_async(
     # 7. 失败时标记 failed 和 error_message
     async with AsyncSessionLocal() as db:
         try:
-            await update_task_record_status(
-                db,
-                task_id=task_id,
-                status="running"
-            )
-            await update_document_status(
-                db,
-                document_id=document_id,
-                status="indexing"
-            )
+            async def report_stage(stage: str) -> None:
+                await transition_task_status(db,task_id=task_id,to_status=stage)
+            await transition_task_status(db,task_id=task_id,to_status="parsing")
 
-            doc = await get_document_by_id(
-                db,
-                document_id=document_id
-            )
+            await update_document_status(db,document_id=document_id,status="indexing")
+
+            doc = await get_document_by_id(db,document_id=document_id)
 
             if not doc:
-                raise BusinessException(message="document not found",code=404)
+                raise BusinessException(message="document not found", code=404)
 
-            await run_document_index_pipeline(
-                db,
-                document=doc
-            )
+            result = await run_document_index_pipeline(db,document=doc,on_stage_change=report_stage)
 
-            await update_document_status(
-                db,
-                document_id=doc.id,
-                status="completed"
+            app_logger.bind(module="index_task").info(
+                "index task completed",
+                task_id=task_id,
+                document_id=document_id,
+                chunk_count=result["chunk_count"],
+                vector_batch_count=result["vector_batch_count"],
+                vector_batch_size=result["vector_batch_size"],
             )
+            await transition_task_status(db,task_id=task_id,to_status="completed",)
             await db.commit()
 
         except Exception as exc:
-            await update_task_record_status(
+            await transition_task_status(
                 db,
                 task_id=task_id,
-                status="failed",
+                to_status="failed",
                 error_message=str(exc),
             )
-            await update_document_status(
-                db,
-                document_id=document_id,
-                status="failed",
-            )
+            await update_document_status(db,document_id=document_id,status="failed",)
             await db.commit()
             raise
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

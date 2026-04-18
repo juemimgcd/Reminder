@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 from langchain_core.documents import Document as LCDocument
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
@@ -17,8 +18,8 @@ async def load_langchain_documents(
         file_name: str,
 ) -> list[LCDocument]:
 
-    file_path = Path(file_path)
-    if not file_path.exists():
+    path = Path(file_path)
+    if not path.exists():
         raise BusinessException(status_code=404,message="file not found")
 
     loader = None
@@ -30,7 +31,7 @@ async def load_langchain_documents(
     else:
         raise BusinessException(message="Incorrect file type")
 
-    docs = loader.load()
+    docs = await asyncio.to_thread(loader.load)
 
     for doc in docs:
         doc.metadata["user_id"] = user_id

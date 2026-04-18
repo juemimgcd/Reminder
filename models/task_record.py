@@ -19,7 +19,7 @@ class TaskRecord(Base):
     status: Mapped[str] = mapped_column(
         String(50),
         nullable=False,
-        default="pending",
+        default="queued",
         comment="任务状态",
     )
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True, comment="错误信息")

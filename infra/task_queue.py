@@ -1,5 +1,6 @@
 from conf.logging import app_logger
 from infra.celery_app import celery_app
+from tasks.index_tasks import index_document_task
 
 
 def enqueue_index_document_task(

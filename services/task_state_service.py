@@ -1,0 +1,48 @@
+from sqlalchemy.ext.asyncio import AsyncSession
+from utils.exceptions import BusinessException
+from crud.task_record import get_task_record_by_id, update_task_record_status
+from models import task_record
+
+ALLOWED_TASK_TRANSITIONS = {
+    "queued": ["parsing", "failed"],
+    "parsing": ["chunking", "failed"],
+    "chunking": ["embedding", "failed"],
+    "embedding": ["vector_upserting", "failed"],
+    "vector_upserting": ["completed", "failed"],
+    "failed": "queued"
+
+}
+
+
+async def transition_task_status(
+        db: AsyncSession,
+        *,
+        task_id: str,
+        to_status: str,
+        error_message: str | None = None,
+):
+    # 你要做的事：
+    # 1. 查询 task_record
+    # 2. 读取当前状态
+    # 3. 判断 current -> to_status 是否合法
+    # 4. 同状态直接返回
+    # 5. 非法迁移抛异常
+    # 6. 合法迁移则更新 task_record.status
+    task_recd = await get_task_record_by_id(db, task_id=task_id)
+    if task_recd:
+        apparent_status = task_recd.status
+        if to_status in ALLOWED_TASK_TRANSITIONS.get(apparent_status, []):
+            task_recd.status = to_status
+        else:
+
+            raise BusinessException(
+                message=f"非法状态迁移: {apparent_status} -> {to_status}",
+                code=4009,
+                status_code=400,
+            )
+    return await update_task_record_status(
+        db,
+        task_id=task_id,
+        status=to_status,
+        error_message=error_message,
+    )
