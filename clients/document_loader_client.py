@@ -6,6 +6,7 @@ from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from utils.exceptions import BusinessException
 
 
+# 读取原始文件并补齐文档域流水线后续步骤需要的基础 metadata。
 async def load_langchain_documents(
         *,
         file_path: str,
@@ -17,7 +18,17 @@ async def load_langchain_documents(
         document_pk: int,
         file_name: str,
 ) -> list[LCDocument]:
-
+    # 每个 loader 产出的 doc.metadata 最终会补成类似：
+    # {
+    #     "user_id": 1,
+    #     "knowledge_base_id": "kb_demo_001",
+    #     "knowledge_base_pk": 1,
+    #     "document_id": "doc_demo_001",
+    #     "document_pk": 1,
+    #     "file_name": "demo.txt",
+    #     "file_type": "txt",
+    #     "source": "E:/python_files/agentic_rag/storage/raw/demo.txt",
+    # }
     path = Path(file_path)
     if not path.exists():
         raise BusinessException(status_code=404,message="file not found")

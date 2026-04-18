@@ -7,6 +7,7 @@ from models.chunk import Chunk
 BULK_INSERT_BATCH_SIZE = 5000
 
 
+# 将切分后的 chunk 批量写入 chunks 表。
 async def create_chunks(
         db: AsyncSession,
         *,
@@ -14,7 +15,17 @@ async def create_chunks(
         document_pk: int,
         chunk_docs: list[LCDocument],
 ) -> None:
-
+    # rows 会被整理成适合 bulk insert 的扁平结构，形如：
+    # {
+    #     "id": "doc_demo_001_chunk_0_a1b2c3",
+    #     "document_id": "doc_demo_001",
+    #     "document_pk": 1,
+    #     "chunk_index": 0,
+    #     "content": "第一段 chunk 文本",
+    #     "page_no": 1,
+    #     "start_offset": 0,
+    #     "end_offset": 120,
+    # }
     rows: list[dict] = []
     stmt = insert(Chunk).execution_options(render_nulls=True)
 

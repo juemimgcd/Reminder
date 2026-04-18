@@ -6,6 +6,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from models.base import Base
 
 
+# 表达异步任务在数据库中的持久化状态记录。
 class TaskRecord(Base):
     __tablename__ = "task_records"
     __table_args__ = (

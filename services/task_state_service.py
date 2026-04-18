@@ -3,6 +3,16 @@ from utils.exceptions import BusinessException
 from crud.task_record import get_task_record_by_id, update_task_record_status
 from models import task_record
 
+# 定义任务状态机允许的状态迁移关系。
+# 结构示例：
+# {
+#     "queued": ["parsing", "failed"],
+#     "parsing": ["chunking", "failed"],
+#     "chunking": ["embedding", "failed"],
+#     "embedding": ["vector_upserting", "failed"],
+#     "vector_upserting": ["completed", "failed"],
+#     "failed": "queued",
+# }
 ALLOWED_TASK_TRANSITIONS = {
     "queued": ["parsing", "failed"],
     "parsing": ["chunking", "failed"],
@@ -14,6 +24,7 @@ ALLOWED_TASK_TRANSITIONS = {
 }
 
 
+# 按状态机规则推动 task_record 的状态迁移，并在需要时写入错误信息。
 async def transition_task_status(
         db: AsyncSession,
         *,

@@ -9,12 +9,14 @@ from clients.text_splitter_client import split_documents
 from clients.vector_store_client import add_documents_to_vector_store_in_batches
 
 
+# 执行文档索引主流水线：加载文档、切分 chunk、落库并写入向量库。
 async def run_document_index_pipeline(
         db: AsyncSession,
         document: Document,
         on_stage_change=None
 ) -> dict:
-
+    # on_stage_change 用来把 parsing / chunking / embedding / vector_upserting
+    # 这类阶段信号往 task 层回传；它本身不是业务动作。
     doc = await update_document_status(db,document_id=document.id,status="indexing")
 
     docs = await load_langchain_documents(

@@ -4,8 +4,8 @@ from langchain_core.documents import Document as LCDocument
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 
+# 构建当前项目统一使用的文本切分器配置。
 async def build_text_splitter() -> RecursiveCharacterTextSplitter:
-
     return RecursiveCharacterTextSplitter(
         chunk_size=500,
         chunk_overlap=100,
@@ -16,12 +16,20 @@ async def build_text_splitter() -> RecursiveCharacterTextSplitter:
 
 
 
+# 将原始文档切成 chunk，并补齐 chunk 级 metadata。
 async def split_documents(
         *,
         document_id: str,
         documents: list[LCDocument],
 ) -> list[LCDocument]:
-
+    # 每个 chunk.metadata 最终会补成类似：
+    # {
+    #     "chunk_id": "doc_demo_001_chunk_0_a1b2c3",
+    #     "chunk_index": 0,
+    #     "page_no": 1,
+    #     "start_offset": 0,
+    #     ...
+    # }
     splitter = await build_text_splitter()
     chunks = splitter.split_documents(documents=documents)
 

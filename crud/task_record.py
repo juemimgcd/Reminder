@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.task_record import TaskRecord
 
 
+# 创建一条新的任务记录并写入当前 session。
 async def create_task_record(
         db: AsyncSession,
         *,
@@ -33,6 +34,7 @@ async def create_task_record(
 
 
 
+# 按 task_id 查询单条任务记录。
 async def get_task_record_by_id(
         db: AsyncSession,
         *,
@@ -46,6 +48,7 @@ async def get_task_record_by_id(
 
 
 
+# 更新任务记录状态，并在需要时补充错误信息。
 async def update_task_record_status(
         db: AsyncSession,
         *,

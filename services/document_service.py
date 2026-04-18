@@ -3,13 +3,16 @@ from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from conf.config import settings
 from crud import task_record
 from crud.document import get_document_by_id, update_document_status
 from crud.task_record import create_task_record
+from infra.rate_limit import enforce_fixed_window_rate_limit
 from models.document import Document
 from utils.exceptions import BusinessException
 
 
+# 校验文档是否存在，以及当前状态是否允许再次进入索引。
 async def ensure_document_can_index(
         db: AsyncSession,
         *,
@@ -34,6 +37,7 @@ async def ensure_document_can_index(
 
 
 
+# 生成文档索引任务使用的 task_id。
 def build_index_task_id() -> str:
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
     return f"task_index_{timestamp}_{uuid.uuid4().hex[:6]}"
@@ -43,6 +47,7 @@ def build_index_task_id() -> str:
 
 
 
+# 提交文档索引任务，并在入队前完成限流和状态校验。
 async def submit_document_index_task(
         db: AsyncSession,
         *,
@@ -55,9 +60,19 @@ async def submit_document_index_task(
     # 4. 更新 document.status 为 queued
     # 5. 投递任务
     # 6. 返回任务提交结果
-    doc = await get_document_by_id(db,document_id=document_id)
-    if not doc:
-        raise BusinessException(message="document not found",code=404)
+    doc = await ensure_document_can_index(
+        db,
+        document_id=document_id,
+    )
+
+    # 这里的限流 key 形如 "user:1:kb:kb_demo_001"，用于限制重复索引提交。
+    enforce_fixed_window_rate_limit(
+        bucket="index_submit",
+        key=f"user:{doc.user_id}:kb:{doc.knowledge_base_id}",
+        limit=settings.INDEX_SUBMIT_RATE_LIMIT_MAX,
+        window_seconds=settings.RATE_LIMIT_WINDOW_SECONDS,
+    )
+
 
     task_id = build_index_task_id()
     await create_task_record(
@@ -69,8 +84,7 @@ async def submit_document_index_task(
 
     )
 
-    await update_document_status(db,document_id=doc.id,status="queued")
-    await ensure_document_can_index(db,document_id=doc.id)
+    await update_document_status(db, document_id=doc.id, status="queued")
 
     return {
         "task_id": task_id,

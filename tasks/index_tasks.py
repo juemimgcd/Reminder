@@ -11,6 +11,7 @@ from utils.exceptions import BusinessException
 
 
 @celery_app.task(name="tasks.index_document_task")
+# Celery 同步任务入口，负责把任务转进异步 runner。
 def index_document_task(
         *,
         task_id: str,
@@ -27,6 +28,7 @@ def index_document_task(
     )
 
 
+# 在 worker 里执行文档索引任务，并驱动 task/document 状态推进。
 async def run_index_document_task_async(
         *,
         task_id: str,
@@ -42,6 +44,7 @@ async def run_index_document_task_async(
     # 7. 失败时标记 failed 和 error_message
     async with AsyncSessionLocal() as db:
         try:
+            # 接收 pipeline 回传的阶段信号，再转成 task_record 的状态迁移。
             async def report_stage(stage: str) -> None:
                 await transition_task_status(db,task_id=task_id,to_status=stage)
             await transition_task_status(db,task_id=task_id,to_status="parsing")

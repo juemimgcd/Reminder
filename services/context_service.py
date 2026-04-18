@@ -3,12 +3,17 @@ from typing import Any
 
 from langchain_core.documents import Document as LCDocument
 
-from clients.vector_store_client import get_vector_store
+from clients.vector_store_client import get_vector_store, similarity_search_with_score_resilient
 
-
+# 表达检索阶段使用的 metadata 过滤条件，结构示例：
+# {
+#     "user_id": 1,
+#     "knowledge_base_id": "kb_demo_001",
+# }
 MetadataFilter = dict[str, int | str]
 
 
+# 为检索结果构建稳定去重键，优先使用 chunk_id。
 def build_document_key(doc: LCDocument) -> tuple:
     chunk_id = doc.metadata.get("chunk_id")
     if chunk_id:
@@ -23,6 +28,7 @@ def build_document_key(doc: LCDocument) -> tuple:
     )
 
 
+# 对普通列表做保持原始顺序的去重。
 def dedupe_preserve_order(items: list) -> list:
     seen: set = set()
     result: list = []
@@ -36,7 +42,16 @@ def dedupe_preserve_order(items: list) -> list:
     return result
 
 
+# 确保文档片段具备 source_* 级别的来源元数据，方便后续合并和返回 sources。
 def ensure_source_metadata(doc: LCDocument) -> LCDocument:
+    # 补齐后的 metadata 结构示例：
+    # {
+    #     "chunk_id": "doc_demo_001_chunk_0_a1b2c3",
+    #     "page_no": 1,
+    #     "source_chunk_ids": ["doc_demo_001_chunk_0_a1b2c3"],
+    #     "source_page_nos": [1],
+    #     "merged_chunk_count": 1,
+    # }
     source_chunk_ids = doc.metadata.get("source_chunk_ids")
     if not isinstance(source_chunk_ids, list) or not source_chunk_ids:
         chunk_id = doc.metadata.get("chunk_id")
@@ -51,6 +66,7 @@ def ensure_source_metadata(doc: LCDocument) -> LCDocument:
     return doc
 
 
+# 判断两个相邻片段是否满足 Day9 第一版的合并条件。
 def can_merge_documents(
         prev_doc: LCDocument,
         current_doc: LCDocument,
@@ -81,6 +97,7 @@ def can_merge_documents(
     return len(prev_doc.page_content) + len(current_doc.page_content) <= max_merged_length
 
 
+# 将两个可合并片段拼成一个片段，并同步更新来源元数据。
 def merge_two_documents(
         prev_doc: LCDocument,
         prev_score: float,
@@ -103,6 +120,7 @@ def merge_two_documents(
     return prev_doc, min(prev_score, current_score)
 
 
+# 组装相似度检索使用的 metadata filter。
 def build_metadata_filter(
         *,
         user_id: int | None = None,
@@ -117,6 +135,7 @@ def build_metadata_filter(
 
 
 
+# 将 metadata filter 转成 Milvus expr 字符串。
 def build_milvus_expr(metadata_filter: MetadataFilter) -> str | None:
     if not metadata_filter:
         return None
@@ -131,6 +150,7 @@ def build_milvus_expr(metadata_filter: MetadataFilter) -> str | None:
     return " and ".join(expr_parts)
 
 
+# 统一构造相似度检索参数，避免 query 层自己拼 search kwargs。
 def build_similarity_search_kwargs(
         query: str,
         *,
@@ -152,6 +172,7 @@ def build_similarity_search_kwargs(
     return search_kwargs
 
 
+# 执行带过滤条件的相似度检索，并通过 resilient client 获得结果。
 async def retrieve_documents_with_scores(
         query: str,
         top_k: int = 4,
@@ -159,16 +180,17 @@ async def retrieve_documents_with_scores(
         user_id: int | None = None,
         knowledge_base_id: str | None = None,
 ):
-    vector_store = get_vector_store()
+
     search_kwargs = build_similarity_search_kwargs(
         query,
         top_k=top_k,
         user_id=user_id,
         knowledge_base_id=knowledge_base_id,
     )
-    return vector_store.similarity_search_with_score(**search_kwargs)
+    return await similarity_search_with_score_resilient(**search_kwargs)
 
 
+# 将治理后的片段转换成接口返回可消费的 source item。
 def build_source_item(doc: LCDocument) -> dict:
     ensure_source_metadata(doc)
     source_chunk_ids = doc.metadata["source_chunk_ids"]
@@ -191,6 +213,7 @@ def build_source_item(doc: LCDocument) -> dict:
 
 
 
+# 对召回结果做第一轮确定性去重，避免重复 chunk 和重复文本进入后续治理。
 def deduplicate_retrieved_documents(
         items: list[tuple[LCDocument, float]],
 ) -> list[tuple[LCDocument, float]]:
@@ -219,6 +242,7 @@ def deduplicate_retrieved_documents(
 
 
 
+# 按相邻 chunk 规则合并检索结果，减少碎片化上下文。
 def merge_adjacent_scored_documents(
         items: list[tuple[LCDocument, float]],
         *,
@@ -252,6 +276,7 @@ def merge_adjacent_scored_documents(
     return merged
 
 
+# 按字符预算裁剪最终要进入 prompt 的上下文片段。
 def trim_scored_documents_by_budget(
         items: list[tuple[LCDocument, float]],
         *,
@@ -278,6 +303,7 @@ def trim_scored_documents_by_budget(
 
 
 
+# 将最终保留的片段格式化成 prompt 侧直接可消费的 context 文本。
 def format_context_docs(docs: list[LCDocument]) -> str:
     sections: list[str] = []
     for index, doc in enumerate(docs, start=1):
@@ -297,6 +323,7 @@ def format_context_docs(docs: list[LCDocument]) -> str:
 
 
 
+# 执行完整的检索后治理流程，并返回 context_text + sources + 治理统计。
 async def build_query_context(
         query: str,
         *,
@@ -329,7 +356,6 @@ async def build_query_context(
         "merged_count": len(merged_items),
         "final_count": len(final_items),
     }
-
 
 
 
