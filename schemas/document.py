@@ -42,12 +42,10 @@ class DocumentDetailItem(BaseModel):
     updated_at: datetime
 
 
-
 # 表达文档列表接口的聚合返回结构。
 class DocumentListData(BaseModel):
     items: list[DocumentListItem]
     total: int
-
 
 
 # 表达文档索引完成后返回的最小结果摘要。
@@ -56,8 +54,6 @@ class DocumentIndexData(BaseModel):
     knowledge_base_id: str
     chunk_count: int
     status: str
-
-
 
 
 # 表达文档索引任务提交成功后的任务信息。
@@ -70,16 +66,11 @@ class DocumentIndexTaskData(BaseModel):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+class DocumentIndexPipelineResult(BaseModel):
+    document_id: str
+    knowledge_base_id: str
+    chunk_count: int
+    vector_batch_count: int
+    vector_batch_size: int
+    indexed_vector_count: int
+    status: str

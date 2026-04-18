@@ -21,6 +21,7 @@ def build_celery_app() -> Celery:
         enable_utc=False,
     )
     app.autodiscover_tasks(["tasks"])
+    return app
 
 
 
