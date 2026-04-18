@@ -2,6 +2,7 @@ import json
 
 from langchain_core.output_parsers import PydanticOutputParser
 
+from conf.logging import app_logger
 from schemas.companion import CompanionAnswerResult
 from utils.companion_prompt import get_companion_prompt
 from clients.llm_client import get_llm
@@ -37,6 +38,10 @@ async def build_companion_response(
         profile: dict,
         growth_report: dict,
 ) -> dict:
+    app_logger.bind(module="companion_service").info(
+        f"build companion response start user_id={user_id} knowledge_base_id={knowledge_base_id} "
+        f"question_length={len(question)}"
+    )
 
     parser = PydanticOutputParser(pydantic_object=CompanionAnswerResult)
     instruction = parser.get_format_instructions()
@@ -62,6 +67,9 @@ async def build_companion_response(
     payload = result.model_dump()
     payload["knowledge_base_id"] = knowledge_base_id
     payload["question"] = question
+    app_logger.bind(module="companion_service").info(
+        f"build companion response completed user_id={user_id} knowledge_base_id={knowledge_base_id}"
+    )
     return payload
 
 

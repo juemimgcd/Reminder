@@ -3,6 +3,7 @@ import uuid
 from langchain_core.documents import Document as LCDocument
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+from conf.logging import app_logger
 
 # 构建当前项目统一使用的文本切分器配置。
 async def build_text_splitter() -> RecursiveCharacterTextSplitter:
@@ -30,6 +31,9 @@ async def split_documents(
     #     "start_offset": 0,
     #     ...
     # }
+    app_logger.bind(module="text_splitter").info(
+        f"split documents start document_id={document_id} source_doc_count={len(documents)}"
+    )
     splitter = await build_text_splitter()
     chunks = splitter.split_documents(documents=documents)
 
@@ -44,6 +48,9 @@ async def split_documents(
         chunk.metadata["page_no"] = page_no
         chunk.metadata["start_offset"] = start_offset
 
+    app_logger.bind(module="text_splitter").info(
+        f"split documents completed document_id={document_id} chunk_count={len(chunks)}"
+    )
     return chunks
 
 

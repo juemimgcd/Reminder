@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from conf.database import get_database
+from conf.logging import app_logger
 from crud.knowledge_base import get_knowledge_base_by_id
 from crud.memory_entry import list_memory_entries_by_user_id
 from crud.user import get_user_by_id
@@ -27,6 +28,11 @@ async def get_companion_reply(
         current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_database),
 ):
+    app_logger.bind(module="companion_router").info(
+        f"companion request knowledge_base_id={knowledge_base_id} "
+        f"payload_user_id={payload.user_id} current_user_id={current_user.id} "
+        f"top_k={payload.top_k}"
+    )
 
     user = await get_user_by_id(db, payload.user_id)
     if not user:
@@ -77,6 +83,10 @@ async def get_companion_reply(
     )
 
     data = CompanionAnswerResult(**companion)
+    app_logger.bind(module="companion_router").info(
+        f"companion success knowledge_base_id={knowledge_base_id} current_user_id={current_user.id} "
+        f"entry_count={len(entries)} source_count={len(result['sources'])}"
+    )
     return success_response(data=data)
 
 

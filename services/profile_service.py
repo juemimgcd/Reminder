@@ -1,6 +1,7 @@
 import json
 from langchain_core.output_parsers import PydanticOutputParser
 
+from conf.logging import app_logger
 from schemas.profile import PersonalProfileResult
 from clients.llm_client import get_llm
 from utils.profile_prompt import get_profile_prompt
@@ -19,6 +20,10 @@ async def build_personal_profile(
         knowledge_base_id: str,
         memory_library: dict,
 ) -> dict:
+    app_logger.bind(module="profile_service").info(
+        f"build profile start user_id={user_id} knowledge_base_id={knowledge_base_id} "
+        f"entry_count={len(memory_library.get('timeline', []))}"
+    )
 
     parser = PydanticOutputParser(pydantic_object=PersonalProfileResult)
     instructions = parser.get_format_instructions()
@@ -41,6 +46,9 @@ async def build_personal_profile(
     payload = result.model_dump()
     payload["knowledge_base_id"] = knowledge_base_id
     payload["entry_count"] = len(memory_library.get("timeline", []))
+    app_logger.bind(module="profile_service").info(
+        f"build profile completed user_id={user_id} knowledge_base_id={knowledge_base_id}"
+    )
     return payload
 
 

@@ -1,4 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
+from conf.logging import app_logger
 from utils.exceptions import BusinessException
 from crud.task_record import get_task_record_by_id, update_task_record_status
 from models import task_record
@@ -42,15 +43,30 @@ async def transition_task_status(
     task_recd = await get_task_record_by_id(db, task_id=task_id)
     if task_recd:
         apparent_status = task_recd.status
+        if apparent_status == to_status:
+            app_logger.bind(module="task_state").info(
+                f"task status unchanged task_id={task_id} status={to_status}"
+            )
+            return task_recd
         if to_status in ALLOWED_TASK_TRANSITIONS.get(apparent_status, []):
+            app_logger.bind(module="task_state").info(
+                f"task status transition task_id={task_id} from_status={apparent_status} to_status={to_status}"
+            )
             task_recd.status = to_status
         else:
-
+            app_logger.bind(module="task_state").warning(
+                f"task status illegal transition task_id={task_id} "
+                f"from_status={apparent_status} to_status={to_status}"
+            )
             raise BusinessException(
                 message=f"非法状态迁移: {apparent_status} -> {to_status}",
                 code=4009,
                 status_code=400,
             )
+    else:
+        app_logger.bind(module="task_state").warning(
+            f"task status transition target missing task_id={task_id} to_status={to_status}"
+        )
     return await update_task_record_status(
         db,
         task_id=task_id,

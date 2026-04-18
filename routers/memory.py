@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from conf.database import get_database
+from conf.logging import app_logger
 from crud.knowledge_base import get_knowledge_base_by_id
 from crud.memory_entry import (
     list_memory_entries_by_document_id,
@@ -38,6 +39,9 @@ async def get_memory_library(
         user_id: int | None = None,
         db: AsyncSession = Depends(get_database),
 ):
+    app_logger.bind(module="memory_router").info(
+        f"memory library request knowledge_base_id={knowledge_base_id} user_id={user_id}"
+    )
     knowledge_base = await get_knowledge_base_by_id(db, knowledge_base_id)
     if not knowledge_base:
         raise BusinessException(message="知识库不存在", code=4042, status_code=404)
@@ -48,6 +52,9 @@ async def get_memory_library(
         db,
         knowledge_base_id=knowledge_base_id,
     )
+    app_logger.bind(module="memory_router").info(
+        f"memory library success knowledge_base_id={knowledge_base_id} entry_count={len(rows)}"
+    )
     data = build_memory_library_response(rows)
     return success_response(data=data)
 
@@ -57,14 +64,19 @@ async def get_document_memory_library(
         document_id: str,
         db: AsyncSession = Depends(get_database),
 ):
+    app_logger.bind(module="memory_router").info(
+        f"document memory library request document_id={document_id}"
+    )
     rows = await list_memory_entries_by_document_id(
         db,
         document_id=document_id,
     )
 
+    app_logger.bind(module="memory_router").info(
+        f"document memory library success document_id={document_id} entry_count={len(rows)}"
+    )
     data = build_memory_library_response(rows)
     return success_response(data=data)
-
 
 
 

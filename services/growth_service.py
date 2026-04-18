@@ -2,6 +2,7 @@ import json
 from datetime import timedelta
 from langchain_core.output_parsers import PydanticOutputParser
 
+from conf.logging import app_logger
 from schemas.growth_report import GrowthReportResult
 from utils.growth_prompt import get_growth_report_prompt
 from clients.llm_client import get_llm
@@ -69,6 +70,10 @@ async def build_growth_report(
         profile: dict,
         recent_days: int = 30,
 ) -> dict:
+    app_logger.bind(module="growth_service").info(
+        f"build growth report start user_id={user_id} knowledge_base_id={knowledge_base_id} "
+        f"entry_count={len(memory_library.get('timeline', []))} recent_days={recent_days}"
+    )
 
     parser = PydanticOutputParser(pydantic_object=GrowthReportResult)
     instructions = parser.get_format_instructions()
@@ -96,6 +101,9 @@ async def build_growth_report(
 
     payload = result.model_dump()
     payload["knowledge_base_id"] = knowledge_base_id
+    app_logger.bind(module="growth_service").info(
+        f"build growth report completed user_id={user_id} knowledge_base_id={knowledge_base_id}"
+    )
     return payload
 
 

@@ -1,6 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from conf.config import settings
+from conf.logging import app_logger
 from crud.chunk import create_chunks
 from crud.document import update_document_status
 from models.document import Document
@@ -17,6 +18,9 @@ async def emit_stage(
         *,
         on_stage_change: Callable[[str], Awaitable[None]] | None,
 ) -> None:
+    app_logger.bind(module="document_pipeline").info(
+        f"pipeline stage change stage={stage}"
+    )
     if on_stage_change:
         await on_stage_change(stage)
 
@@ -39,6 +43,9 @@ async def run_document_index_pipeline(
         document_id=document.id,
         status="indexing"
     )
+    app_logger.bind(module="document_pipeline").info(
+        f"document index pipeline start document_id={doc.id} knowledge_base_id={doc.knowledge_base_id}"
+    )
     await emit_stage("parsing", on_stage_change=on_stage_change)
     docs = await load_langchain_documents(
         file_path=doc.file_path,
@@ -50,10 +57,16 @@ async def run_document_index_pipeline(
         document_id=doc.id,
         document_pk=doc.pk,
     )
+    app_logger.bind(module="document_pipeline").info(
+        f"document parsed document_id={doc.id} parsed_doc_count={len(docs)}"
+    )
 
     await emit_stage("chunking", on_stage_change=on_stage_change)
 
     chunk_docs = await split_documents(document_id=doc.id, documents=docs, )
+    app_logger.bind(module="document_pipeline").info(
+        f"document chunked document_id={doc.id} chunk_count={len(chunk_docs)}"
+    )
 
     await create_chunks(
         db,
@@ -69,8 +82,15 @@ async def run_document_index_pipeline(
         chunk_docs=chunk_docs,
         batch_size=settings.INDEX_VECTOR_BATCH_SIZE,
     )
+    app_logger.bind(module="document_pipeline").info(
+        f"vector upsert finished document_id={doc.id} batch_count={vector_result['batch_count']} "
+        f"batch_size={vector_result['batch_size']} indexed_vector_count={vector_result['total_count']}"
+    )
 
     await update_document_status(db, document_id=doc.id, status="indexed", )
+    app_logger.bind(module="document_pipeline").info(
+        f"document index pipeline completed document_id={doc.id} status=indexed"
+    )
 
     return DocumentIndexPipelineResult(
         document_id=doc.id,

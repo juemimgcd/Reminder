@@ -2,6 +2,8 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from typing import TypeVar
 
+from conf.logging import app_logger
+
 
 T = TypeVar("T")
 
@@ -22,11 +24,20 @@ async def retry_async(
         try:
             return await func()
         except Exception as exc:
-            if attempt >= max_attempts or not is_retryable(exc):
+            retryable = is_retryable(exc)
+            if attempt >= max_attempts or not retryable:
+                app_logger.bind(module="retry").warning(
+                    f"retry stop attempt={attempt}/{max_attempts} "
+                    f"retryable={retryable} error_type={type(exc).__name__} error={exc}"
+                )
                 raise
 
             delay = min(
                 base_delay_seconds * (2 ** (attempt - 1)),
                 max_delay_seconds,
                 )
+            app_logger.bind(module="retry").warning(
+                f"retry scheduled attempt={attempt}/{max_attempts} "
+                f"delay_seconds={delay} error_type={type(exc).__name__} error={exc}"
+            )
             await asyncio.sleep(delay)

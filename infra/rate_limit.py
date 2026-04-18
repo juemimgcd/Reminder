@@ -1,5 +1,6 @@
 from time import time
 
+from conf.logging import app_logger
 from utils.exceptions import BusinessException
 
 
@@ -43,6 +44,10 @@ def enforce_fixed_window_rate_limit(
         _WINDOW_COUNTERS[counter_key] = record
 
     if int(record["count"]) >= limit:
+        app_logger.bind(module="rate_limit").warning(
+            f"rate limit blocked bucket={bucket} key={key} "
+            f"count={int(record['count'])} limit={limit} window_seconds={window_seconds}"
+        )
         raise BusinessException(
             message=f"请求过于频繁，请稍后再试: {bucket}",
             code=4290,

@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from conf.config import settings
-from crud import task_record
+from conf.logging import app_logger
 from crud.document import get_document_by_id, update_document_status
 from crud.task_record import create_task_record
 from infra.rate_limit import enforce_fixed_window_rate_limit
@@ -25,12 +25,21 @@ async def ensure_document_can_index(
     # 4. 返回 document
     doc = await get_document_by_id(db,document_id=document_id)
     if not doc:
+        app_logger.bind(module="document_service").warning(
+            f"index check failed document_id={document_id} reason=document_not_found"
+        )
         raise BusinessException(message="document not found",code=404)
 
     if doc.status == "indexing":
+        app_logger.bind(module="document_service").warning(
+            f"index check failed document_id={document_id} status={doc.status}"
+        )
         raise BusinessException(message="document is indexing")
 
     if doc.status == "indexed":
+        app_logger.bind(module="document_service").warning(
+            f"index check failed document_id={document_id} status={doc.status}"
+        )
         raise BusinessException(message="document has already indexed")
 
     return doc
@@ -58,11 +67,15 @@ async def submit_document_index_task(
     # 2. 生成 task_id
     # 3. 创建 task_record
     # 4. 更新 document.status 为 queued
-    # 5. 投递任务
+    # 5. 由调用方在 commit 后投递任务
     # 6. 返回任务提交结果
     doc = await ensure_document_can_index(
         db,
         document_id=document_id,
+    )
+    app_logger.bind(module="document_service").info(
+        f"submit index task start document_id={doc.id} user_id={doc.user_id} "
+        f"knowledge_base_id={doc.knowledge_base_id} status={doc.status}"
     )
 
     # 这里的限流 key 形如 "user:1:kb:kb_demo_001"，用于限制重复索引提交。
@@ -85,6 +98,10 @@ async def submit_document_index_task(
     )
 
     await update_document_status(db, document_id=doc.id, status="queued")
+    app_logger.bind(module="document_service").info(
+        f"submit index task prepared task_id={task_id} document_id={doc.id} "
+        f"knowledge_base_id={doc.knowledge_base_id}"
+    )
 
     return {
         "task_id": task_id,

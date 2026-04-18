@@ -1,6 +1,7 @@
 from conf.logging import app_logger
 from infra.celery_app import celery_app
 from tasks.index_tasks import index_document_task
+from conf.config import settings
 
 
 def enqueue_index_document_task(
@@ -12,10 +13,9 @@ def enqueue_index_document_task(
     # 1. 调用 tasks.index_tasks.index_document_task
     # 2. 把 task_id 和 document_id 传进去
     # 3. Day 3 可以先做占位，Day 4 再接 Celery
-    app_logger.bind(moduel="task_queue").info(
-        "index task queued",
-        task_id=task_id,
-        document_id=document_id
+    app_logger.bind(module="task_queue").info(
+        f"enqueue index task start task_id={task_id} document_id={document_id} "
+        f"queue={settings.CELERY_INDEX_QUEUE}"
     )
 
     # 你要做的事：
@@ -27,4 +27,7 @@ def enqueue_index_document_task(
             "task_id": task_id,
             "document_id": document_id,
         }
+    )
+    app_logger.bind(module="task_queue").info(
+        f"enqueue index task submitted task_id={task_id} document_id={document_id}"
     )

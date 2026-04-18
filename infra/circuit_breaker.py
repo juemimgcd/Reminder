@@ -1,5 +1,6 @@
 from time import time
 
+from conf.logging import app_logger
 from utils.exceptions import BusinessException
 
 # 进程内熔断器状态表，按依赖名保存当前 breaker 状态。
@@ -34,12 +35,18 @@ def before_call(*, name: str, recovery_timeout_seconds: int) -> None:
 
     if state == "open":
         if time() < reopen_at:
+            app_logger.bind(module="circuit_breaker").warning(
+                f"breaker blocked name={name} state={state} reopen_at={reopen_at}"
+            )
             raise BusinessException(
                 message=f"外部依赖暂时不可用: {name}",
                 code=5031,
                 status_code=503,
             )
         curr["state"] = "half_open"
+        app_logger.bind(module="circuit_breaker").info(
+            f"breaker half_open name={name}"
+        )
 
 
 # 在外部依赖调用成功后重置对应 breaker 状态。
@@ -52,6 +59,9 @@ def record_success(*, name: str) -> None:
         "failure_count": 0,
         "reopen_at": 0.0,
     }
+    app_logger.bind(module="circuit_breaker").info(
+        f"breaker closed name={name}"
+    )
 
 
 # 在外部依赖调用失败后累计失败次数，并在达到阈值时打开 breaker。
@@ -79,3 +89,13 @@ def record_failure(
     if failure_count >= failure_threshold:
         state["state"] = "open"
         state["reopen_at"] = time() + recovery_timeout_seconds
+        app_logger.bind(module="circuit_breaker").warning(
+            f"breaker opened name={name} failure_count={failure_count} "
+            f"failure_threshold={failure_threshold} recovery_timeout_seconds={recovery_timeout_seconds}"
+        )
+        return
+
+    app_logger.bind(module="circuit_breaker").warning(
+        f"breaker failure recorded name={name} failure_count={failure_count} "
+        f"failure_threshold={failure_threshold}"
+    )

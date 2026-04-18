@@ -1,6 +1,7 @@
 from langchain_core.documents import Document as LCDocument
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from conf.logging import app_logger
 from crud.memory_entry import create_memory_entries
 from schemas.memory_entry import MemoryExtractPipelineResult, MemoryEntryPayload
 from services.memory_service import extract_entries_from_chunks
@@ -18,6 +19,10 @@ async def run_memory_extract_pipeline(
     # 2. 做第一版去重 / 归并
     # 3. 调 create_memory_entries(...) 入库
     # 4. 返回结构化统计结果
+    app_logger.bind(module="memory_pipeline").info(
+        f"memory extract pipeline start knowledge_base_id={knowledge_base_id} "
+        f"document_id={document_id} chunk_count={len(chunk_docs)}"
+    )
     raw_entries = await extract_entries_from_chunks(chunk_docs)
     deduped_entries = deduplicate_memory_entries(raw_entries)
 
@@ -28,6 +33,11 @@ async def run_memory_extract_pipeline(
     await create_memory_entries(
         db,
         entries=payloads,
+    )
+    app_logger.bind(module="memory_pipeline").info(
+        f"memory extract pipeline completed knowledge_base_id={knowledge_base_id} "
+        f"document_id={document_id} raw_entry_count={len(raw_entries)} "
+        f"dedup_entry_count={len(deduped_entries)} persisted_entry_count={len(payloads)}"
     )
 
     return MemoryExtractPipelineResult(

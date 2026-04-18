@@ -19,6 +19,9 @@ def index_document_task(
     # 你要做的事：
     # 1. 用 asyncio.run(...) 调 async runner
     # 2. 把 task_id / document_id 传进去
+    app_logger.bind(module="index_task").info(
+        f"worker task start task_id={task_id} document_id={document_id}"
+    )
     asyncio.run(
         run_index_document_task_async(
             task_id=task_id,
@@ -36,6 +39,9 @@ async def run_index_document_task_async(
     async with AsyncSessionLocal() as db:
         try:
             async def report_stage(stage: str) -> None:
+                app_logger.bind(module="index_task").info(
+                    f"worker task stage task_id={task_id} document_id={document_id} stage={stage}"
+                )
                 await transition_task_status(db,task_id=task_id,to_status=stage,)
 
             doc = await get_document_by_id(db, document_id=document_id)
@@ -49,16 +55,17 @@ async def run_index_document_task_async(
             )
 
             app_logger.bind(module="index_task").info(
-                "index task completed",
-                task_id=task_id,
-                document_id=document_id,
-                chunk_count=result.chunk_count,
-                vector_batch_count=result.vector_batch_count,
-                vector_batch_size=result.vector_batch_size,
+                f"index task completed task_id={task_id} document_id={document_id} "
+                f"chunk_count={result.chunk_count} vector_batch_count={result.vector_batch_count} "
+                f"vector_batch_size={result.vector_batch_size}"
             )
             await transition_task_status(db,task_id=task_id,to_status="completed",)
             await db.commit()
         except Exception as exc:
+            app_logger.bind(module="index_task").exception(
+                f"index task failed task_id={task_id} document_id={document_id} "
+                f"error_type={type(exc).__name__} error={exc}"
+            )
             await transition_task_status(
                 db,
                 task_id=task_id,

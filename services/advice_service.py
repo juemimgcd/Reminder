@@ -2,6 +2,7 @@ import json
 
 from langchain_core.output_parsers import PydanticOutputParser
 
+from conf.logging import app_logger
 from schemas.advice import GrowthAdviceResult
 from utils.advice_prompt import get_growth_advice_prompt
 from clients.llm_client import get_llm
@@ -42,6 +43,10 @@ async def build_growth_advice(
         growth_report: dict,
         focus_goal: str | None = None,
 ) -> dict:
+    app_logger.bind(module="advice_service").info(
+        f"build growth advice start user_id={user_id} knowledge_base_id={knowledge_base_id} "
+        f"focus_goal={focus_goal}"
+    )
 
     parser = PydanticOutputParser(pydantic_object=GrowthAdviceResult)
     instruction = parser.get_format_instructions()
@@ -66,6 +71,9 @@ async def build_growth_advice(
     payload = result.model_dump()
     payload["knowledge_base_id"] = knowledge_base_id
     payload["focus_goal"] = focus_goal
+    app_logger.bind(module="advice_service").info(
+        f"build growth advice completed user_id={user_id} knowledge_base_id={knowledge_base_id}"
+    )
     return payload
 
 

@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from conf.config import settings
 from conf.database import get_database
+from conf.logging import app_logger
 from crud.knowledge_base import get_knowledge_base_by_id
 from crud.user import get_user_by_id
 from infra.rate_limit import enforce_fixed_window_rate_limit
@@ -22,6 +23,10 @@ async def query_chat(
         payload: ChatQueryRequest,
         db: AsyncSession = Depends(get_database),
 ):
+    app_logger.bind(module="chat_router").info(
+        f"chat query request user_id={payload.user_id} knowledge_base_id={payload.knowledge_base_id} "
+        f"top_k={payload.top_k} question_length={len(payload.question)}"
+    )
     user = await get_user_by_id(db, payload.user_id)
     if not user:
         raise BusinessException(message="用户不存在", code=4041, status_code=404)
@@ -48,6 +53,10 @@ async def query_chat(
         knowledge_base_id=payload.knowledge_base_id,
         user_id=payload.user_id,
         top_k=payload.top_k,
+    )
+    app_logger.bind(module="chat_router").info(
+        f"chat query success user_id={payload.user_id} knowledge_base_id={payload.knowledge_base_id} "
+        f"source_count={len(result['sources'])}"
     )
     data = ChatQueryData(**result)
     return success_response(data=data)

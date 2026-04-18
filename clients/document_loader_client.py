@@ -3,6 +3,7 @@ from pathlib import Path
 from langchain_core.documents import Document as LCDocument
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 
+from conf.logging import app_logger
 from utils.exceptions import BusinessException
 
 
@@ -31,6 +32,9 @@ async def load_langchain_documents(
     # }
     path = Path(file_path)
     if not path.exists():
+        app_logger.bind(module="document_loader").warning(
+            f"load document failed document_id={document_id} file_path={file_path} reason=file_not_found"
+        )
         raise BusinessException(status_code=404,message="file not found")
 
     loader = None
@@ -42,6 +46,9 @@ async def load_langchain_documents(
     else:
         raise BusinessException(message="Incorrect file type")
 
+    app_logger.bind(module="document_loader").info(
+        f"load document start document_id={document_id} file_type={file_type} file_name={file_name}"
+    )
     docs = await asyncio.to_thread(loader.load)
 
     for doc in docs:
@@ -54,6 +61,9 @@ async def load_langchain_documents(
         doc.metadata["file_type"] = file_type
         doc.metadata["source"] = str(file_path)
 
+    app_logger.bind(module="document_loader").info(
+        f"load document completed document_id={document_id} doc_count={len(docs)}"
+    )
     return docs
 
 

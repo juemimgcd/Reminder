@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from conf.database import get_database
+from conf.logging import app_logger
 from crud.knowledge_base import get_knowledge_base_by_id
 from crud.memory_entry import list_memory_entries_by_user_id
 from models.user import User
@@ -22,6 +23,10 @@ async def get_growth_report(
         current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_database),
 ):
+    app_logger.bind(module="analysis_router").info(
+        f"growth report request knowledge_base_id={knowledge_base_id} "
+        f"current_user_id={current_user.id} recent_days={recent_days}"
+    )
 
     kb = await get_knowledge_base_by_id(db, knowledge_base_id=knowledge_base_id)
     if not kb:
@@ -49,6 +54,10 @@ async def get_growth_report(
         recent_days=recent_days
     )
     data = GrowthReportResult(**report)
+    app_logger.bind(module="analysis_router").info(
+        f"growth report success knowledge_base_id={knowledge_base_id} "
+        f"current_user_id={current_user.id} entry_count={len(entries)} recent_days={recent_days}"
+    )
     return success_response(data=data)
 
 

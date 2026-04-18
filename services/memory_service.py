@@ -3,6 +3,7 @@ from collections import defaultdict
 from langchain_core.documents import Document as LCDocument
 from langchain_core.output_parsers import PydanticOutputParser
 from clients.llm_client import get_llm
+from conf.logging import app_logger
 from schemas.memory_entry import MemoryEntryExtractionResult
 from utils.entry_prompt import get_entry_extraction_prompt
 
@@ -64,6 +65,10 @@ def build_memory_library(entries: list[dict]) -> dict:
 
 
 async def extract_entries_from_chunk(doc: LCDocument) -> list[dict]:
+    app_logger.bind(module="memory_service").info(
+        f"extract entries start document_id={doc.metadata.get('document_id')} "
+        f"chunk_id={doc.metadata.get('chunk_id')}"
+    )
     parser = PydanticOutputParser(pydantic_object=MemoryEntryExtractionResult)
     instructions = parser.get_format_instructions()
 
@@ -101,6 +106,10 @@ async def extract_entries_from_chunk(doc: LCDocument) -> list[dict]:
             }
         )
 
+    app_logger.bind(module="memory_service").info(
+        f"extract entries completed document_id={doc.metadata.get('document_id')} "
+        f"chunk_id={doc.metadata.get('chunk_id')} entry_count={len(entries)}"
+    )
     return entries
 
 
@@ -108,11 +117,17 @@ async def extract_entries_from_chunk(doc: LCDocument) -> list[dict]:
 
 
 async def extract_entries_from_chunks(chunk_docs: list[LCDocument]) -> list[dict]:
+    app_logger.bind(module="memory_service").info(
+        f"extract entries batch start chunk_count={len(chunk_docs)}"
+    )
     entries: list[dict] = []
     for chunk in chunk_docs:
         chunk_entries = await extract_entries_from_chunk(chunk)
         entries.extend(chunk_entries)
 
+    app_logger.bind(module="memory_service").info(
+        f"extract entries batch completed chunk_count={len(chunk_docs)} total_entry_count={len(entries)}"
+    )
     return entries
 
 

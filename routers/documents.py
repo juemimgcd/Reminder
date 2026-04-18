@@ -6,10 +6,12 @@ from fastapi import APIRouter, Depends, File, Form, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from conf.config import settings
 from conf.database import get_database
+from conf.logging import app_logger
 from crud.document import create_document, get_document_by_id, list_documents, update_document_status
 from crud.knowledge_base import get_knowledge_base_by_id, get_or_create_default_knowledge_base
 from crud.user import get_user_by_id
 from infra.rate_limit import enforce_fixed_window_rate_limit
+from infra.task_queue import enqueue_index_document_task
 from schemas.document import DocumentListData, DocumentListItem, DocumentUploadData, DocumentIndexData, \
     DocumentIndexTaskData
 from services.document_service import submit_document_index_task
@@ -40,6 +42,10 @@ async def upload_document(
         file: UploadFile = File(...),
         db: AsyncSession = Depends(get_database),
 ):
+    app_logger.bind(module="documents_router").info(
+        f"upload request received user_id={user_id} knowledge_base_id={knowledge_base_id} "
+        f"filename={file.filename}"
+    )
     user = await get_user_by_id(db, user_id)
     if not user:
         raise BusinessException(message="用户不存在", code=4041, status_code=404)
@@ -113,7 +119,17 @@ async def upload_document(
     except Exception as exc:
         if save_path.exists():
             save_path.unlink()
+        app_logger.bind(module="documents_router").exception(
+            f"upload failed user_id={user_id} knowledge_base_id={knowledge_base.id if knowledge_base else None} "
+            f"filename={file_name} error={exc}"
+        )
         raise BusinessException(message=f"上传失败：{exc}", code=5001, status_code=500)
+
+    app_logger.bind(module="documents_router").info(
+        f"upload success document_id={document.id} user_id={document.user_id} "
+        f"knowledge_base_id={document.knowledge_base_id} file_type={document.file_type} "
+        f"file_size={document.file_size}"
+    )
 
     return success_response(
         data=DocumentUploadData(
@@ -136,6 +152,9 @@ async def get_document_list(
         knowledge_base_id: str | None = None,
         db: AsyncSession = Depends(get_database),
 ):
+    app_logger.bind(module="documents_router").info(
+        f"list documents request user_id={user_id} knowledge_base_id={knowledge_base_id}"
+    )
     if user_id:
         user = await get_user_by_id(db, user_id)
         if not user:
@@ -160,6 +179,9 @@ async def get_document_list(
     ]
 
     total = len(document_items)
+    app_logger.bind(module="documents_router").info(
+        f"list documents success user_id={user_id} knowledge_base_id={knowledge_base_id} total={total}"
+    )
     data = DocumentListData(items=document_items, total=total)
     return success_response(data=data)
 
@@ -172,18 +194,26 @@ async def index_document_api(
         document_id: str,
         db: AsyncSession = Depends(get_database),
 ):
+    app_logger.bind(module="documents_router").info(
+        f"index request received document_id={document_id}"
+    )
     result = await submit_document_index_task(
         db,
         document_id=document_id,
     )
     await db.commit()
+    enqueue_index_document_task(
+        task_id=result["task_id"],
+        document_id=document_id,
+    )
+    app_logger.bind(module="documents_router").info(
+        f"index request committed task_id={result['task_id']} document_id={document_id}"
+    )
 
     return success_response(
         data=DocumentIndexTaskData(**result),
         message="index task submitted",
     )
-
-
 
 
 
