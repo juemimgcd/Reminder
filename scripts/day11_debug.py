@@ -1,8 +1,8 @@
 import asyncio
 from datetime import datetime
 
-from utils.growth_analyzer import build_growth_report
-from utils.profile_builder import build_personal_profile
+from services.growth_service import build_growth_report
+from services.profile_service import build_personal_profile
 
 
 memory_library = {

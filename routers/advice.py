@@ -3,16 +3,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from conf.database import get_database
 from crud.knowledge_base import get_knowledge_base_by_id
-from crud.memory_entry import list_memory_entries_by_knowledge_base_id, list_memory_entries_by_user_id
+from crud.memory_entry import list_memory_entries_by_user_id
 from crud.user import get_user_by_id
 from models.user import User
 from schemas.advice import GrowthAdviceRequest, GrowthAdviceResult
-from utils.advice_builder import build_growth_advice
+from services.advice_service import build_growth_advice
 from utils.auth import get_current_user
 from utils.exceptions import BusinessException
-from utils.growth_analyzer import build_growth_report
-from utils.memory_organizer import build_memory_library
-from utils.profile_builder import build_personal_profile
+from services.growth_service import build_growth_report
+from services.memory_service import build_memory_library
+from services.profile_service import build_personal_profile
 from utils.response import success_response
 
 

@@ -517,10 +517,9 @@ from crud.memory_entry import list_memory_entries_by_knowledge_base_id
 from models.user import User
 from schemas.profile import PersonalProfileResult
 from utils.auth import get_current_user
-from utils.memory_organizer import build_memory_library
-from utils.profile_builder import build_personal_profile
+from services.memory_service import build_memory_library
+from services.profile_service import build_personal_profile
 from utils.response import success_response
-
 
 router = APIRouter(prefix="/profile", tags=["profile"])
 
@@ -531,17 +530,17 @@ async def get_personal_profile(
         current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_database),
 ):
-    # 你要做的事：
-    # 1. 查询 knowledge_base
-    # 2. 判断 knowledge_base 是否存在
-    # 3. 校验 knowledge_base.user_id == current_user.id
-    # 4. 读取该知识库下的 memory entries
-    # 5. 转成 build_memory_library(...) 需要的 dict 列表
-    # 6. 调 build_memory_library(entries)
-    # 7. 调 await build_personal_profile(...)
-    # 8. 用 PersonalProfileResult 校验结果
-    # 9. return success_response(data=data)
-    raise NotImplementedError("先自己实现 get_personal_profile")
+  # 你要做的事：
+  # 1. 查询 knowledge_base
+  # 2. 判断 knowledge_base 是否存在
+  # 3. 校验 knowledge_base.user_id == current_user.id
+  # 4. 读取该知识库下的 memory entries
+  # 5. 转成 build_memory_library(...) 需要的 dict 列表
+  # 6. 调 build_memory_library(entries)
+  # 7. 调 await build_personal_profile(...)
+  # 8. 用 PersonalProfileResult 校验结果
+  # 9. return success_response(data=data)
+  raise NotImplementedError("先自己实现 get_personal_profile")
 ```
 
 路由里你今天一定要做的事：
@@ -566,10 +565,9 @@ from models.user import User
 from schemas.profile import PersonalProfileResult
 from utils.auth import get_current_user
 from utils.exceptions import BusinessException
-from utils.memory_organizer import build_memory_library
-from utils.profile_builder import build_personal_profile
+from services.memory_service import build_memory_library
+from services.profile_service import build_personal_profile
 from utils.response import success_response
-
 
 router = APIRouter(prefix="/profile", tags=["profile"])
 
@@ -580,37 +578,37 @@ async def get_personal_profile(
         current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_database),
 ):
-    knowledge_base = await get_knowledge_base_by_id(db, knowledge_base_id)
-    if not knowledge_base:
-        raise BusinessException(message="知识库不存在", code=4042, status_code=404)
-    if knowledge_base.user_id != current_user.id:
-        raise BusinessException(message="知识库不属于当前用户", code=4007)
+  knowledge_base = await get_knowledge_base_by_id(db, knowledge_base_id)
+  if not knowledge_base:
+    raise BusinessException(message="知识库不存在", code=4042, status_code=404)
+  if knowledge_base.user_id != current_user.id:
+    raise BusinessException(message="知识库不属于当前用户", code=4007)
 
-    rows = await list_memory_entries_by_knowledge_base_id(
-        db,
-        knowledge_base_id=knowledge_base_id,
-    )
+  rows = await list_memory_entries_by_knowledge_base_id(
+    db,
+    knowledge_base_id=knowledge_base_id,
+  )
 
-    entries = [
-        {
-            "id": item.id,
-            "entry_name": item.entry_name,
-            "entry_type": item.entry_type,
-            "summary": item.summary,
-            "created_at": item.created_at,
-        }
-        for item in rows
-    ]
+  entries = [
+    {
+      "id": item.id,
+      "entry_name": item.entry_name,
+      "entry_type": item.entry_type,
+      "summary": item.summary,
+      "created_at": item.created_at,
+    }
+    for item in rows
+  ]
 
-    memory_library = build_memory_library(entries)
-    profile = await build_personal_profile(
-        user_id=current_user.id,
-        knowledge_base_id=knowledge_base_id,
-        memory_library=memory_library,
-    )
-    data = PersonalProfileResult(**profile)
+  memory_library = build_memory_library(entries)
+  profile = await build_personal_profile(
+    user_id=current_user.id,
+    knowledge_base_id=knowledge_base_id,
+    memory_library=memory_library,
+  )
+  data = PersonalProfileResult(**profile)
 
-    return success_response(data=data)
+  return success_response(data=data)
 ```
 
 ## 17:00 - 17:40：做一个最小调试脚本
@@ -627,23 +625,23 @@ async def get_personal_profile(
 ```python
 import asyncio
 
-from utils.profile_builder import build_personal_profile
+from services.profile_service import build_personal_profile
 
 
 async def main():
-    # 你要做的事：
-    # 1. 准备一个最小 memory_library 模拟对象
-    # 2. 传入 user_id、knowledge_base_id
-    # 3. 调 build_personal_profile(...)
-    # 4. 打印 profile_summary
-    # 5. 打印 main_themes
-    # 6. 打印 ability_tags
-    # 7. 打印 growth_focus
-    raise NotImplementedError("先自己实现 main")
+  # 你要做的事：
+  # 1. 准备一个最小 memory_library 模拟对象
+  # 2. 传入 user_id、knowledge_base_id
+  # 3. 调 build_personal_profile(...)
+  # 4. 打印 profile_summary
+  # 5. 打印 main_themes
+  # 6. 打印 ability_tags
+  # 7. 打印 growth_focus
+  raise NotImplementedError("先自己实现 main")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+  asyncio.run(main())
 ```
 
 建议至少打印：
@@ -659,79 +657,78 @@ if __name__ == "__main__":
 import asyncio
 from datetime import datetime
 
-from utils.profile_builder import build_personal_profile
-
+from services.profile_service import build_personal_profile
 
 memory_library = {
-    "timeline": [
-        {
-            "entry_id": "entry_001",
-            "entry_name": "FastAPI 后端开发",
-            "entry_type": "ability",
-            "summary": "有 FastAPI 后端开发经验",
-            "created_at": datetime(2026, 4, 1, 10, 0, 0),
-        },
-        {
-            "entry_id": "entry_002",
-            "entry_name": "个人成长记录",
-            "entry_type": "theme",
-            "summary": "长期关注成长、复盘与记录",
-            "created_at": datetime(2026, 4, 2, 10, 0, 0),
-        },
-        {
-            "entry_id": "entry_003",
-            "entry_name": "知识管理",
-            "entry_type": "theme",
-            "summary": "希望把个人内容沉淀为长期可用的记忆库",
-            "created_at": datetime(2026, 4, 3, 10, 0, 0),
-        },
-    ],
-    "by_type": {
-        "ability": ["FastAPI 后端开发"],
-        "theme": ["个人成长记录", "知识管理"],
+  "timeline": [
+    {
+      "entry_id": "entry_001",
+      "entry_name": "FastAPI 后端开发",
+      "entry_type": "ability",
+      "summary": "有 FastAPI 后端开发经验",
+      "created_at": datetime(2026, 4, 1, 10, 0, 0),
     },
-    "by_theme": [
-        {
-            "theme_name": "个人成长记录",
-            "entries": ["长期关注成长、复盘与记录"],
-            "count": 1,
-        },
-        {
-            "theme_name": "知识管理",
-            "entries": ["希望把个人内容沉淀为长期可用的记忆库"],
-            "count": 1,
-        },
-    ],
+    {
+      "entry_id": "entry_002",
+      "entry_name": "个人成长记录",
+      "entry_type": "theme",
+      "summary": "长期关注成长、复盘与记录",
+      "created_at": datetime(2026, 4, 2, 10, 0, 0),
+    },
+    {
+      "entry_id": "entry_003",
+      "entry_name": "知识管理",
+      "entry_type": "theme",
+      "summary": "希望把个人内容沉淀为长期可用的记忆库",
+      "created_at": datetime(2026, 4, 3, 10, 0, 0),
+    },
+  ],
+  "by_type": {
+    "ability": ["FastAPI 后端开发"],
+    "theme": ["个人成长记录", "知识管理"],
+  },
+  "by_theme": [
+    {
+      "theme_name": "个人成长记录",
+      "entries": ["长期关注成长、复盘与记录"],
+      "count": 1,
+    },
+    {
+      "theme_name": "知识管理",
+      "entries": ["希望把个人内容沉淀为长期可用的记忆库"],
+      "count": 1,
+    },
+  ],
 }
 
 
 async def main():
-    profile = await build_personal_profile(
-        user_id=1,
-        knowledge_base_id="kb_demo_001",
-        memory_library=memory_library,
-    )
+  profile = await build_personal_profile(
+    user_id=1,
+    knowledge_base_id="kb_demo_001",
+    memory_library=memory_library,
+  )
 
-    print("profile_summary")
-    print(profile["profile_summary"])
-    print()
+  print("profile_summary")
+  print(profile["profile_summary"])
+  print()
 
-    print("main_themes")
-    for item in profile["main_themes"]:
-        print(item)
-    print()
+  print("main_themes")
+  for item in profile["main_themes"]:
+    print(item)
+  print()
 
-    print("ability_tags")
-    for item in profile["ability_tags"]:
-        print(item)
-    print()
+  print("ability_tags")
+  for item in profile["ability_tags"]:
+    print(item)
+  print()
 
-    print("growth_focus")
-    print(profile["growth_focus"])
+  print("growth_focus")
+  print(profile["growth_focus"])
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+  asyncio.run(main())
 ```
 
 ## 17:40 - 18:00：给 Day 11 留下明确交接

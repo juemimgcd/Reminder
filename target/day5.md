@@ -872,8 +872,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from crud.chunk import create_chunks
 from crud.document import update_document_status
 from models.document import Document
-from utils.file_loader import load_langchain_documents
-from utils.text_splitter import split_documents
+from clients.document_loader_client import load_langchain_documents
+from clients.text_splitter_client import split_documents
 from clients.vector_store_client import add_documents_to_vector_store
 
 
@@ -897,8 +897,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from crud.chunk import create_chunks
 from crud.document import update_document_status
 from models.document import Document
-from utils.file_loader import load_langchain_documents
-from utils.text_splitter import split_documents
+from clients.document_loader_client import load_langchain_documents
+from clients.text_splitter_client import split_documents
 from clients.vector_store_client import add_documents_to_vector_store
 
 

@@ -8,11 +8,11 @@ from crud.user import get_user_by_id
 from models.user import User
 from schemas.companion import CompanionAnswerResult, CompanionQueryRequest
 from utils.auth import get_current_user
-from utils.companion_builder import build_companion_response
+from services.companion_service import build_companion_response
 from utils.exceptions import BusinessException
-from utils.growth_analyzer import build_growth_report
-from utils.memory_organizer import build_memory_library
-from utils.profile_builder import build_personal_profile
+from services.growth_service import build_growth_report
+from services.memory_service import build_memory_library
+from services.profile_service import build_personal_profile
 from services.query_service import generate_rag_answer
 from utils.response import success_response
 

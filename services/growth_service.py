@@ -61,8 +61,6 @@ def build_growth_input(
 
 
 
-
-
 async def build_growth_report(
         *,
         user_id: int,

@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from conf.config import settings
 from conf.database import engine
+from clients.embedding_client import get_embeddings
 from routers import auth, chat, documents, health, memory, users, advice, companion, profile, analysis
 from utils.exceptions import BusinessException, business_exception_handler
 from utils.response import success_response
@@ -14,10 +15,12 @@ from conf.logging import setup_logger, app_logger
 async def lifespan(app: FastAPI):
     setup_logger()
     app_logger.bind(module="system").info("application start")
+    if settings.EMBEDDING_PRELOAD_ON_STARTUP:
+        get_embeddings()
     try:
         yield
     finally:
-        app_logger.bind(module="system").info("application start")
+        app_logger.bind(module="system").info("application stop")
         logger_complete = app_logger.complete()
         if logger_complete:
             await logger_complete

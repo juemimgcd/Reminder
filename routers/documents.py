@@ -14,7 +14,6 @@ from schemas.document import DocumentListData, DocumentListItem, DocumentUploadD
 from services.document_service import submit_document_index_task
 from utils.exceptions import BusinessException
 from utils.response import success_response
-from pipelines.document_index_pipeline import index_document
 
 router = APIRouter(prefix="/kb/documents", tags=["documents"])
 
@@ -162,7 +161,6 @@ async def index_document_api(
         data=DocumentIndexTaskData(**result),
         message="index task submitted",
     )
-
 
 
 

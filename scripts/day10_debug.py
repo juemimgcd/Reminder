@@ -1,10 +1,7 @@
 import asyncio
 from datetime import datetime
 
-from utils.profile_builder import build_personal_profile
-
-
-from utils.profile_builder import build_personal_profile
+from services.profile_service import build_personal_profile
 
 
 memory_library = {

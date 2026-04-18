@@ -11,7 +11,7 @@ if str(PROJECT_ROOT) not in sys.path:
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(errors="replace")
 
-from utils.entry_extractor import extract_entries_from_chunk
+from services.memory_service import extract_entries_from_chunk
 
 
 async def main():

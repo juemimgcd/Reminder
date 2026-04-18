@@ -565,7 +565,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from conf.database import get_database
 from crud.memory_entry import list_memory_entries_by_document_id
-from utils.memory_organizer import build_memory_library
+from services.memory_service import build_memory_library
 from utils.response import success_response
 
 router = APIRouter(prefix="/memory", tags=["memory"])
@@ -576,24 +576,24 @@ async def get_memory_library(
         document_id: str,
         db: AsyncSession = Depends(get_database),
 ):
-    rows = await list_memory_entries_by_document_id(
-        db,
-        document_id=document_id,
-    )
+  rows = await list_memory_entries_by_document_id(
+    db,
+    document_id=document_id,
+  )
 
-    entries = [
-        {
-            "id": item.id,
-            "entry_name": item.entry_name,
-            "entry_type": item.entry_type,
-            "summary": item.summary,
-            "created_at": item.created_at,
-        }
-        for item in rows
-    ]
+  entries = [
+    {
+      "id": item.id,
+      "entry_name": item.entry_name,
+      "entry_type": item.entry_type,
+      "summary": item.summary,
+      "created_at": item.created_at,
+    }
+    for item in rows
+  ]
 
-    data = build_memory_library(entries)
-    return success_response(data=data)
+  data = build_memory_library(entries)
+  return success_response(data=data)
 ```
 
 ### 为什么 Day 9 要开始有 memory 路由
@@ -612,21 +612,21 @@ async def get_memory_library(
 ### `scripts/debug_day9.py` 练手骨架版
 
 ```python
-from utils.memory_organizer import build_memory_library
+from services.memory_service import build_memory_library
 
 
 def main():
-    # 你要做的事：
-    # 1. 准备 3 到 5 条模拟 entries
-    # 2. 调 build_memory_library(entries)
-    # 3. 打印 timeline
-    # 4. 打印 by_type
-    # 5. 打印 by_theme
-    raise NotImplementedError("先自己实现 main")
+  # 你要做的事：
+  # 1. 准备 3 到 5 条模拟 entries
+  # 2. 调 build_memory_library(entries)
+  # 3. 打印 timeline
+  # 4. 打印 by_type
+  # 5. 打印 by_theme
+  raise NotImplementedError("先自己实现 main")
 
 
 if __name__ == "__main__":
-    main()
+  main()
 ```
 
 ### `scripts/debug_day9.py` 参考答案
@@ -634,50 +634,50 @@ if __name__ == "__main__":
 ```python
 from datetime import datetime, timedelta
 
-from utils.memory_organizer import build_memory_library
+from services.memory_service import build_memory_library
 
 
 def main():
-    now = datetime.now()
-    entries = [
-        {
-            "id": "entry_001",
-            "entry_name": "FastAPI 后端开发",
-            "entry_type": "ability",
-            "summary": "有 FastAPI 项目开发经验",
-            "created_at": now - timedelta(days=3),
-        },
-        {
-            "id": "entry_002",
-            "entry_name": "安徽理工大学",
-            "entry_type": "stage",
-            "summary": "当前教育阶段与学校背景",
-            "created_at": now - timedelta(days=2),
-        },
-        {
-            "id": "entry_003",
-            "entry_name": "个人成长记录",
-            "entry_type": "theme",
-            "summary": "长期关注成长、复盘与记录",
-            "created_at": now - timedelta(days=1),
-        },
-    ]
+  now = datetime.now()
+  entries = [
+    {
+      "id": "entry_001",
+      "entry_name": "FastAPI 后端开发",
+      "entry_type": "ability",
+      "summary": "有 FastAPI 项目开发经验",
+      "created_at": now - timedelta(days=3),
+    },
+    {
+      "id": "entry_002",
+      "entry_name": "安徽理工大学",
+      "entry_type": "stage",
+      "summary": "当前教育阶段与学校背景",
+      "created_at": now - timedelta(days=2),
+    },
+    {
+      "id": "entry_003",
+      "entry_name": "个人成长记录",
+      "entry_type": "theme",
+      "summary": "长期关注成长、复盘与记录",
+      "created_at": now - timedelta(days=1),
+    },
+  ]
 
-    library = build_memory_library(entries)
+  library = build_memory_library(entries)
 
-    print("=" * 60)
-    print("timeline")
-    print(library["timeline"])
-    print("=" * 60)
-    print("by_type")
-    print(library["by_type"])
-    print("=" * 60)
-    print("by_theme")
-    print(library["by_theme"])
+  print("=" * 60)
+  print("timeline")
+  print(library["timeline"])
+  print("=" * 60)
+  print("by_type")
+  print(library["by_type"])
+  print("=" * 60)
+  print("by_theme")
+  print(library["by_theme"])
 
 
 if __name__ == "__main__":
-    main()
+  main()
 ```
 
 ### 为什么 Day 9 的调试脚本很重要

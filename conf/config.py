@@ -36,10 +36,18 @@ class Settings(BaseSettings):
     MAX_FILE_SIZE: int = 10 * 1024 * 1024
 
     EMBEDDING_MODEL_NAME: str = "BAAI/bge-m3"
+    EMBEDDING_MODEL_PATH: str = ""
+    EMBEDDING_CACHE_DIR: Path = DEFAULT_BASE_DIR / "storage" / "model_cache" / "sentence_transformers"
+    EMBEDDING_LOCAL_FILES_ONLY: bool = False
+    EMBEDDING_PRELOAD_ON_STARTUP: bool = False
+    HF_ENDPOINT: str = ""
+    HF_HUB_ETAG_TIMEOUT: int = 10
+    HF_HUB_DOWNLOAD_TIMEOUT: int = 10
+    HF_TOKEN: str = ""
     VECTOR_BACKEND: str = "milvus"
     # 本机直接启动应用时默认连宿主机映射端口；
     # Docker Compose 中 app 容器会被环境变量覆盖为 http://milvus:19530。
-    MILVUS_URI: str = "http://127.0.0.1:19530"
+    MILVUS_URI: str = "http://124.223.14.145:19530"
     MILVUS_TOKEN: str = ""
     MILVUS_DB_NAME: str = "default"
     MILVUS_COLLECTION_NAME: str = "document_chunks"

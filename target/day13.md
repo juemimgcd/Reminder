@@ -574,13 +574,12 @@ from crud.knowledge_base import get_knowledge_base_by_id
 from crud.memory_entry import list_memory_entries_by_knowledge_base_id
 from models.user import User
 from schemas.advice import GrowthAdviceRequest, GrowthAdviceResult
-from utils.advice_builder import build_growth_advice
+from services.advice_service import build_growth_advice
 from utils.auth import get_current_user
-from utils.growth_analyzer import build_growth_report
-from utils.memory_organizer import build_memory_library
-from utils.profile_builder import build_personal_profile
+from services.growth_service import build_growth_report
+from services.memory_service import build_memory_library
+from services.profile_service import build_personal_profile
 from utils.response import success_response
-
 
 router = APIRouter(prefix="/advice", tags=["advice"])
 
@@ -592,19 +591,19 @@ async def get_growth_advice(
         current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_database),
 ):
-    # 你要做的事：
-    # 1. 查询 knowledge_base
-    # 2. 判断 knowledge_base 是否存在
-    # 3. 校验 knowledge_base.user_id == current_user.id
-    # 4. 读取该知识库下的 memory entries
-    # 5. 转成 build_memory_library(...) 需要的 dict 列表
-    # 6. 调 build_memory_library(entries)
-    # 7. 调 await build_personal_profile(...)
-    # 8. 调 await build_growth_report(...)
-    # 9. 调 await build_growth_advice(...)
-    # 10. 用 GrowthAdviceResult 校验结果
-    # 11. return success_response(data=data)
-    raise NotImplementedError("先自己实现 get_growth_advice")
+  # 你要做的事：
+  # 1. 查询 knowledge_base
+  # 2. 判断 knowledge_base 是否存在
+  # 3. 校验 knowledge_base.user_id == current_user.id
+  # 4. 读取该知识库下的 memory entries
+  # 5. 转成 build_memory_library(...) 需要的 dict 列表
+  # 6. 调 build_memory_library(entries)
+  # 7. 调 await build_personal_profile(...)
+  # 8. 调 await build_growth_report(...)
+  # 9. 调 await build_growth_advice(...)
+  # 10. 用 GrowthAdviceResult 校验结果
+  # 11. return success_response(data=data)
+  raise NotImplementedError("先自己实现 get_growth_advice")
 ```
 
 今天路由里你一定要做的事：
@@ -626,14 +625,13 @@ from crud.knowledge_base import get_knowledge_base_by_id
 from crud.memory_entry import list_memory_entries_by_knowledge_base_id
 from models.user import User
 from schemas.advice import GrowthAdviceRequest, GrowthAdviceResult
-from utils.advice_builder import build_growth_advice
+from services.advice_service import build_growth_advice
 from utils.auth import get_current_user
 from utils.exceptions import BusinessException
-from utils.growth_analyzer import build_growth_report
-from utils.memory_organizer import build_memory_library
-from utils.profile_builder import build_personal_profile
+from services.growth_service import build_growth_report
+from services.memory_service import build_memory_library
+from services.profile_service import build_personal_profile
 from utils.response import success_response
-
 
 router = APIRouter(prefix="/advice", tags=["advice"])
 
@@ -645,51 +643,51 @@ async def get_growth_advice(
         current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_database),
 ):
-    knowledge_base = await get_knowledge_base_by_id(db, knowledge_base_id)
-    if not knowledge_base:
-        raise BusinessException(message="知识库不存在", code=4042, status_code=404)
-    if knowledge_base.user_id != current_user.id:
-        raise BusinessException(message="知识库不属于当前用户", code=4007)
+  knowledge_base = await get_knowledge_base_by_id(db, knowledge_base_id)
+  if not knowledge_base:
+    raise BusinessException(message="知识库不存在", code=4042, status_code=404)
+  if knowledge_base.user_id != current_user.id:
+    raise BusinessException(message="知识库不属于当前用户", code=4007)
 
-    rows = await list_memory_entries_by_knowledge_base_id(
-        db,
-        knowledge_base_id=knowledge_base_id,
-    )
+  rows = await list_memory_entries_by_knowledge_base_id(
+    db,
+    knowledge_base_id=knowledge_base_id,
+  )
 
-    entries = [
-        {
-            "id": item.id,
-            "entry_name": item.entry_name,
-            "entry_type": item.entry_type,
-            "summary": item.summary,
-            "created_at": item.created_at,
-        }
-        for item in rows
-    ]
+  entries = [
+    {
+      "id": item.id,
+      "entry_name": item.entry_name,
+      "entry_type": item.entry_type,
+      "summary": item.summary,
+      "created_at": item.created_at,
+    }
+    for item in rows
+  ]
 
-    memory_library = build_memory_library(entries)
-    profile = await build_personal_profile(
-        user_id=current_user.id,
-        knowledge_base_id=knowledge_base_id,
-        memory_library=memory_library,
-    )
-    growth_report = await build_growth_report(
-        user_id=current_user.id,
-        knowledge_base_id=knowledge_base_id,
-        memory_library=memory_library,
-        profile=profile,
-        recent_days=30,
-    )
-    result = await build_growth_advice(
-        user_id=current_user.id,
-        knowledge_base_id=knowledge_base_id,
-        profile=profile,
-        growth_report=growth_report,
-        focus_goal=payload.focus_goal,
-    )
-    data = GrowthAdviceResult(**result)
+  memory_library = build_memory_library(entries)
+  profile = await build_personal_profile(
+    user_id=current_user.id,
+    knowledge_base_id=knowledge_base_id,
+    memory_library=memory_library,
+  )
+  growth_report = await build_growth_report(
+    user_id=current_user.id,
+    knowledge_base_id=knowledge_base_id,
+    memory_library=memory_library,
+    profile=profile,
+    recent_days=30,
+  )
+  result = await build_growth_advice(
+    user_id=current_user.id,
+    knowledge_base_id=knowledge_base_id,
+    profile=profile,
+    growth_report=growth_report,
+    focus_goal=payload.focus_goal,
+  )
+  data = GrowthAdviceResult(**result)
 
-    return success_response(data=data)
+  return success_response(data=data)
 ```
 
 ## 17:00 - 17:40：做一个最小调试脚本
@@ -711,25 +709,25 @@ async def get_growth_advice(
 ```python
 import asyncio
 
-from utils.advice_builder import build_growth_advice
+from services.advice_service import build_growth_advice
 
 
 async def main():
-    # 你要做的事：
-    # 1. 准备一个最小 profile 模拟对象
-    # 2. 准备一个最小 growth_report 模拟对象
-    # 3. 传入 focus_goal
-    # 4. 调 build_growth_advice(...)
-    # 5. 打印 advice_summary
-    # 6. 打印 current_priorities
-    # 7. 打印 action_suggestions
-    # 8. 打印 one_week_plan
-    # 9. 打印 reflection_questions
-    raise NotImplementedError("先自己实现 main")
+  # 你要做的事：
+  # 1. 准备一个最小 profile 模拟对象
+  # 2. 准备一个最小 growth_report 模拟对象
+  # 3. 传入 focus_goal
+  # 4. 调 build_growth_advice(...)
+  # 5. 打印 advice_summary
+  # 6. 打印 current_priorities
+  # 7. 打印 action_suggestions
+  # 8. 打印 one_week_plan
+  # 9. 打印 reflection_questions
+  raise NotImplementedError("先自己实现 main")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+  asyncio.run(main())
 ```
 
 建议至少打印：
@@ -745,85 +743,84 @@ if __name__ == "__main__":
 ```python
 import asyncio
 
-from utils.advice_builder import build_growth_advice
-
+from services.advice_service import build_growth_advice
 
 profile = {
-    "knowledge_base_id": "kb_demo_001",
-    "entry_count": 8,
-    "profile_summary": "长期关注个人成长、知识管理和 AI 后端系统构建。",
-    "main_themes": [
-        {
-            "theme_name": "知识管理",
-            "reason": "多条内容围绕长期沉淀和复用展开",
-            "evidence_entries": ["知识管理", "个人成长记录"],
-        }
-    ],
-    "ability_tags": [
-        {
-            "ability_name": "FastAPI 后端开发",
-            "reason": "持续在做接口和业务能力实现",
-            "evidence_entries": ["FastAPI 后端开发"],
-        }
-    ],
-    "expression_style": "偏结构化、复盘式表达",
-    "growth_focus": ["把系统能力沉淀成产品闭环"],
+  "knowledge_base_id": "kb_demo_001",
+  "entry_count": 8,
+  "profile_summary": "长期关注个人成长、知识管理和 AI 后端系统构建。",
+  "main_themes": [
+    {
+      "theme_name": "知识管理",
+      "reason": "多条内容围绕长期沉淀和复用展开",
+      "evidence_entries": ["知识管理", "个人成长记录"],
+    }
+  ],
+  "ability_tags": [
+    {
+      "ability_name": "FastAPI 后端开发",
+      "reason": "持续在做接口和业务能力实现",
+      "evidence_entries": ["FastAPI 后端开发"],
+    }
+  ],
+  "expression_style": "偏结构化、复盘式表达",
+  "growth_focus": ["把系统能力沉淀成产品闭环"],
 }
 
 growth_report = {
-    "knowledge_base_id": "kb_demo_001",
-    "analysis_window": "最近 30 天 vs 更早阶段",
-    "stage_summary": "最近明显从底层实现，转向产品化组合与可展示输出。",
-    "recent_focus": ["陪伴式输出", "成长建议"],
-    "theme_changes": [
-        {
-            "theme_name": "产品化输出",
-            "change_type": "stronger",
-            "reason": "最近内容多次强调统一结果页和行动导向",
-            "evidence_entries": ["统一输出层", "成长建议"],
-        }
-    ],
-    "highlights": ["已经从单功能实现开始转向完整产品闭环"],
-    "blockers": ["建议层还不够可执行"],
-    "next_actions": ["做建议 schema、建议 prompt 和建议路由"],
+  "knowledge_base_id": "kb_demo_001",
+  "analysis_window": "最近 30 天 vs 更早阶段",
+  "stage_summary": "最近明显从底层实现，转向产品化组合与可展示输出。",
+  "recent_focus": ["陪伴式输出", "成长建议"],
+  "theme_changes": [
+    {
+      "theme_name": "产品化输出",
+      "change_type": "stronger",
+      "reason": "最近内容多次强调统一结果页和行动导向",
+      "evidence_entries": ["统一输出层", "成长建议"],
+    }
+  ],
+  "highlights": ["已经从单功能实现开始转向完整产品闭环"],
+  "blockers": ["建议层还不够可执行"],
+  "next_actions": ["做建议 schema、建议 prompt 和建议路由"],
 }
 
 
 async def main():
-    result = await build_growth_advice(
-        user_id=1,
-        knowledge_base_id="kb_demo_001",
-        profile=profile,
-        growth_report=growth_report,
-        focus_goal="优先把项目做成更完整的可演示产品",
-    )
+  result = await build_growth_advice(
+    user_id=1,
+    knowledge_base_id="kb_demo_001",
+    profile=profile,
+    growth_report=growth_report,
+    focus_goal="优先把项目做成更完整的可演示产品",
+  )
 
-    print("advice_summary")
-    print(result["advice_summary"])
-    print()
+  print("advice_summary")
+  print(result["advice_summary"])
+  print()
 
-    print("current_priorities")
-    for item in result["current_priorities"]:
-        print(item)
-    print()
+  print("current_priorities")
+  for item in result["current_priorities"]:
+    print(item)
+  print()
 
-    print("action_suggestions")
-    for item in result["action_suggestions"]:
-        print(item)
-    print()
+  print("action_suggestions")
+  for item in result["action_suggestions"]:
+    print(item)
+  print()
 
-    print("one_week_plan")
-    for item in result["one_week_plan"]:
-        print(item)
-    print()
+  print("one_week_plan")
+  for item in result["one_week_plan"]:
+    print(item)
+  print()
 
-    print("reflection_questions")
-    for item in result["reflection_questions"]:
-        print(item)
+  print("reflection_questions")
+  for item in result["reflection_questions"]:
+    print(item)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+  asyncio.run(main())
 ```
 
 ## 17:40 - 18:00：给 Day 14 留下最终收束入口

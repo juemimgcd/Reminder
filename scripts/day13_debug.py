@@ -1,6 +1,6 @@
 import asyncio
 
-from utils.advice_builder import build_growth_advice
+from services.advice_service import build_growth_advice
 
 
 profile = {

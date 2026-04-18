@@ -213,12 +213,28 @@ Copy-Item .env-example .env
 ### Embedding / Vector Store
 
 - `EMBEDDING_MODEL_NAME`
+- `EMBEDDING_MODEL_PATH`
+- `EMBEDDING_CACHE_DIR`
+- `EMBEDDING_LOCAL_FILES_ONLY`
+- `EMBEDDING_PRELOAD_ON_STARTUP`
+- `HF_ENDPOINT`
+- `HF_HUB_ETAG_TIMEOUT`
+- `HF_HUB_DOWNLOAD_TIMEOUT`
 - `MILVUS_URI`
 - `MILVUS_DB_NAME`
 - `MILVUS_COLLECTION_NAME`
 - `MILVUS_INDEX_TYPE`
 - `MILVUS_METRIC_TYPE`
 - `MILVUS_SEARCH_PARAMS`
+
+Embedding 模块现在会按下面的顺序选择模型来源：
+
+1. `EMBEDDING_MODEL_PATH` 指定的本地目录
+2. `EMBEDDING_MODEL_NAME` 指向的本地目录
+3. `EMBEDDING_CACHE_DIR` 下已经缓存好的 Hugging Face snapshot
+4. `EMBEDDING_MODEL_NAME` 对应的远端仓库
+
+如果本地已经有缓存 snapshot，服务会直接加载本地路径，不再每次启动都去 Hugging Face 解析仓库。
 
 ### Docker 构建可选项
 
@@ -240,6 +256,38 @@ pip install -r requirements.txt
 
 复制 `.env-example` 为 `.env`，并补充你的真实配置。
 
+如果你希望 embedding 只在第一次预热时联网，推荐这样配置：
+
+```env
+EMBEDDING_MODEL_NAME=BAAI/bge-m3
+EMBEDDING_CACHE_DIR=./storage/model_cache/sentence_transformers
+EMBEDDING_LOCAL_FILES_ONLY=false
+EMBEDDING_PRELOAD_ON_STARTUP=false
+HF_ENDPOINT=https://hf-mirror.com
+HF_HUB_ETAG_TIMEOUT=60
+HF_HUB_DOWNLOAD_TIMEOUT=600
+```
+
+第一次预热模型：
+
+```bash
+python scripts/preload_embedding.py
+```
+
+PowerShell 如果安装的是 Python Launcher：
+
+```powershell
+py -3 scripts/preload_embedding.py
+```
+
+预热成功后，把 `.env` 改成：
+
+```env
+EMBEDDING_LOCAL_FILES_ONLY=true
+```
+
+这样后续应用进程和 Celery worker 都会优先走本地模型，不再依赖运行时下载。
+
 ### 3. 准备 PostgreSQL
 
 确保数据库已启动，并且 `DATABASE_URL` 可用。
@@ -255,6 +303,14 @@ alembic upgrade head
 ```bash
 uvicorn main:app --reload
 ```
+
+如果你希望应用启动时就把 embedding 预热到当前进程，可以额外配置：
+
+```env
+EMBEDDING_PRELOAD_ON_STARTUP=true
+```
+
+注意：`--reload` 会启动额外进程，本地开发时可能看到 embedding 初始化日志出现多次；这不等于每次都重新下载模型。
 
 默认访问地址：
 

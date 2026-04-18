@@ -581,11 +581,10 @@ from crud.memory_entry import list_memory_entries_by_knowledge_base_id
 from models.user import User
 from schemas.growth_report import GrowthReportResult
 from utils.auth import get_current_user
-from utils.growth_analyzer import build_growth_report
-from utils.memory_organizer import build_memory_library
-from utils.profile_builder import build_personal_profile
+from services.growth_service import build_growth_report
+from services.memory_service import build_memory_library
+from services.profile_service import build_personal_profile
 from utils.response import success_response
-
 
 router = APIRouter(prefix="/analysis", tags=["analysis"])
 
@@ -597,18 +596,18 @@ async def get_growth_report(
         current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_database),
 ):
-    # 你要做的事：
-    # 1. 查询 knowledge_base
-    # 2. 判断 knowledge_base 是否存在
-    # 3. 校验 knowledge_base.user_id == current_user.id
-    # 4. 读取该知识库下的 memory entries
-    # 5. 转成 build_memory_library(...) 需要的 dict 列表
-    # 6. 调 build_memory_library(entries)
-    # 7. 调 await build_personal_profile(...)
-    # 8. 调 await build_growth_report(...)
-    # 9. 用 GrowthReportResult 校验结果
-    # 10. return success_response(data=data)
-    raise NotImplementedError("先自己实现 get_growth_report")
+  # 你要做的事：
+  # 1. 查询 knowledge_base
+  # 2. 判断 knowledge_base 是否存在
+  # 3. 校验 knowledge_base.user_id == current_user.id
+  # 4. 读取该知识库下的 memory entries
+  # 5. 转成 build_memory_library(...) 需要的 dict 列表
+  # 6. 调 build_memory_library(entries)
+  # 7. 调 await build_personal_profile(...)
+  # 8. 调 await build_growth_report(...)
+  # 9. 用 GrowthReportResult 校验结果
+  # 10. return success_response(data=data)
+  raise NotImplementedError("先自己实现 get_growth_report")
 ```
 
 推荐内部流程：
@@ -634,11 +633,10 @@ from models.user import User
 from schemas.growth_report import GrowthReportResult
 from utils.auth import get_current_user
 from utils.exceptions import BusinessException
-from utils.growth_analyzer import build_growth_report
-from utils.memory_organizer import build_memory_library
-from utils.profile_builder import build_personal_profile
+from services.growth_service import build_growth_report
+from services.memory_service import build_memory_library
+from services.profile_service import build_personal_profile
 from utils.response import success_response
-
 
 router = APIRouter(prefix="/analysis", tags=["analysis"])
 
@@ -650,44 +648,44 @@ async def get_growth_report(
         current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_database),
 ):
-    knowledge_base = await get_knowledge_base_by_id(db, knowledge_base_id)
-    if not knowledge_base:
-        raise BusinessException(message="知识库不存在", code=4042, status_code=404)
-    if knowledge_base.user_id != current_user.id:
-        raise BusinessException(message="知识库不属于当前用户", code=4007)
+  knowledge_base = await get_knowledge_base_by_id(db, knowledge_base_id)
+  if not knowledge_base:
+    raise BusinessException(message="知识库不存在", code=4042, status_code=404)
+  if knowledge_base.user_id != current_user.id:
+    raise BusinessException(message="知识库不属于当前用户", code=4007)
 
-    rows = await list_memory_entries_by_knowledge_base_id(
-        db,
-        knowledge_base_id=knowledge_base_id,
-    )
+  rows = await list_memory_entries_by_knowledge_base_id(
+    db,
+    knowledge_base_id=knowledge_base_id,
+  )
 
-    entries = [
-        {
-            "id": item.id,
-            "entry_name": item.entry_name,
-            "entry_type": item.entry_type,
-            "summary": item.summary,
-            "created_at": item.created_at,
-        }
-        for item in rows
-    ]
+  entries = [
+    {
+      "id": item.id,
+      "entry_name": item.entry_name,
+      "entry_type": item.entry_type,
+      "summary": item.summary,
+      "created_at": item.created_at,
+    }
+    for item in rows
+  ]
 
-    memory_library = build_memory_library(entries)
-    profile = await build_personal_profile(
-        user_id=current_user.id,
-        knowledge_base_id=knowledge_base_id,
-        memory_library=memory_library,
-    )
-    report = await build_growth_report(
-        user_id=current_user.id,
-        knowledge_base_id=knowledge_base_id,
-        memory_library=memory_library,
-        profile=profile,
-        recent_days=recent_days,
-    )
-    data = GrowthReportResult(**report)
+  memory_library = build_memory_library(entries)
+  profile = await build_personal_profile(
+    user_id=current_user.id,
+    knowledge_base_id=knowledge_base_id,
+    memory_library=memory_library,
+  )
+  report = await build_growth_report(
+    user_id=current_user.id,
+    knowledge_base_id=knowledge_base_id,
+    memory_library=memory_library,
+    profile=profile,
+    recent_days=recent_days,
+  )
+  data = GrowthReportResult(**report)
 
-    return success_response(data=data)
+  return success_response(data=data)
 ```
 
 ## 17:00 - 17:40：做一个最小调试脚本
@@ -708,25 +706,25 @@ async def get_growth_report(
 ```python
 import asyncio
 
-from utils.growth_analyzer import build_growth_report
-from utils.profile_builder import build_personal_profile
+from services.growth_service import build_growth_report
+from services.profile_service import build_personal_profile
 
 
 async def main():
-    # 你要做的事：
-    # 1. 准备一个最小 memory_library 模拟对象
-    # 2. 先调 build_personal_profile(...) 拿到长期画像
-    # 3. 再调 build_growth_report(...)
-    # 4. 打印 analysis_window
-    # 5. 打印 stage_summary
-    # 6. 打印 theme_changes
-    # 7. 打印 highlights
-    # 8. 打印 next_actions
-    raise NotImplementedError("先自己实现 main")
+  # 你要做的事：
+  # 1. 准备一个最小 memory_library 模拟对象
+  # 2. 先调 build_personal_profile(...) 拿到长期画像
+  # 3. 再调 build_growth_report(...)
+  # 4. 打印 analysis_window
+  # 5. 打印 stage_summary
+  # 6. 打印 theme_changes
+  # 7. 打印 highlights
+  # 8. 打印 next_actions
+  raise NotImplementedError("先自己实现 main")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+  asyncio.run(main())
 ```
 
 建议至少打印：
@@ -743,99 +741,98 @@ if __name__ == "__main__":
 import asyncio
 from datetime import datetime
 
-from utils.growth_analyzer import build_growth_report
-from utils.profile_builder import build_personal_profile
-
+from services.growth_service import build_growth_report
+from services.profile_service import build_personal_profile
 
 memory_library = {
-    "timeline": [
-        {
-            "entry_id": "entry_001",
-            "entry_name": "Java 后端开发",
-            "entry_type": "ability",
-            "summary": "早期主要在 Java 后端方向积累经验",
-            "created_at": datetime(2026, 2, 1, 10, 0, 0),
-        },
-        {
-            "entry_id": "entry_002",
-            "entry_name": "个人成长记录",
-            "entry_type": "theme",
-            "summary": "持续进行成长复盘与阶段总结",
-            "created_at": datetime(2026, 2, 15, 10, 0, 0),
-        },
-        {
-            "entry_id": "entry_003",
-            "entry_name": "FastAPI 后端开发",
-            "entry_type": "ability",
-            "summary": "最近开始深入使用 FastAPI 构建 AI 后端",
-            "created_at": datetime(2026, 3, 25, 10, 0, 0),
-        },
-        {
-            "entry_id": "entry_004",
-            "entry_name": "Agentic RAG",
-            "entry_type": "theme",
-            "summary": "最近持续关注 Agentic RAG 与记忆系统",
-            "created_at": datetime(2026, 4, 2, 10, 0, 0),
-        },
-    ],
-    "by_type": {
-        "ability": ["Java 后端开发", "FastAPI 后端开发"],
-        "theme": ["个人成长记录", "Agentic RAG"],
+  "timeline": [
+    {
+      "entry_id": "entry_001",
+      "entry_name": "Java 后端开发",
+      "entry_type": "ability",
+      "summary": "早期主要在 Java 后端方向积累经验",
+      "created_at": datetime(2026, 2, 1, 10, 0, 0),
     },
-    "by_theme": [
-        {
-            "theme_name": "个人成长记录",
-            "entries": ["持续进行成长复盘与阶段总结"],
-            "count": 1,
-        },
-        {
-            "theme_name": "Agentic RAG",
-            "entries": ["最近持续关注 Agentic RAG 与记忆系统"],
-            "count": 1,
-        },
-    ],
+    {
+      "entry_id": "entry_002",
+      "entry_name": "个人成长记录",
+      "entry_type": "theme",
+      "summary": "持续进行成长复盘与阶段总结",
+      "created_at": datetime(2026, 2, 15, 10, 0, 0),
+    },
+    {
+      "entry_id": "entry_003",
+      "entry_name": "FastAPI 后端开发",
+      "entry_type": "ability",
+      "summary": "最近开始深入使用 FastAPI 构建 AI 后端",
+      "created_at": datetime(2026, 3, 25, 10, 0, 0),
+    },
+    {
+      "entry_id": "entry_004",
+      "entry_name": "Agentic RAG",
+      "entry_type": "theme",
+      "summary": "最近持续关注 Agentic RAG 与记忆系统",
+      "created_at": datetime(2026, 4, 2, 10, 0, 0),
+    },
+  ],
+  "by_type": {
+    "ability": ["Java 后端开发", "FastAPI 后端开发"],
+    "theme": ["个人成长记录", "Agentic RAG"],
+  },
+  "by_theme": [
+    {
+      "theme_name": "个人成长记录",
+      "entries": ["持续进行成长复盘与阶段总结"],
+      "count": 1,
+    },
+    {
+      "theme_name": "Agentic RAG",
+      "entries": ["最近持续关注 Agentic RAG 与记忆系统"],
+      "count": 1,
+    },
+  ],
 }
 
 
 async def main():
-    profile = await build_personal_profile(
-        user_id=1,
-        knowledge_base_id="kb_demo_001",
-        memory_library=memory_library,
-    )
-    report = await build_growth_report(
-        user_id=1,
-        knowledge_base_id="kb_demo_001",
-        memory_library=memory_library,
-        profile=profile,
-        recent_days=30,
-    )
+  profile = await build_personal_profile(
+    user_id=1,
+    knowledge_base_id="kb_demo_001",
+    memory_library=memory_library,
+  )
+  report = await build_growth_report(
+    user_id=1,
+    knowledge_base_id="kb_demo_001",
+    memory_library=memory_library,
+    profile=profile,
+    recent_days=30,
+  )
 
-    print("analysis_window")
-    print(report["analysis_window"])
-    print()
+  print("analysis_window")
+  print(report["analysis_window"])
+  print()
 
-    print("stage_summary")
-    print(report["stage_summary"])
-    print()
+  print("stage_summary")
+  print(report["stage_summary"])
+  print()
 
-    print("theme_changes")
-    for item in report["theme_changes"]:
-        print(item)
-    print()
+  print("theme_changes")
+  for item in report["theme_changes"]:
+    print(item)
+  print()
 
-    print("highlights")
-    for item in report["highlights"]:
-        print(item)
-    print()
+  print("highlights")
+  for item in report["highlights"]:
+    print(item)
+  print()
 
-    print("next_actions")
-    for item in report["next_actions"]:
-        print(item)
+  print("next_actions")
+  for item in report["next_actions"]:
+    print(item)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+  asyncio.run(main())
 ```
 
 ## 17:40 - 18:00：给 Day 12 留下产品化入口

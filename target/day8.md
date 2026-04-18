@@ -742,7 +742,7 @@ import asyncio
 
 from langchain_core.documents import Document as LCDocument
 
-from utils.entry_extractor import extract_entries_from_chunk
+from services.memory_service import extract_entries_from_chunk
 
 
 async def main():

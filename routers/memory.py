@@ -9,7 +9,7 @@ from crud.memory_entry import (
 )
 from schemas.memory_library import MemoryLibraryData
 from utils.exceptions import BusinessException
-from utils.memory_organizer import build_memory_library
+from services.memory_service import build_memory_library
 from utils.response import success_response
 
 

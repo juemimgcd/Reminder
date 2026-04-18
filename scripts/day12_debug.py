@@ -1,6 +1,6 @@
 import asyncio
 
-from utils.companion_builder import build_companion_response
+from services.companion_service import build_companion_response
 
 
 rag_result = {
