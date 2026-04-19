@@ -12,6 +12,27 @@ from infra.circuit_breaker import before_call, record_success, record_failure
 from infra.retry import retry_async
 
 
+def _sanitize_metadata_for_milvus(metadata: dict[str, Any]) -> dict[str, Any]:
+    sanitized: dict[str, Any] = {}
+    for key, value in metadata.items():
+        if value is None:
+            continue
+        sanitized[key] = value
+    return sanitized
+
+
+def _sanitize_documents_for_milvus(chunk_docs: list[LCDocument]) -> list[LCDocument]:
+    sanitized_docs: list[LCDocument] = []
+    for chunk in chunk_docs:
+        sanitized_docs.append(
+            LCDocument(
+                page_content=chunk.page_content,
+                metadata=_sanitize_metadata_for_milvus(chunk.metadata),
+            )
+        )
+    return sanitized_docs
+
+
 # 组装 Milvus 连接参数，兼容无 token 和带 token 两种配置。
 def _build_connection_args() -> dict[str, str]:
     connection_args: dict[str, str] = {
@@ -75,9 +96,10 @@ async def add_documents_to_vector_store(chunk_docs: list[LCDocument]) -> None:
         return
 
     vector_store = get_vector_store()
-    ids = [str(chunk.metadata["chunk_id"]) for chunk in chunk_docs]
+    sanitized_docs = _sanitize_documents_for_milvus(chunk_docs)
+    ids = [str(chunk.metadata["chunk_id"]) for chunk in sanitized_docs]
     log_event("vector_store", "info", "vector_store.add.start", chunk_count=len(chunk_docs))
-    vector_store.add_documents(documents=chunk_docs, ids=ids)
+    vector_store.add_documents(documents=sanitized_docs, ids=ids)
     log_event("vector_store", "info", "vector_store.add.completed", chunk_count=len(chunk_docs))
 
 
@@ -130,8 +152,9 @@ async def add_documents_to_vector_store_in_batches(
         batch_size: int,
 ) -> dict:
     vector_store = get_vector_store()
+    sanitized_docs = _sanitize_documents_for_milvus(chunk_docs)
     batches = build_document_batches(
-        chunk_docs,
+        sanitized_docs,
         batch_size=batch_size,
     )
     log_event(

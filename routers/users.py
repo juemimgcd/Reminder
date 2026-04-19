@@ -4,14 +4,17 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from conf.database import get_database
-from crud.knowledge_base import create_knowledge_base, list_knowledge_bases_by_user_id
-from crud.user import get_user_by_id, list_users
+from crud.document import list_documents
+from crud.knowledge_base import create_knowledge_base, get_knowledge_base_by_id, list_knowledge_bases_by_user_id
+from models.user import User
 from schemas.knowledge_base import (
     KnowledgeBaseCreateRequest,
     KnowledgeBaseData,
+    KnowledgeBaseDeleteData,
     KnowledgeBaseListData,
 )
-from schemas.user import UserCreateRequest, UserData, UserListData
+from services.resource_service import delete_knowledge_base_resources
+from utils.auth import get_current_user
 from utils.exceptions import BusinessException
 from utils.response import success_response
 
@@ -22,37 +25,19 @@ def build_knowledge_base_id() -> str:
     return f"kb_{uuid.uuid4().hex[:12]}"
 
 
-@router.post("")
-async def create_user_api(
-        payload: UserCreateRequest,
-        db: AsyncSession = Depends(get_database),
-):
-    _ = payload
-    _ = db
-    raise BusinessException(
-        message="请使用 /auth/register 完成用户注册",
-        code=4017,
-        status_code=400,
-    )
-
-
-@router.get("")
-async def list_users_api(db: AsyncSession = Depends(get_database)):
-    users = await list_users(db)
-    items = [UserData.model_validate(item) for item in users]
-    data = UserListData(items=items, total=len(items))
-    return success_response(data=data)
+def ensure_current_user_matches(current_user: User, user_id: int) -> None:
+    if current_user.id != user_id:
+        raise BusinessException(message="你无权访问该用户资源", code=4007, status_code=403)
 
 
 @router.post("/{user_id}/knowledge-bases")
 async def create_knowledge_base_api(
         user_id: int,
         payload: KnowledgeBaseCreateRequest,
+        current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_database),
 ):
-    user = await get_user_by_id(db, user_id)
-    if not user:
-        raise BusinessException(message="用户不存在", code=4041, status_code=404)
+    ensure_current_user_matches(current_user, user_id)
 
     knowledge_base = await create_knowledge_base(
         db,
@@ -69,13 +54,47 @@ async def create_knowledge_base_api(
 @router.get("/{user_id}/knowledge-bases")
 async def list_knowledge_bases_api(
         user_id: int,
+        current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_database),
 ):
-    user = await get_user_by_id(db, user_id)
-    if not user:
-        raise BusinessException(message="用户不存在", code=4041, status_code=404)
+    ensure_current_user_matches(current_user, user_id)
 
     knowledge_bases = await list_knowledge_bases_by_user_id(db, user_id=user_id)
     items = [KnowledgeBaseData.model_validate(item) for item in knowledge_bases]
     data = KnowledgeBaseListData(items=items, total=len(items))
     return success_response(data=data)
+
+
+@router.delete("/{user_id}/knowledge-bases/{knowledge_base_id}")
+async def delete_knowledge_base_api(
+        user_id: int,
+        knowledge_base_id: str,
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_database),
+):
+    ensure_current_user_matches(current_user, user_id)
+
+    knowledge_base = await get_knowledge_base_by_id(db, knowledge_base_id)
+    if not knowledge_base or knowledge_base.user_id != user_id:
+        raise BusinessException(message="知识库不存在", code=4042, status_code=404)
+
+    if knowledge_base.is_default:
+        raise BusinessException(message="默认知识库不能删除", code=4022, status_code=400)
+
+    documents = await list_documents(
+        db,
+        knowledge_base_pk=knowledge_base.pk,
+    )
+    if any(doc.status in {"queued", "indexing", "parsing", "chunking", "embedding", "vector_upserting"} for doc in documents):
+        raise BusinessException(message="知识库中仍有文档在索引中，暂时不能删除", code=4023, status_code=400)
+
+    result = await delete_knowledge_base_resources(
+        db,
+        knowledge_base_id=knowledge_base.id,
+        knowledge_base_pk=knowledge_base.pk,
+    )
+    await db.commit()
+    return success_response(
+        data=KnowledgeBaseDeleteData(**result),
+        message="knowledge base deleted",
+    )
