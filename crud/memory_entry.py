@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from crud.document import get_document_by_id
@@ -70,6 +70,34 @@ async def list_memory_entries_by_user_id(
     )
     res = await db.execute(sql)
     return list(res.scalars().all())
+
+
+async def delete_memory_entries_by_document_id(
+        db: AsyncSession,
+        *,
+        document_id: str,
+) -> int:
+    document = await get_document_by_id(db, document_id=document_id)
+    if not document:
+        return 0
+
+    sql = delete(MemoryEntry).where(MemoryEntry.document_pk == document.pk)
+    res = await db.execute(sql)
+    return res.rowcount or 0
+
+
+async def delete_memory_entries_by_knowledge_base_id(
+        db: AsyncSession,
+        *,
+        knowledge_base_id: str,
+) -> int:
+    knowledge_base = await get_knowledge_base_by_id(db, knowledge_base_id=knowledge_base_id)
+    if not knowledge_base:
+        return 0
+
+    sql = delete(MemoryEntry).where(MemoryEntry.knowledge_base_pk == knowledge_base.pk)
+    res = await db.execute(sql)
+    return res.rowcount or 0
 
 
 

@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from conf.config import settings
 from conf.database import engine
 from clients.embedding_client import get_embeddings
-from routers import auth, chat, documents, health, memory, users, advice, companion, profile, analysis
+from routers import auth, chat, documents, health, memory, users, advice, companion, profile, analysis, tasks, graph
 from utils.exceptions import BusinessException, business_exception_handler
 from utils.response import success_response
 from conf.logging import setup_logger, app_logger
@@ -56,6 +56,8 @@ app.include_router(advice.router)
 app.include_router(analysis.router)
 app.include_router(profile.router)
 app.include_router(companion.router)
+app.include_router(tasks.router)
+app.include_router(graph.router)
 
 
 @app.get("/")

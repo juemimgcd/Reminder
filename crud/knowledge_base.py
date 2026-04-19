@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.knowledge_base import KnowledgeBase
@@ -85,6 +85,16 @@ async def get_or_create_default_knowledge_base(
         description="系统自动创建的默认知识库",
         is_default=True,
     )
+
+
+async def delete_knowledge_base_by_id(
+        db: AsyncSession,
+        *,
+        knowledge_base_id: str,
+) -> int:
+    sql = delete(KnowledgeBase).where(KnowledgeBase.id == knowledge_base_id)
+    res = await db.execute(sql)
+    return res.rowcount or 0
 
 
 

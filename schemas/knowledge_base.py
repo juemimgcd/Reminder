@@ -22,3 +22,12 @@ class KnowledgeBaseData(BaseModel):
 class KnowledgeBaseListData(BaseModel):
     items: list[KnowledgeBaseData]
     total: int
+
+
+class KnowledgeBaseDeleteData(BaseModel):
+    knowledge_base_id: str
+    document_count: int
+    chunk_count: int
+    deleted_memory_entry_count: int
+    deleted_task_count: int
+    deleted_vector_count: int
