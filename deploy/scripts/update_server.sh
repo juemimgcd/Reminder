@@ -2,7 +2,7 @@
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-/opt/mneme}"
-BRANCH="${BRANCH:-main}"
+BRANCH="${BRANCH:-master}"
 
 cd "$APP_DIR"
 
