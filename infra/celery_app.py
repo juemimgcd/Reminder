@@ -19,8 +19,8 @@ def build_celery_app() -> Celery:
         accept_content=["json"],
         timezone="Asia/Shanghai",
         enable_utc=False,
+        imports=("tasks.index_tasks",),
     )
-    app.autodiscover_tasks(["tasks"])
     return app
 
 
