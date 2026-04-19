@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from models.document import Document
 
@@ -92,3 +92,13 @@ async def update_document_status(
     await db.flush()
     await db.refresh(doc)
     return doc
+
+
+async def delete_document_by_id(
+        db: AsyncSession,
+        *,
+        document_id: str,
+) -> int:
+    sql = delete(Document).where(Document.id == document_id)
+    res = await db.execute(sql)
+    return res.rowcount or 0

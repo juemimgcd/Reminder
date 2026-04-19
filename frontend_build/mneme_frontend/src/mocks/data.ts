@@ -1,6 +1,7 @@
 import type {
   AbilityTag,
   ActivityItem,
+  GrowthAdvice,
   AuthToken,
   ChatExchange,
   DashboardMetric,
@@ -222,6 +223,33 @@ export const growthMetrics: GrowthReport = {
   highlights: ['阶段性输出更稳定', '开始把素材转成主题簇'],
   blockers: ['旧材料仍未完全索引', '部分主题还停留在单点记录'],
   next_actions: ['优先清理待索引文档', '继续围绕固定主题做周复盘'],
+};
+
+export const adviceInsights: GrowthAdvice = {
+  knowledge_base_id: 'kb_life_writing',
+  focus_goal: '把知识沉淀成稳定输出节律',
+  advice_summary:
+    '当前最值得做的不是继续扩充材料，而是围绕固定主题把已有知识库转成持续输出节律。',
+  current_priorities: ['先完成存量文档索引', '固定每周一次主题复盘', '把高频主题做成可复用写作清单'],
+  action_suggestions: [
+    {
+      area: '索引清理',
+      why_now: '未索引材料会直接削弱后续画像和成长分析的稳定性。',
+      action: '先把待处理文档全部进入 indexed 状态。',
+      first_step: '本周先清掉当前知识库里最常用的 1 份待索引文档。',
+      evidence_entries: ['知识库即作品集', '从记录转向分析'],
+    },
+    {
+      area: '主题输出',
+      why_now: '你已经有稳定主题，但还缺少固定输出回路。',
+      action: '每周围绕一个高频主题产出一篇短复盘或卡片总结。',
+      first_step: '从“长期主义”开始，写一篇 500 字的本周观察。',
+      evidence_entries: ['重建晨间节律', '知识库即作品集'],
+    },
+  ],
+  avoid_list: ['继续无上限扩充新材料', '同时追太多分散主题'],
+  one_week_plan: ['完成一次 memory 重建', '补齐待索引文档', '输出一篇主题复盘'],
+  reflection_questions: ['哪些材料还没进入可检索状态？', '最近最值得持续追踪的主题到底是哪一个？'],
 };
 
 export const dashboardMetrics: DashboardMetric[] = [

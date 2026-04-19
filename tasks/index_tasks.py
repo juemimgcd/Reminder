@@ -2,6 +2,7 @@ import asyncio
 from conf.database import AsyncSessionLocal
 from conf.logging import app_logger
 from crud.document import update_document_status
+from crud.task_record import get_task_record_by_id
 from infra.celery_app import celery_app
 from crud.document import get_document_by_id
 from pipelines.document_index_pipeline import run_document_index_pipeline
@@ -47,6 +48,15 @@ async def run_index_document_task_async(
             doc = await get_document_by_id(db, document_id=document_id)
             if not doc:
                 raise BusinessException(message="document not found", code=404)
+
+            task_record = await get_task_record_by_id(db, task_id=task_id)
+            if task_record and task_record.status == "canceled":
+                app_logger.bind(module="index_task").info(
+                    f"worker task skipped because canceled task_id={task_id} document_id={document_id}"
+                )
+                await update_document_status(db, document_id=document_id, status="uploaded")
+                await db.commit()
+                return
 
             result = await run_document_index_pipeline(
                 db,

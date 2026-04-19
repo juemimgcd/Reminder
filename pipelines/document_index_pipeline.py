@@ -11,6 +11,7 @@ from clients.vector_store_client import add_documents_to_vector_store_in_batches
 from collections.abc import Awaitable, Callable
 
 from schemas.document import DocumentIndexPipelineResult
+from services.memory_service import rebuild_memory_entries_for_document
 
 
 async def emit_stage(
@@ -83,6 +84,11 @@ async def run_document_index_pipeline(
         document_id=doc.id,
         document_pk=doc.pk,
         chunk_docs=chunk_docs,
+    )
+
+    await rebuild_memory_entries_for_document(
+        db,
+        document=doc,
     )
 
     await emit_stage("embedding", on_stage_change=on_stage_change)

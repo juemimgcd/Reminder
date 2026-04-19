@@ -74,3 +74,12 @@ class DocumentIndexPipelineResult(BaseModel):
     vector_batch_size: int
     indexed_vector_count: int
     status: str
+
+
+class DocumentDeleteData(BaseModel):
+    document_id: str
+    knowledge_base_id: str
+    chunk_count: int
+    deleted_memory_entry_count: int
+    deleted_task_count: int
+    deleted_vector_count: int
