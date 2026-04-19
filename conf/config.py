@@ -20,8 +20,14 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Agentic RAG Assistant"
     VERSION: str = "0.1.0"
     DESCRIPTION: str = "一个基于 FastAPI 的 Agentic RAG 私有知识助手后端项目"
+    LOG_LEVEL: str = "INFO"
 
     API_PREFIX: str = "/api/v1"
+    CORS_ALLOWED_ORIGINS: list[str] = Field(default_factory=list)
+    CORS_ALLOW_ORIGIN_REGEX: str = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
+    CORS_ALLOW_CREDENTIALS: bool = True
+    CORS_ALLOW_METHODS: list[str] = Field(default_factory=lambda: ["*"])
+    CORS_ALLOW_HEADERS: list[str] = Field(default_factory=lambda: ["*"])
 
     # 数据库地址默认给出本地开发值，同时允许通过 .env 完整覆盖。
     DATABASE_URL: str = "postgresql+asyncpg://postgres:123456@localhost:5432/agentic"

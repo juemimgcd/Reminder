@@ -3,8 +3,8 @@ from typing import Any
 
 from langchain_core.documents import Document as LCDocument
 
-from clients.vector_store_client import get_vector_store, similarity_search_with_score_resilient
-from conf.logging import app_logger
+from clients.vector_store_client import similarity_search_with_score_resilient
+from conf.logging import log_event
 
 # 表达检索阶段使用的 metadata 过滤条件，结构示例：
 # {
@@ -187,9 +187,14 @@ async def retrieve_documents_with_scores(
         user_id=user_id,
         knowledge_base_id=knowledge_base_id,
     )
-    app_logger.bind(module="context_service").info(
-        f"retrieve documents start knowledge_base_id={knowledge_base_id} user_id={user_id} "
-        f"top_k={top_k} has_expr={'expr' in search_kwargs}"
+    log_event(
+        "context_service",
+        "debug",
+        "context.retrieve.start",
+        knowledge_base_id=knowledge_base_id,
+        user_id=user_id,
+        top_k=top_k,
+        has_expr="expr" in search_kwargs,
     )
     return await similarity_search_with_score_resilient(**search_kwargs)
 
@@ -336,9 +341,15 @@ async def build_query_context(
         knowledge_base_id: str | None = None,
         context_budget: int = 4000,
 ) -> dict:
-    app_logger.bind(module="context_service").info(
-        f"build query context start knowledge_base_id={knowledge_base_id} user_id={user_id} "
-        f"top_k={top_k} context_budget={context_budget} query_length={len(query)}"
+    log_event(
+        "context_service",
+        "info",
+        "context.build.start",
+        knowledge_base_id=knowledge_base_id,
+        user_id=user_id,
+        top_k=top_k,
+        context_budget=context_budget,
+        query_length=len(query),
     )
     raw_items = await retrieve_documents_with_scores(
         query=query,
@@ -355,10 +366,16 @@ async def build_query_context(
     )
 
     final_docs = [doc for doc, _ in final_items]
-    app_logger.bind(module="context_service").info(
-        f"build query context completed knowledge_base_id={knowledge_base_id} user_id={user_id} "
-        f"raw_count={len(raw_items)} dedup_count={len(deduped_items)} "
-        f"merged_count={len(merged_items)} final_count={len(final_items)}"
+    log_event(
+        "context_service",
+        "info",
+        "context.build.completed",
+        knowledge_base_id=knowledge_base_id,
+        user_id=user_id,
+        raw_count=len(raw_items),
+        dedup_count=len(deduped_items),
+        merged_count=len(merged_items),
+        final_count=len(final_items),
     )
 
     return {
@@ -369,8 +386,6 @@ async def build_query_context(
         "merged_count": len(merged_items),
         "final_count": len(final_items),
     }
-
-
 
 
 

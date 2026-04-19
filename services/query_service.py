@@ -2,7 +2,7 @@ from langchain_core.output_parsers import StrOutputParser
 
 from clients.llm_client import get_llm
 from conf.config import settings
-from conf.logging import app_logger
+from conf.logging import log_event
 from infra.circuit_breaker import before_call, record_success, record_failure
 from infra.retry import retry_async
 from services.context_service import build_query_context
@@ -23,9 +23,14 @@ async def generate_rag_answer(
         user_id: int | None = None,
         top_k: int = 4,
 ) -> dict:
-    app_logger.bind(module="query_service").info(
-        f"rag answer start knowledge_base_id={knowledge_base_id} user_id={user_id} top_k={top_k} "
-        f"question_length={len(question)}"
+    log_event(
+        "query_service",
+        "info",
+        "rag.answer.start",
+        knowledge_base_id=knowledge_base_id,
+        user_id=user_id,
+        top_k=top_k,
+        question_length=len(question),
     )
     context_packet = await build_query_context(
         query=question,
@@ -33,15 +38,25 @@ async def generate_rag_answer(
         user_id=user_id,
         knowledge_base_id=knowledge_base_id,
     )
-    app_logger.bind(module="query_service").info(
-        f"rag context ready knowledge_base_id={knowledge_base_id} user_id={user_id} "
-        f"raw_count={context_packet['raw_count']} dedup_count={context_packet['dedup_count']} "
-        f"merged_count={context_packet['merged_count']} final_count={context_packet['final_count']}"
+    log_event(
+        "query_service",
+        "info",
+        "rag.context.ready",
+        knowledge_base_id=knowledge_base_id,
+        user_id=user_id,
+        raw_count=context_packet["raw_count"],
+        dedup_count=context_packet["dedup_count"],
+        merged_count=context_packet["merged_count"],
+        final_count=context_packet["final_count"],
     )
 
     if not context_packet["sources"]:
-        app_logger.bind(module="query_service").warning(
-            f"rag answer empty sources knowledge_base_id={knowledge_base_id} user_id={user_id}"
+        log_event(
+            "query_service",
+            "warning",
+            "rag.answer.empty_sources",
+            knowledge_base_id=knowledge_base_id,
+            user_id=user_id,
         )
         return {
             "answer": "我无法从已检索内容中找到相关答案。请先确认文档已经完成索引。",
@@ -59,8 +74,12 @@ async def generate_rag_answer(
             recovery_timeout_seconds=settings.CIRCUIT_BREAKER_RECOVERY_TIMEOUT_SECONDS,
         )
         try:
-            app_logger.bind(module="query_service").info(
-                f"llm invoke start knowledge_base_id={knowledge_base_id} user_id={user_id}"
+            log_event(
+                "query_service",
+                "debug",
+                "llm.invoke.start",
+                knowledge_base_id=knowledge_base_id,
+                user_id=user_id,
             )
             answer_text = await chain.ainvoke(
                 {
@@ -69,9 +88,13 @@ async def generate_rag_answer(
                 }
             )
             record_success(name="llm")
-            app_logger.bind(module="query_service").info(
-                f"llm invoke success knowledge_base_id={knowledge_base_id} user_id={user_id} "
-                f"answer_length={len(answer_text)}"
+            log_event(
+                "query_service",
+                "info",
+                "llm.invoke.completed",
+                knowledge_base_id=knowledge_base_id,
+                user_id=user_id,
+                answer_length=len(answer_text),
             )
             return answer_text
         except Exception as exc:
@@ -93,16 +116,19 @@ async def generate_rag_answer(
         base_delay_seconds=settings.EXTERNAL_RETRY_BASE_DELAY_SECONDS,
         max_delay_seconds=settings.EXTERNAL_RETRY_MAX_DELAY_SECONDS,
     )
-    app_logger.bind(module="query_service").info(
-        f"rag answer completed knowledge_base_id={knowledge_base_id} user_id={user_id} "
-        f"source_count={len(context_packet['sources'])}"
+    log_event(
+        "query_service",
+        "info",
+        "rag.answer.completed",
+        knowledge_base_id=knowledge_base_id,
+        user_id=user_id,
+        source_count=len(context_packet["sources"]),
     )
 
     return {
         "answer": answer,
         "sources": context_packet["sources"],
     }
-
 
 
 

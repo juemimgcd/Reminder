@@ -258,6 +258,75 @@ pip install -r requirements.txt
 
 如果你希望 embedding 只在第一次预热时联网，推荐这样配置：
 
+---
+
+## Docker 部署
+
+如果你准备直接在云服务器上部署，当前仓库推荐用 `docker compose` 直接起整套服务：
+
+```bash
+cp .env-example .env
+docker compose up -d --build
+```
+
+PowerShell:
+
+```powershell
+Copy-Item .env-example .env
+docker compose up -d --build
+```
+
+这套 Compose 现在会启动：
+
+- `app`：FastAPI API 服务
+- `worker`：Celery 文档索引 worker
+- `redis`：Celery broker / result backend
+- `postgres`：业务数据库
+- `milvus`：向量数据库
+- `etcd / minio`：Milvus standalone 依赖
+
+### 首次上线前至少要改的配置
+
+- `DASHSCOPE_API_KEY`
+- `JWT_SECRET`
+- `POSTGRES_PASSWORD`
+- 如果你有本地 embedding 模型，建议配置 `EMBEDDING_MODEL_PATH`
+
+### 默认端口暴露策略
+
+当前 Compose 默认只把应用端口公开到宿主机，内部基础设施端口全部绑定到 `127.0.0.1`：
+
+- `app`：`${APP_HOST_PORT:-8000}`
+- `postgres / redis / minio / milvus`：仅宿主机本地可访问
+
+这样更适合直接上云服务器，避免把数据库、Redis、Milvus 直接暴露到公网。
+
+### 常用运维命令
+
+查看服务状态：
+
+```bash
+docker compose ps
+```
+
+查看应用日志：
+
+```bash
+docker compose logs -f app
+```
+
+查看 worker 日志：
+
+```bash
+docker compose logs -f worker
+```
+
+停止服务：
+
+```bash
+docker compose down
+```
+
 ```env
 EMBEDDING_MODEL_NAME=BAAI/bge-m3
 EMBEDDING_CACHE_DIR=./storage/model_cache/sentence_transformers

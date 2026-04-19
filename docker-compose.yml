@@ -1,3 +1,31 @@
+name: mneme
+
+x-app-base: &app-base
+  build:
+    context: .
+    dockerfile: Dockerfile
+    args:
+      PYTHON_VERSION: ${PYTHON_VERSION:-3.12}
+      PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
+      PIP_EXTRA_INDEX_URL: ${PIP_EXTRA_INDEX_URL:-}
+  image: mneme-app:local
+  restart: unless-stopped
+  init: true
+  env_file:
+    - .env
+  environment:
+    DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-123456}@postgres:5432/${POSTGRES_DB:-agentic}
+    CELERY_BROKER_URL: redis://redis:6379/0
+    CELERY_RESULT_BACKEND: redis://redis:6379/1
+    MILVUS_URI: http://milvus:19530
+    MILVUS_DB_NAME: ${MILVUS_DB_NAME:-default}
+    PYTHONPATH: /app
+    WAIT_FOR_HOSTS: postgres:5432,redis:6379,milvus:19530
+    WAIT_FOR_URLS: http://milvus:9091/healthz
+    WAIT_FOR_TIMEOUT_SECONDS: ${WAIT_FOR_TIMEOUT_SECONDS:-180}
+  volumes:
+    - ./storage:/app/storage
+
 services:
   postgres:
     image: postgres:17
@@ -8,7 +36,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123456}
       POSTGRES_DB: ${POSTGRES_DB:-agentic}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -33,6 +61,11 @@ services:
       - --data-dir=/etcd
     volumes:
       - etcd_data:/etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "--endpoints=http://127.0.0.1:2379", "endpoint", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   minio:
     image: minio/minio:RELEASE.2025-02-28T09-55-16Z
@@ -43,56 +76,89 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
     command: minio server /minio_data --console-address ":9001"
     ports:
-      - "${MINIO_PORT:-9000}:9000"
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+      - "127.0.0.1:${MINIO_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
     volumes:
       - minio_data:/minio_data
 
+  redis:
+    image: redis:7-alpine
+    container_name: mneme-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   milvus:
-    image: milvusdb/milvus:v2.5.12
+    image: milvusdb/milvus:v2.5.16
     container_name: mneme-milvus
     restart: unless-stopped
     command: ["milvus", "run", "standalone"]
+    cpus: ${MILVUS_CPU_LIMIT:-2.0}
+    mem_limit: ${MILVUS_MEMORY_LIMIT:-4g}
+    security_opt:
+      - seccomp:unconfined
     environment:
       ETCD_ENDPOINTS: http://etcd:2379
       MINIO_ADDRESS: minio:9000
     ports:
-      - "${MILVUS_PORT:-19530}:19530"
-      - "${MILVUS_HTTP_PORT:-9091}:9091"
+      - "127.0.0.1:${MILVUS_PORT:-19530}:19530"
+      - "127.0.0.1:${MILVUS_HTTP_PORT:-9091}:9091"
     volumes:
       - milvus_data:/var/lib/milvus
     depends_on:
-      - etcd
-      - minio
+      etcd:
+        condition: service_healthy
+      minio:
+        condition: service_started
+
+  migrate:
+    <<: *app-base
+    container_name: mneme-migrate
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      milvus:
+        condition: service_started
+    command: ["sh", "/app/docker/start-migrate.sh"]
 
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        PYTHON_VERSION: ${PYTHON_VERSION:-3.12}
-        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
-        PIP_EXTRA_INDEX_URL: ${PIP_EXTRA_INDEX_URL:-}
+    <<: *app-base
     container_name: mneme-app
-    restart: unless-stopped
     depends_on:
-      - postgres
-      - milvus
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-123456}@postgres:5432/${POSTGRES_DB:-agentic}
-      MILVUS_URI: ${MILVUS_URI:-http://milvus:19530}
-      MILVUS_DB_NAME: ${MILVUS_DB_NAME:-default}
-      PYTHONPATH: /app
+      migrate:
+        condition: service_completed_successfully
     ports:
-      - "8000:8000"
-    volumes:
-      - ./storage:/app/storage
-    command: ["/bin/sh", "-c", "alembic upgrade head && exec uvicorn main:app --host 0.0.0.0 --port 8000"]
+      - "${APP_HOST_PORT:-8000}:${APP_PORT:-8000}"
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; import sys; sys.exit(0 if urlopen('http://127.0.0.1:8000/health').status == 200 else 1)"]
+      interval: 60s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    command: ["sh", "/app/docker/start-api.sh"]
+
+  worker:
+    <<: *app-base
+    container_name: mneme-worker
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    command: ["sh", "/app/docker/start-worker.sh"]
 
 volumes:
   postgres_data:
   etcd_data:
   minio_data:
   milvus_data:
+  redis_data:

@@ -6,7 +6,7 @@ from langchain_core.documents import Document as LCDocument
 from langchain_milvus import Milvus
 
 from conf.config import settings
-from conf.logging import app_logger
+from conf.logging import log_event
 from clients.embedding_client import get_embeddings
 from infra.circuit_breaker import before_call, record_success, record_failure
 from infra.retry import retry_async
@@ -47,9 +47,12 @@ def _build_index_params() -> dict[str, Any]:
 
 # 创建当前项目使用的 Milvus vector store 客户端。
 def get_vector_store() -> Milvus:
-    app_logger.bind(module="vector_store").info(
-        f"build vector store client backend={settings.VECTOR_BACKEND} "
-        f"collection={settings.MILVUS_COLLECTION_NAME}"
+    log_event(
+        "vector_store",
+        "debug",
+        "vector_store.client_built",
+        backend=settings.VECTOR_BACKEND,
+        collection=settings.MILVUS_COLLECTION_NAME,
     )
     return Milvus(
         embedding_function=get_embeddings(),
@@ -73,13 +76,9 @@ async def add_documents_to_vector_store(chunk_docs: list[LCDocument]) -> None:
 
     vector_store = get_vector_store()
     ids = [str(chunk.metadata["chunk_id"]) for chunk in chunk_docs]
-    app_logger.bind(module="vector_store").info(
-        f"vector add documents start chunk_count={len(chunk_docs)}"
-    )
+    log_event("vector_store", "info", "vector_store.add.start", chunk_count=len(chunk_docs))
     vector_store.add_documents(documents=chunk_docs, ids=ids)
-    app_logger.bind(module="vector_store").info(
-        f"vector add documents completed chunk_count={len(chunk_docs)}"
-    )
+    log_event("vector_store", "info", "vector_store.add.completed", chunk_count=len(chunk_docs))
 
 
 # 按 chunk id 从向量库中删除指定文档块。
@@ -88,20 +87,19 @@ async def delete_documents_from_vector_store(*, ids: list[str] | None = None) ->
         return
 
     vector_store = get_vector_store()
-    app_logger.bind(module="vector_store").info(
-        f"vector delete documents start id_count={len(ids)}"
-    )
+    log_event("vector_store", "info", "vector_store.delete.start", id_count=len(ids))
     vector_store.delete(ids=ids)
-    app_logger.bind(module="vector_store").info(
-        f"vector delete documents completed id_count={len(ids)}"
-    )
+    log_event("vector_store", "info", "vector_store.delete.completed", id_count=len(ids))
 
 
 # 删除当前项目使用的整个向量集合。
 async def drop_vector_collection() -> None:
     vector_store = get_vector_store()
-    app_logger.bind(module="vector_store").warning(
-        f"vector drop collection collection={settings.MILVUS_COLLECTION_NAME}"
+    log_event(
+        "vector_store",
+        "warning",
+        "vector_store.collection_drop",
+        collection=settings.MILVUS_COLLECTION_NAME,
     )
     vector_store.drop()
 
@@ -136,9 +134,13 @@ async def add_documents_to_vector_store_in_batches(
         chunk_docs,
         batch_size=batch_size,
     )
-    app_logger.bind(module="vector_store").info(
-        f"vector batch upsert start batch_count={len(batches)} batch_size={batch_size} "
-        f"chunk_count={len(chunk_docs)}"
+    log_event(
+        "vector_store",
+        "info",
+        "vector_store.batch_upsert.start",
+        batch_count=len(batches),
+        batch_size=batch_size,
+        chunk_count=len(chunk_docs),
     )
 
     total_count = 0
@@ -146,13 +148,21 @@ async def add_documents_to_vector_store_in_batches(
         ids = [str(chunk.metadata["chunk_id"]) for chunk in batch_docs]
         await asyncio.to_thread(lambda: vector_store.add_documents(documents=batch_docs, ids=ids))
         total_count += len(batch_docs)
-        app_logger.bind(module="vector_store").info(
-            f"vector batch upsert progress current_batch_size={len(batch_docs)} total_count={total_count}"
+        log_event(
+            "vector_store",
+            "debug",
+            "vector_store.batch_upsert.progress",
+            current_batch_size=len(batch_docs),
+            total_count=total_count,
         )
 
-    app_logger.bind(module="vector_store").info(
-        f"vector batch upsert completed batch_count={len(batches)} total_count={total_count} "
-        f"batch_size={batch_size}"
+    log_event(
+        "vector_store",
+        "info",
+        "vector_store.batch_upsert.completed",
+        batch_count=len(batches),
+        total_count=total_count,
+        batch_size=batch_size,
     )
     return {
         "batch_count": len(batches),
@@ -169,8 +179,12 @@ def is_retryable_vector_error(exc: Exception) -> bool:
 # 用 breaker + retry 包住 Milvus similarity_search_with_score 调用。
 async def similarity_search_with_score_resilient(**search_kwargs):
     vector_store = get_vector_store()
-    app_logger.bind(module="vector_store").info(
-        f"vector similarity search start k={search_kwargs.get('k')} has_expr={'expr' in search_kwargs}"
+    log_event(
+        "vector_store",
+        "debug",
+        "vector_store.search.start",
+        k=search_kwargs.get("k"),
+        has_expr="expr" in search_kwargs,
     )
 
     # 真正执行一次检索调用，并在成功/失败时更新 breaker 状态。
@@ -184,8 +198,11 @@ async def similarity_search_with_score_resilient(**search_kwargs):
                 lambda: vector_store.similarity_search_with_score(**search_kwargs)
             )
             record_success(name="milvus")
-            app_logger.bind(module="vector_store").info(
-                f"vector similarity search success result_count={len(result)}"
+            log_event(
+                "vector_store",
+                "debug",
+                "vector_store.search.completed",
+                result_count=len(result),
             )
             return result
         except Exception as exc:

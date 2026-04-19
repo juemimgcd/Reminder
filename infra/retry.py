@@ -2,7 +2,7 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from typing import TypeVar
 
-from conf.logging import app_logger
+from conf.logging import log_event
 
 
 T = TypeVar("T")
@@ -26,9 +26,15 @@ async def retry_async(
         except Exception as exc:
             retryable = is_retryable(exc)
             if attempt >= max_attempts or not retryable:
-                app_logger.bind(module="retry").warning(
-                    f"retry stop attempt={attempt}/{max_attempts} "
-                    f"retryable={retryable} error_type={type(exc).__name__} error={exc}"
+                log_event(
+                    "retry",
+                    "warning",
+                    "retry.stop",
+                    attempt=attempt,
+                    max_attempts=max_attempts,
+                    retryable=retryable,
+                    error_type=type(exc).__name__,
+                    error=exc,
                 )
                 raise
 
@@ -36,8 +42,14 @@ async def retry_async(
                 base_delay_seconds * (2 ** (attempt - 1)),
                 max_delay_seconds,
                 )
-            app_logger.bind(module="retry").warning(
-                f"retry scheduled attempt={attempt}/{max_attempts} "
-                f"delay_seconds={delay} error_type={type(exc).__name__} error={exc}"
+            log_event(
+                "retry",
+                "warning",
+                "retry.scheduled",
+                attempt=attempt,
+                max_attempts=max_attempts,
+                delay_seconds=delay,
+                error_type=type(exc).__name__,
+                error=exc,
             )
             await asyncio.sleep(delay)
