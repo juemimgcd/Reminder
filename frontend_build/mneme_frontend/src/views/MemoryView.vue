@@ -21,7 +21,7 @@ const workspace = useWorkspaceStore();
       <EmptyState
         v-else
         title="记忆库暂时为空"
-        description="等文档索引和记忆提取接通后，这里会显示主题化结果。"
+        description="完成索引后这里会自动出现结果；如果已有 chunk 但没有记忆，也可以去洞察页手动重建。"
       />
     </SurfacePanel>
   </div>

@@ -51,6 +51,27 @@ def get_rag_prompt() -> ChatPromptTemplate:
     return prompt
 
 
+def get_general_chat_prompt() -> ChatPromptTemplate:
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                "你是 Mneme 的通用智能助手。"
+                "当用户的问题与其已上传资料无关时，直接基于通用能力回答，不需要引用知识库。"
+                "请简洁、明确、自然地回答。"
+                "如果用户询问你是谁、你能做什么、如何使用系统，优先介绍你的定位、能力边界和可提供的帮助。"
+                "不要假装看过用户未上传的资料，也不要虚构其知识库内容。",
+            ),
+            (
+                "human",
+                "{question}",
+            ),
+        ]
+    )
+
+    return prompt
+
+
 
 
 

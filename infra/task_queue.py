@@ -23,6 +23,7 @@ def enqueue_index_document_task(
     # 2. 调用 delay 或 apply_async
     # 3. 传入 task_id 和 document_id
     index_document_task.apply_async(
+        task_id=task_id,
         kwargs={
             "task_id": task_id,
             "document_id": document_id,
@@ -31,3 +32,10 @@ def enqueue_index_document_task(
     app_logger.bind(module="task_queue").info(
         f"enqueue index task submitted task_id={task_id} document_id={document_id}"
     )
+
+
+def cancel_index_document_task(*, task_id: str) -> None:
+    app_logger.bind(module="task_queue").info(
+        f"cancel index task requested task_id={task_id}"
+    )
+    celery_app.control.revoke(task_id)

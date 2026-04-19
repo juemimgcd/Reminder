@@ -139,11 +139,40 @@ export interface GrowthReport {
   next_actions: string[];
 }
 
+export interface AdviceActionSuggestion {
+  area: string;
+  why_now: string;
+  action: string;
+  first_step: string;
+  evidence_entries: string[];
+}
+
+export interface GrowthAdvice {
+  knowledge_base_id: string;
+  focus_goal: string | null;
+  advice_summary: string;
+  current_priorities: string[];
+  action_suggestions: AdviceActionSuggestion[];
+  avoid_list: string[];
+  one_week_plan: string[];
+  reflection_questions: string[];
+}
+
 export interface IndexSubmission {
   document_id: string;
   status: DocumentItem['status'];
   task_id?: string;
   message?: string;
+}
+
+export interface TaskRecord {
+  id: string;
+  task_type: string;
+  target_id: string;
+  status: DocumentItem['status'] | 'completed' | 'canceled';
+  error_message?: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface DashboardMetric {

@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.task_record import TaskRecord
@@ -70,6 +70,47 @@ async def update_task_record_status(
     await db.flush()
     await db.refresh(task)
     return task
+
+
+async def list_task_records_by_target_id(
+        db: AsyncSession,
+        *,
+        target_id: str,
+        task_type: str | None = None,
+) -> list[TaskRecord]:
+    sql = select(TaskRecord).where(TaskRecord.target_id == target_id)
+    if task_type:
+        sql = sql.where(TaskRecord.task_type == task_type)
+    sql = sql.order_by(TaskRecord.created_at.desc())
+    result = await db.execute(sql)
+    return list(result.scalars().all())
+
+
+async def get_latest_task_record_by_target_id(
+        db: AsyncSession,
+        *,
+        target_id: str,
+        task_type: str | None = None,
+) -> TaskRecord | None:
+    rows = await list_task_records_by_target_id(
+        db,
+        target_id=target_id,
+        task_type=task_type,
+    )
+    return rows[0] if rows else None
+
+
+async def delete_task_records_by_target_id(
+        db: AsyncSession,
+        *,
+        target_id: str,
+        task_type: str | None = None,
+) -> int:
+    sql = delete(TaskRecord).where(TaskRecord.target_id == target_id)
+    if task_type:
+        sql = sql.where(TaskRecord.task_type == task_type)
+    result = await db.execute(sql)
+    return result.rowcount or 0
 
 
 

@@ -15,12 +15,13 @@ from models import task_record
 #     "failed": "queued",
 # }
 ALLOWED_TASK_TRANSITIONS = {
-    "queued": ["parsing", "failed"],
+    "queued": ["parsing", "failed", "canceled"],
     "parsing": ["chunking", "failed"],
     "chunking": ["embedding", "failed"],
     "embedding": ["vector_upserting", "failed"],
     "vector_upserting": ["completed", "failed"],
-    "failed": "queued"
+    "failed": ["queued"],
+    "canceled": ["queued"],
 
 }
 
