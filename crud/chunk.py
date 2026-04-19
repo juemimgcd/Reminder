@@ -1,5 +1,5 @@
 from langchain_core.documents import Document as LCDocument
-from sqlalchemy import insert
+from sqlalchemy import delete, insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.chunk import Chunk
@@ -61,6 +61,30 @@ async def create_chunks(
 
     if rows:
         await db.execute(stmt, rows)
+
+
+async def list_chunks_by_document_id(
+        db: AsyncSession,
+        *,
+        document_id: str,
+) -> list[Chunk]:
+    sql = (
+        select(Chunk)
+        .where(Chunk.document_id == document_id)
+        .order_by(Chunk.chunk_index.asc())
+    )
+    res = await db.execute(sql)
+    return list(res.scalars().all())
+
+
+async def delete_chunks_by_document_id(
+        db: AsyncSession,
+        *,
+        document_id: str,
+) -> int:
+    sql = delete(Chunk).where(Chunk.document_id == document_id)
+    res = await db.execute(sql)
+    return res.rowcount or 0
 
 
 

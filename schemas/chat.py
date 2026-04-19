@@ -3,7 +3,6 @@ from pydantic import BaseModel, Field
 
 # 表达问答接口的输入请求结构。
 class ChatQueryRequest(BaseModel):
-    user_id: int = Field(..., description="用户 ID")
     question: str = Field(..., description="用户输入的问题")
     knowledge_base_id: str = Field(..., description="知识库 ID")
     top_k: int = Field(default=4, ge=1, le=10, description="检索返回的片段数量")

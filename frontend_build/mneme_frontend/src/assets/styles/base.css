@@ -548,6 +548,13 @@ textarea:focus-visible {
   align-items: center;
 }
 
+.surface-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
 .chat-stack {
   display: grid;
   gap: 1rem;
@@ -720,6 +727,57 @@ textarea:focus-visible {
 .inline-form label {
   display: grid;
   gap: 0.45rem;
+}
+
+.inline-form--stacked {
+  margin-bottom: 1rem;
+}
+
+.advice-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.advice-card {
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(135deg, rgba(15, 118, 110, 0.06), transparent 42%),
+    var(--bg-strong);
+}
+
+.advice-card--summary {
+  background:
+    linear-gradient(135deg, rgba(15, 118, 110, 0.14), rgba(234, 88, 12, 0.08)),
+    var(--bg-strong);
+}
+
+.advice-card header,
+.advice-card__detail {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  align-items: flex-start;
+}
+
+.advice-card__detail {
+  margin: 1rem 0;
+  flex-wrap: wrap;
+}
+
+.advice-card__detail div {
+  min-width: min(100%, 280px);
+}
+
+.advice-card__detail dt {
+  margin-bottom: 0.35rem;
+  color: var(--fg-soft);
+}
+
+.advice-card__detail dd {
+  margin: 0;
+  font-weight: 700;
 }
 
 .text-link {

@@ -1,6 +1,7 @@
 import type {
   AuthPayload,
   PersonalProfile,
+  GrowthAdvice,
   AuthToken,
   ChatExchange,
   ChatSource,
@@ -8,6 +9,7 @@ import type {
   GrowthReport,
   KnowledgeBase,
   MemoryLibrary,
+  TaskRecord,
   User,
 } from '@/lib/types';
 import {
@@ -15,6 +17,7 @@ import {
   demoToken,
   demoUser,
   documents,
+  adviceInsights,
   growthMetrics,
   knowledgeBases,
   memoryLibrary,
@@ -169,4 +172,34 @@ export async function mockProfile(): Promise<PersonalProfile> {
 export async function mockGrowth(): Promise<GrowthReport> {
   await wait();
   return growthMetrics;
+}
+
+export async function mockAdvice(_: string | null = null): Promise<GrowthAdvice> {
+  await wait();
+  return adviceInsights;
+}
+
+export async function mockRebuildMemory() {
+  await wait(320);
+  return {
+    knowledge_base_id: 'kb_life_writing',
+    document_count: 2,
+    processed_document_count: 2,
+    chunk_count: 90,
+    deleted_entry_count: 86,
+    entry_count: 86,
+  };
+}
+
+export async function mockTaskStatus(taskId: string): Promise<TaskRecord> {
+  await wait(200);
+  return {
+    id: taskId,
+    task_type: 'document_index',
+    target_id: 'doc_demo',
+    status: 'completed',
+    error_message: null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
 }

@@ -4,17 +4,20 @@ import type {
   AuthToken,
   ChatExchange,
   DocumentItem,
+  GrowthAdvice,
   GrowthReport,
   IndexSubmission,
   KnowledgeBase,
   MemoryLibrary,
   PersonalProfile,
+  TaskRecord,
   User,
 } from '@/lib/types';
 import {
   mockChatHistory,
   mockChatQuery,
   mockCreateKnowledgeBase,
+  mockAdvice,
   mockDocuments,
   mockGrowth,
   mockIndexDocument,
@@ -23,7 +26,9 @@ import {
   mockMe,
   mockMemoryLibrary,
   mockProfile,
+  mockRebuildMemory,
   mockRegister,
+  mockTaskStatus,
   mockUploadDocuments,
 } from '@/mocks/api';
 
@@ -281,6 +286,50 @@ function normalizeIndexSubmission(raw: unknown, documentId: string): IndexSubmis
   };
 }
 
+function normalizeActionSuggestion(raw: unknown, index: number) {
+  const source = isObject(raw) ? raw : {};
+  return {
+    area: asString(firstPresent(source, ['area', 'title']), `建议 ${index + 1}`),
+    why_now: asString(firstPresent(source, ['why_now', 'reason']), ''),
+    action: asString(firstPresent(source, ['action']), ''),
+    first_step: asString(firstPresent(source, ['first_step']), ''),
+    evidence_entries: asArray<string>(firstPresent(source, ['evidence_entries'], [])),
+  };
+}
+
+function normalizeGrowthAdvice(raw: unknown): GrowthAdvice {
+  const source = isObject(raw) ? raw : {};
+  return {
+    knowledge_base_id: asString(firstPresent(source, ['knowledge_base_id']), ''),
+    focus_goal:
+      firstPresent(source, ['focus_goal']) !== undefined && firstPresent(source, ['focus_goal']) !== null
+        ? asString(firstPresent(source, ['focus_goal']))
+        : null,
+    advice_summary: asString(firstPresent(source, ['advice_summary']), ''),
+    current_priorities: asArray<string>(firstPresent(source, ['current_priorities'], [])),
+    action_suggestions: asArray(firstPresent(source, ['action_suggestions'], [])).map(normalizeActionSuggestion),
+    avoid_list: asArray<string>(firstPresent(source, ['avoid_list'], [])),
+    one_week_plan: asArray<string>(firstPresent(source, ['one_week_plan'], [])),
+    reflection_questions: asArray<string>(firstPresent(source, ['reflection_questions'], [])),
+  };
+}
+
+function normalizeTaskRecord(raw: unknown): TaskRecord {
+  const source = isObject(raw) ? raw : {};
+  return {
+    id: asString(firstPresent(source, ['id', 'task_id'])),
+    task_type: asString(firstPresent(source, ['task_type']), 'document_index'),
+    target_id: asString(firstPresent(source, ['target_id', 'document_id'])),
+    status: asString(firstPresent(source, ['status']), 'queued') as TaskRecord['status'],
+    error_message:
+      firstPresent(source, ['error_message']) !== undefined && firstPresent(source, ['error_message']) !== null
+        ? asString(firstPresent(source, ['error_message']))
+        : null,
+    created_at: asString(firstPresent(source, ['created_at']), new Date().toISOString()),
+    updated_at: asString(firstPresent(source, ['updated_at']), new Date().toISOString()),
+  };
+}
+
 function unwrapCollection(raw: unknown, collectionKeys: string[]) {
   if (Array.isArray(raw)) {
     return raw;
@@ -374,9 +423,8 @@ export const api = {
       () => mockCreateKnowledgeBase(payload),
     );
   },
-  documents(userId: number, token: string, knowledgeBaseId?: string) {
+  documents(token: string, knowledgeBaseId?: string) {
     const query = new URLSearchParams();
-    query.set('user_id', String(userId));
     if (knowledgeBaseId) {
       query.set('knowledge_base_id', knowledgeBaseId);
     }
@@ -388,13 +436,12 @@ export const api = {
       () => mockDocuments(knowledgeBaseId),
     );
   },
-  uploadDocuments(token: string, userId: number, knowledgeBaseId: string, files: File[]) {
+  uploadDocuments(token: string, knowledgeBaseId: string, files: File[]) {
     return withFallback(
       async () => {
         const uploadedDocuments: DocumentItem[] = [];
         for (const file of files) {
           const formData = new FormData();
-          formData.append('user_id', String(userId));
           formData.append('knowledge_base_id', knowledgeBaseId);
           formData.append('file', file);
           const raw = await requestJson<unknown>(
@@ -405,7 +452,6 @@ export const api = {
           uploadedDocuments.push(
             normalizeDocument({
               ...(isObject(raw) ? raw : {}),
-              user_id: userId,
               knowledge_base_id: knowledgeBaseId,
               file_name: file.name,
               file_size: file.size,
@@ -414,7 +460,7 @@ export const api = {
         }
         return uploadedDocuments;
       },
-      () => mockUploadDocuments(userId, knowledgeBaseId, files),
+      () => mockUploadDocuments(1, knowledgeBaseId, files),
     );
   },
   indexDocument(token: string, documentId: string) {
@@ -439,7 +485,7 @@ export const api = {
   },
   chatQuery(
     token: string,
-    payload: { userId: number; knowledgeBaseId: string; question: string; topK: number },
+    payload: { knowledgeBaseId: string; question: string; topK: number },
   ) {
     return withFallback(
       async () =>
@@ -449,7 +495,6 @@ export const api = {
             {
               method: 'POST',
               body: JSON.stringify({
-                user_id: payload.userId,
                 knowledge_base_id: payload.knowledgeBaseId,
                 question: payload.question,
                 top_k: payload.topK,
@@ -502,6 +547,48 @@ export const api = {
           ),
         ),
       () => mockGrowth(),
+    );
+  },
+  advice(token: string, knowledgeBaseId: string, focusGoal?: string) {
+    return withFallback(
+      async () =>
+        normalizeGrowthAdvice(
+          await requestJson<unknown>(
+            `/advice/knowledge-bases/${knowledgeBaseId}`,
+            {
+              method: 'POST',
+              body: JSON.stringify({
+                focus_goal: focusGoal?.trim() || null,
+              }),
+            },
+            token,
+          ),
+        ),
+      () => mockAdvice(focusGoal ?? null),
+    );
+  },
+  rebuildMemory(token: string, knowledgeBaseId: string) {
+    return withFallback(
+      async () =>
+        requestJson<unknown>(
+          `/memory/knowledge-bases/${knowledgeBaseId}/rebuild`,
+          { method: 'POST' },
+          token,
+        ),
+      () => mockRebuildMemory(),
+    );
+  },
+  taskStatus(token: string, taskId: string) {
+    return withFallback(
+      async () =>
+        normalizeTaskRecord(
+          await requestJson<unknown>(
+            `/tasks/${taskId}`,
+            {},
+            token,
+          ),
+        ),
+      () => mockTaskStatus(taskId),
     );
   },
 };
