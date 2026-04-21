@@ -1,9 +1,16 @@
 from pathlib import Path
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_BASE_DIR = Path(__file__).resolve().parent.parent
+
+DEFAULT_CORS_ALLOWED_ORIGINS = [
+    "http://www.mneme.com.cn",
+    "https://www.mneme.com.cn",
+    "http://mneme.com.cn",
+    "https://mneme.com.cn",
+]
 
 
 class Settings(BaseSettings):
@@ -24,12 +31,7 @@ class Settings(BaseSettings):
 
     API_PREFIX: str = "/api/v1"
     CORS_ALLOWED_ORIGINS: list[str] = Field(
-        default_factory=lambda: [
-            "http://www.mneme.com.cn",
-            "https://www.mneme.com.cn",
-            "http://mneme.com.cn",
-            "https://mneme.com.cn",
-        ],
+        default_factory=lambda: list(DEFAULT_CORS_ALLOWED_ORIGINS),
     )
     CORS_ALLOW_ORIGIN_REGEX: str = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
     CORS_ALLOW_CREDENTIALS: bool = True
@@ -102,6 +104,15 @@ class Settings(BaseSettings):
 
     CIRCUIT_BREAKER_FAILURE_THRESHOLD: int = 3
     CIRCUIT_BREAKER_RECOVERY_TIMEOUT_SECONDS: int = 30
+
+    @model_validator(mode="after")
+    def include_default_cors_origins(self) -> "Settings":
+        merged = [*self.CORS_ALLOWED_ORIGINS]
+        for origin in DEFAULT_CORS_ALLOWED_ORIGINS:
+            if origin not in merged:
+                merged.append(origin)
+        self.CORS_ALLOWED_ORIGINS = merged
+        return self
 
 
 
