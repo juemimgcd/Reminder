@@ -23,7 +23,14 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
 
     API_PREFIX: str = "/api/v1"
-    CORS_ALLOWED_ORIGINS: list[str] = Field(default_factory=list)
+    CORS_ALLOWED_ORIGINS: list[str] = Field(
+        default_factory=lambda: [
+            "http://www.mneme.com.cn",
+            "https://www.mneme.com.cn",
+            "http://mneme.com.cn",
+            "https://mneme.com.cn",
+        ],
+    )
     CORS_ALLOW_ORIGIN_REGEX: str = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
     CORS_ALLOW_CREDENTIALS: bool = True
     CORS_ALLOW_METHODS: list[str] = Field(default_factory=lambda: ["*"])
