@@ -2,8 +2,12 @@ from langchain_core.documents import Document as LCDocument
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from conf.logging import app_logger
+from crud.document import get_document_by_id
+from crud.knowledge_base import get_knowledge_base_by_id
+from crud.user import get_user_by_id
 from crud.memory_entry import create_memory_entries
 from schemas.memory_entry import MemoryExtractPipelineResult, MemoryEntryPayload
+from services.graph_projection_service import sync_document_memory_projection
 from services.memory_service import extract_entries_from_chunks
 
 
@@ -30,10 +34,31 @@ async def run_memory_extract_pipeline(
         MemoryEntryPayload(**item).model_dump()
         for item in deduped_entries
     ]
-    await create_memory_entries(
+    persisted_entries = await create_memory_entries(
         db,
         entries=payloads,
     )
+    if document_id:
+        document = await get_document_by_id(
+            db,
+            document_id=document_id,
+        )
+        knowledge_base = await get_knowledge_base_by_id(
+            db,
+            knowledge_base_id=knowledge_base_id,
+        )
+        user = await get_user_by_id(
+            db,
+            user_id=payloads[0]["user_id"],
+        ) if payloads else None
+        if document and knowledge_base and user:
+            await sync_document_memory_projection(
+                db,
+                user=user,
+                knowledge_base=knowledge_base,
+                document=document,
+                memory_entries=persisted_entries,
+            )
     app_logger.bind(module="memory_pipeline").info(
         f"memory extract pipeline completed knowledge_base_id={knowledge_base_id} "
         f"document_id={document_id} raw_entry_count={len(raw_entries)} "

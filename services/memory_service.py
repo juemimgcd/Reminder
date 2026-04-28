@@ -9,9 +9,12 @@ from clients.llm_client import get_llm
 from conf.logging import log_event
 from crud.chunk import list_chunks_by_document_id
 from crud.document import list_documents
+from crud.knowledge_base import get_knowledge_base_by_id
 from crud.memory_entry import create_memory_entries, delete_memory_entries_by_document_id
+from crud.user import get_user_by_id
 from models.document import Document
 from schemas.memory_entry import MemoryEntryExtractionResult
+from services.graph_projection_service import sync_document_memory_projection
 from utils.entry_prompt import get_entry_extraction_prompt
 
 
@@ -206,6 +209,22 @@ async def rebuild_memory_entries_for_document(
     )
 
     if not chunk_rows:
+        knowledge_base = await get_knowledge_base_by_id(
+            db,
+            knowledge_base_id=document.knowledge_base_id,
+        )
+        user = await get_user_by_id(
+            db,
+            user_id=document.user_id,
+        )
+        if knowledge_base and user:
+            await sync_document_memory_projection(
+                db,
+                user=user,
+                knowledge_base=knowledge_base,
+                document=document,
+                memory_entries=[],
+            )
         log_event(
             "memory_service",
             "info",
@@ -225,8 +244,26 @@ async def rebuild_memory_entries_for_document(
         chunk_rows=chunk_rows,
     )
     entries = await extract_entries_from_chunks(chunk_docs)
+    persisted_entries = []
     if entries:
-        await create_memory_entries(db, entries=entries)
+        persisted_entries = await create_memory_entries(db, entries=entries)
+
+    knowledge_base = await get_knowledge_base_by_id(
+        db,
+        knowledge_base_id=document.knowledge_base_id,
+    )
+    user = await get_user_by_id(
+        db,
+        user_id=document.user_id,
+    )
+    if knowledge_base and user:
+        await sync_document_memory_projection(
+            db,
+            user=user,
+            knowledge_base=knowledge_base,
+            document=document,
+            memory_entries=persisted_entries,
+        )
 
     log_event(
         "memory_service",
@@ -235,12 +272,12 @@ async def rebuild_memory_entries_for_document(
         document_id=document.id,
         chunk_count=len(chunk_docs),
         deleted_entry_count=deleted_entry_count,
-        entry_count=len(entries),
+        entry_count=len(persisted_entries),
     )
     return {
         "chunk_count": len(chunk_docs),
         "deleted_entry_count": deleted_entry_count,
-        "entry_count": len(entries),
+        "entry_count": len(persisted_entries),
     }
 
 

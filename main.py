@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from clients.neo4j_client import close_neo4j_driver
 from conf.config import settings
 from conf.database import engine
 from clients.embedding_client import get_embeddings
@@ -25,6 +26,7 @@ async def lifespan(app: FastAPI):
         logger_complete = app_logger.complete()
         if logger_complete:
             await logger_complete
+        await close_neo4j_driver()
         await engine.dispose()
 
 
