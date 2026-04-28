@@ -11,7 +11,17 @@ from crud.memory_entry import (
 from crud.document import get_document_by_id, list_documents
 from crud.knowledge_base import get_knowledge_base_by_id, list_knowledge_bases_by_user_id
 from models.user import User
+from schemas.graph_admin import GraphProjectionRebuildData
 from schemas.graph import GraphData
+from services.graph_admin_service import (
+    rebuild_graph_projection_for_knowledge_base,
+    rebuild_graph_projection_for_user,
+)
+from services.graph_query_service import (
+    build_document_graph_payload_from_neo4j,
+    build_knowledge_base_graph_payload_from_neo4j,
+    build_user_graph_payload_from_neo4j,
+)
 from services.graph_service import (
     build_document_graph_payload,
     build_knowledge_base_graph_payload,
@@ -23,6 +33,29 @@ from utils.response import success_response
 
 
 router = APIRouter(prefix="/graph", tags=["graph"])
+
+
+@router.post("/rebuild")
+async def rebuild_user_graph_projection_api(
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_database),
+):
+    app_logger.bind(module="graph_router").info(
+        f"graph rebuild request scope=user current_user_id={current_user.id}"
+    )
+    result = await rebuild_graph_projection_for_user(
+        db,
+        current_user=current_user,
+    )
+    app_logger.bind(module="graph_router").info(
+        f"graph rebuild success scope=user current_user_id={current_user.id} "
+        f"knowledge_base_count={result.get('knowledge_base_count')} "
+        f"document_count={result['document_count']} memory_entry_count={result['memory_entry_count']}"
+    )
+    return success_response(
+        data=GraphProjectionRebuildData(**result),
+        message="graph projection rebuilt",
+    )
 
 
 @router.get("")
@@ -41,6 +74,21 @@ async def get_user_graph(
         f"min_shared_memory_count={min_shared_memory_count} min_relationship_score={min_relationship_score} "
         f"max_related_edges={max_related_edges}"
     )
+    neo4j_payload = await build_user_graph_payload_from_neo4j(
+        current_user=current_user,
+        include_memory=include_memory,
+        include_relationships=include_relationships,
+        min_shared_memory_count=min_shared_memory_count,
+        min_relationship_score=min_relationship_score,
+        max_related_edges=max_related_edges,
+    )
+    if neo4j_payload is not None:
+        app_logger.bind(module="graph_router").info(
+            f"graph success scope=user current_user_id={current_user.id} "
+            f"backend=neo4j node_count={neo4j_payload['node_count']} edge_count={neo4j_payload['edge_count']}"
+        )
+        return success_response(data=GraphData(**neo4j_payload))
+
     knowledge_bases = await list_knowledge_bases_by_user_id(
         db,
         user_id=current_user.id,
@@ -106,6 +154,24 @@ async def get_document_graph(
     )
     if not root_knowledge_base or root_knowledge_base.user_id != current_user.id:
         raise BusinessException(message="知识库不存在或不属于该用户", code=4042, status_code=404)
+
+    neo4j_payload = await build_document_graph_payload_from_neo4j(
+        current_user=current_user,
+        root_document=document,
+        root_knowledge_base=root_knowledge_base,
+        include_memory=include_memory,
+        include_relationships=include_relationships,
+        min_shared_memory_count=min_shared_memory_count,
+        min_relationship_score=min_relationship_score,
+        max_related_edges=max_related_edges,
+        relationship_scope=relationship_scope,
+    )
+    if neo4j_payload is not None:
+        app_logger.bind(module="graph_router").info(
+            f"graph success scope=document current_user_id={current_user.id} document_id={document_id} "
+            f"backend=neo4j node_count={neo4j_payload['node_count']} edge_count={neo4j_payload['edge_count']}"
+        )
+        return success_response(data=GraphData(**neo4j_payload))
 
     if relationship_scope == "user":
         graph_documents = await list_documents(
@@ -190,6 +256,23 @@ async def get_knowledge_base_graph(
     if knowledge_base.user_id != current_user.id:
         raise BusinessException(message="知识库不属于该用户", code=4007, status_code=403)
 
+    neo4j_payload = await build_knowledge_base_graph_payload_from_neo4j(
+        current_user=current_user,
+        knowledge_base=knowledge_base,
+        include_memory=include_memory,
+        include_relationships=include_relationships,
+        min_shared_memory_count=min_shared_memory_count,
+        min_relationship_score=min_relationship_score,
+        max_related_edges=max_related_edges,
+    )
+    if neo4j_payload is not None:
+        app_logger.bind(module="graph_router").info(
+            f"graph success scope=knowledge_base current_user_id={current_user.id} "
+            f"knowledge_base_id={knowledge_base_id} backend=neo4j "
+            f"node_count={neo4j_payload['node_count']} edge_count={neo4j_payload['edge_count']}"
+        )
+        return success_response(data=GraphData(**neo4j_payload))
+
     documents = await list_documents(
         db,
         user_id=current_user.id,
@@ -218,3 +301,29 @@ async def get_knowledge_base_graph(
         f"memory_count={len(memory_entries)} edge_count={payload['edge_count']}"
     )
     return success_response(data=GraphData(**payload))
+
+
+@router.post("/knowledge-bases/{knowledge_base_id}/rebuild")
+async def rebuild_knowledge_base_graph_projection_api(
+        knowledge_base_id: str,
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_database),
+):
+    app_logger.bind(module="graph_router").info(
+        f"graph rebuild request scope=knowledge_base current_user_id={current_user.id} "
+        f"knowledge_base_id={knowledge_base_id}"
+    )
+    result = await rebuild_graph_projection_for_knowledge_base(
+        db,
+        current_user=current_user,
+        knowledge_base_id=knowledge_base_id,
+    )
+    app_logger.bind(module="graph_router").info(
+        f"graph rebuild success scope=knowledge_base current_user_id={current_user.id} "
+        f"knowledge_base_id={knowledge_base_id} document_count={result['document_count']} "
+        f"memory_entry_count={result['memory_entry_count']}"
+    )
+    return success_response(
+        data=GraphProjectionRebuildData(**result),
+        message="graph projection rebuilt",
+    )

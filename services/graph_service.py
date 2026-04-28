@@ -339,12 +339,13 @@ def build_user_graph_payload(
                     edge_type="contains",
                 )
             )
-            memory_nodes, memory_edges = _build_memory_segments(
-                parent_node_id=document_node["id"],
-                memory_entries=memory_entries_by_document_id.get(document.id, []),
-            )
-            nodes.extend(memory_nodes)
-            edges.extend(memory_edges)
+            if include_memory:
+                memory_nodes, memory_edges = _build_memory_segments(
+                    parent_node_id=document_node["id"],
+                    memory_entries=memory_entries_by_document_id.get(document.id, []),
+                )
+                nodes.extend(memory_nodes)
+                edges.extend(memory_edges)
 
     if include_relationships:
         edges.extend(
@@ -420,12 +421,13 @@ def build_knowledge_base_graph_payload(
                 edge_type="contains",
             )
         )
-        memory_nodes, memory_edges = _build_memory_segments(
-            parent_node_id=document_node["id"],
-            memory_entries=memory_entries_by_document_id.get(document.id, []),
-        )
-        nodes.extend(memory_nodes)
-        edges.extend(memory_edges)
+        if include_memory:
+            memory_nodes, memory_edges = _build_memory_segments(
+                parent_node_id=document_node["id"],
+                memory_entries=memory_entries_by_document_id.get(document.id, []),
+            )
+            nodes.extend(memory_nodes)
+            edges.extend(memory_edges)
 
     if include_relationships:
         edges.extend(

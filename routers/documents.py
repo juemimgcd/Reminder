@@ -16,6 +16,7 @@ from infra.task_queue import enqueue_index_document_task
 from models.user import User
 from schemas.document import DocumentDeleteData, DocumentListData, DocumentListItem, DocumentIndexTaskData, DocumentUploadData
 from services.document_service import submit_document_index_task
+from services.graph_projection_service import sync_document_projection
 from services.resource_service import delete_document_resources
 from utils.auth import get_current_user
 from utils.exceptions import BusinessException
@@ -112,6 +113,11 @@ async def upload_document(
             file_type=file_ext.lstrip("."),
             file_size=file_size,
             status="uploaded",
+        )
+        await sync_document_projection(
+            user=current_user,
+            knowledge_base=knowledge_base,
+            document=document,
         )
     except Exception as exc:
         if save_path.exists():

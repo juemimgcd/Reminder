@@ -1,5 +1,7 @@
 from fastapi import APIRouter
 
+from schemas.graph_admin import Neo4jHealthData
+from services.graph_admin_service import get_neo4j_health_status
 from utils.response import success_response
 
 router = APIRouter(prefix="/health", tags=["health"])
@@ -12,4 +14,13 @@ def health_check():
     return success_response(
         data={"service": "agentic-rag", "status": "running"},
         message="service is healthy",
+    )
+
+
+@router.get("/neo4j")
+async def neo4j_health_check():
+    data = await get_neo4j_health_status()
+    return success_response(
+        data=Neo4jHealthData(**data),
+        message="neo4j health checked",
     )

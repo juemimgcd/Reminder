@@ -9,6 +9,7 @@ from crud.document import get_document_by_id, update_document_status
 from crud.task_record import create_task_record
 from infra.rate_limit import enforce_fixed_window_rate_limit
 from models.document import Document
+from services.graph_projection_service import sync_document_projection_from_db
 from utils.exceptions import BusinessException
 
 
@@ -98,6 +99,15 @@ async def submit_document_index_task(
     )
 
     await update_document_status(db, document_id=doc.id, status="queued")
+    queued_document = await get_document_by_id(
+        db,
+        document_id=doc.id,
+    )
+    if queued_document:
+        await sync_document_projection_from_db(
+            db,
+            document=queued_document,
+        )
     app_logger.bind(module="document_service").info(
         f"submit index task prepared task_id={task_id} document_id={doc.id} "
         f"knowledge_base_id={doc.knowledge_base_id}"
