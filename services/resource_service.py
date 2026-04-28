@@ -9,6 +9,7 @@ from crud.knowledge_base import delete_knowledge_base_by_id
 from crud.memory_entry import delete_memory_entries_by_document_id, delete_memory_entries_by_knowledge_base_id
 from crud.task_record import delete_task_records_by_target_id
 from models.document import Document
+from services.graph_projection_service import delete_document_projection, delete_knowledge_base_projection
 
 
 async def delete_document_resources(
@@ -44,6 +45,8 @@ async def delete_document_resources(
     file_path = Path(document.file_path)
     if file_path.exists():
         file_path.unlink()
+
+    await delete_document_projection(document_id=document.id)
 
     return {
         "document_id": document.id,
@@ -90,6 +93,7 @@ async def delete_knowledge_base_resources(
         db,
         knowledge_base_id=knowledge_base_id,
     )
+    await delete_knowledge_base_projection(knowledge_base_id=knowledge_base_id)
 
     return {
         "knowledge_base_id": knowledge_base_id,

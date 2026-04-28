@@ -13,6 +13,7 @@ from schemas.knowledge_base import (
     KnowledgeBaseDeleteData,
     KnowledgeBaseListData,
 )
+from services.graph_projection_service import sync_knowledge_base_projection
 from services.resource_service import delete_knowledge_base_resources
 from utils.auth import get_current_user
 from utils.exceptions import BusinessException
@@ -47,6 +48,7 @@ async def create_knowledge_base_api(
         description=payload.description,
         is_default=False,
     )
+    await sync_knowledge_base_projection(user=current_user, knowledge_base=knowledge_base)
     data = KnowledgeBaseData.model_validate(knowledge_base)
     return success_response(data=data, message="knowledge base created")
 
