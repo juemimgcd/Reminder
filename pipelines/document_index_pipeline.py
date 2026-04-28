@@ -11,6 +11,7 @@ from clients.vector_store_client import add_documents_to_vector_store_in_batches
 from collections.abc import Awaitable, Callable
 
 from schemas.document import DocumentIndexPipelineResult
+from services.graph_projection_service import sync_document_projection_from_db
 from services.memory_service import rebuild_memory_entries_for_document
 
 
@@ -42,6 +43,11 @@ async def run_document_index_pipeline(
         document_id=document.id,
         status="indexing"
     )
+    if doc:
+        await sync_document_projection_from_db(
+            db,
+            document=doc,
+        )
     log_event(
         "document_pipeline",
         "info",
@@ -108,7 +114,12 @@ async def run_document_index_pipeline(
         indexed_vector_count=vector_result["total_count"],
     )
 
-    await update_document_status(db, document_id=doc.id, status="indexed", )
+    indexed_document = await update_document_status(db, document_id=doc.id, status="indexed", )
+    if indexed_document:
+        await sync_document_projection_from_db(
+            db,
+            document=indexed_document,
+        )
     log_event(
         "document_pipeline",
         "info",

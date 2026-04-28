@@ -19,6 +19,13 @@ x-app-base: &app-base
     CELERY_RESULT_BACKEND: redis://redis:6379/1
     MILVUS_URI: http://milvus:19530
     MILVUS_DB_NAME: ${MILVUS_DB_NAME:-default}
+    GRAPH_BACKEND: ${GRAPH_BACKEND:-postgres}
+    NEO4J_ENABLED: ${NEO4J_ENABLED:-false}
+    NEO4J_URI: ${NEO4J_URI:-bolt://neo4j:7687}
+    NEO4J_USER: ${NEO4J_USER:-neo4j}
+    NEO4J_PASSWORD: ${NEO4J_PASSWORD:-change-this-in-production}
+    NEO4J_DATABASE: ${NEO4J_DATABASE:-neo4j}
+    NEO4J_MAX_CONNECTION_POOL_SIZE: ${NEO4J_MAX_CONNECTION_POOL_SIZE:-20}
     PYTHONPATH: /app
     WAIT_FOR_HOSTS: postgres:5432,redis:6379,milvus:19530
     WAIT_FOR_URLS: http://milvus:9091/healthz
@@ -130,6 +137,24 @@ services:
       minio:
         condition: service_started
 
+  neo4j:
+    image: neo4j:5.28
+    container_name: mneme-neo4j
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-change-this-in-production}
+    ports:
+      - "127.0.0.1:${NEO4J_PORT:-7687}:7687"
+      - "127.0.0.1:${NEO4J_HTTP_PORT:-7474}:7474"
+    volumes:
+      - neo4j_data:/data
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -a bolt://127.0.0.1:7687 -u ${NEO4J_USER:-neo4j} -p ${NEO4J_PASSWORD:-change-this-in-production} 'RETURN 1'"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
   migrate:
     <<: *app-base
     container_name: mneme-migrate
@@ -176,3 +201,4 @@ volumes:
   minio_data:
   milvus_data:
   redis_data:
+  neo4j_data:

@@ -8,6 +8,7 @@ from crud.knowledge_base import get_or_create_default_knowledge_base
 from crud.user import get_user_by_username
 from models.user import User
 from schemas.auth import LoginRequest, RegisterRequest, UserAuthResponse
+from services.graph_projection_service import sync_knowledge_base_projection, sync_user_projection
 from schemas.users import UserPublic
 from utils.auth import get_current_user
 from utils.response import success_response
@@ -38,10 +39,12 @@ async def register_user(
         avatar_url=None,
     )
 
-    await get_or_create_default_knowledge_base(
+    knowledge_base = await get_or_create_default_knowledge_base(
         db,
         user_id=account.id,
     )
+    await sync_user_projection(user=account)
+    await sync_knowledge_base_projection(user=account, knowledge_base=knowledge_base)
 
     data = UserPublic.model_validate(account)
     return success_response(data=data, message="register success")
@@ -84,6 +87,7 @@ async def login_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
         )
+    await sync_user_projection(user=user)
 
     token = await create_access_token(subject=str(user.id))
 
