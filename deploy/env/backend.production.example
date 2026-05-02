@@ -22,7 +22,7 @@ DATABASE_URL=postgresql+asyncpg://postgres:change-this-password@localhost:5432/a
 
 STORAGE_DIR=./storage
 RAW_FILE_DIR=./storage/raw
-ALLOWED_EXTENSIONS=[".pdf",".txt",".md"]
+ALLOWED_EXTENSIONS=[".pdf",".txt",".md",".docx",".pptx",".xlsx",".xls",".csv",".json",".xml",".html",".htm",".epub"]
 MAX_FILE_SIZE=10485760
 
 EMBEDDING_MODEL_NAME=BAAI/bge-m3
