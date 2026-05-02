@@ -79,7 +79,8 @@ async def upload_document(
     file_ext = Path(file_name).suffix.lower()
 
     if file_ext not in settings.ALLOWED_EXTENSIONS:
-        raise BusinessException(message="wrong file type")
+        allowed = ", ".join(sorted(settings.ALLOWED_EXTENSIONS))
+        raise BusinessException(message=f"unsupported file type, allowed: {allowed}")
 
     file_size = file.size
     if file_size is None:
