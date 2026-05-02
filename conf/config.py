@@ -45,9 +45,24 @@ class Settings(BaseSettings):
     STORAGE_DIR: Path = DEFAULT_BASE_DIR / "storage"
     RAW_FILE_DIR: Path = DEFAULT_BASE_DIR / "storage" / "raw"
 
-    # 如果你要在 .env 里覆盖 set/list 这类复杂类型，推荐写成 JSON：
-    # ALLOWED_EXTENSIONS=[".pdf",".txt",".md"]
-    ALLOWED_EXTENSIONS: set[str] = {".pdf", ".txt", ".md"}
+    # 如果你要在 .env 里覆盖 set/list 这类复杂类型，推荐写成 JSON。
+    # 默认放开 MarkItDown 能稳定处理的常见文档格式。
+    # ALLOWED_EXTENSIONS=[".pdf",".txt",".md",".docx",".pptx",".xlsx",".xls",".csv",".json",".xml",".html",".htm",".epub"]
+    ALLOWED_EXTENSIONS: set[str] = {
+        ".pdf",
+        ".txt",
+        ".md",
+        ".docx",
+        ".pptx",
+        ".xlsx",
+        ".xls",
+        ".csv",
+        ".json",
+        ".xml",
+        ".html",
+        ".htm",
+        ".epub",
+    }
     MAX_FILE_SIZE: int = 10 * 1024 * 1024
 
     EMBEDDING_MODEL_NAME: str = "BAAI/bge-m3"
