@@ -17,7 +17,8 @@ from models import task_record
 ALLOWED_TASK_TRANSITIONS = {
     "queued": ["parsing", "failed", "canceled"],
     "parsing": ["chunking", "failed"],
-    "chunking": ["embedding", "failed"],
+    "chunking": ["memory_extracting", "failed"],
+    "memory_extracting": ["embedding", "failed"],
     "embedding": ["vector_upserting", "failed"],
     "vector_upserting": ["completed", "failed"],
     "failed": ["queued"],

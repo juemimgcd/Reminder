@@ -92,7 +92,8 @@ async def run_document_index_pipeline(
         chunk_docs=chunk_docs,
     )
 
-    await rebuild_memory_entries_for_document(
+    await emit_stage("memory_extracting", on_stage_change=on_stage_change)
+    memory_result = await rebuild_memory_entries_for_document(
         db,
         document=doc,
     )
@@ -132,6 +133,8 @@ async def run_document_index_pipeline(
         document_id=doc.id,
         knowledge_base_id=doc.knowledge_base_id,
         chunk_count=len(chunk_docs),
+        deleted_memory_entry_count=memory_result["deleted_entry_count"],
+        memory_entry_count=memory_result["entry_count"],
         vector_batch_count=vector_result["batch_count"],
         vector_batch_size=vector_result["batch_size"],
         indexed_vector_count=vector_result["total_count"],

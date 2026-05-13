@@ -70,6 +70,8 @@ class DocumentIndexPipelineResult(BaseModel):
     document_id: str
     knowledge_base_id: str
     chunk_count: int
+    deleted_memory_entry_count: int
+    memory_entry_count: int
     vector_batch_count: int
     vector_batch_size: int
     indexed_vector_count: int
