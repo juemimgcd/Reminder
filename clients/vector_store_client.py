@@ -6,7 +6,7 @@ from langchain_core.documents import Document as LCDocument
 from langchain_milvus import Milvus
 
 from conf.config import settings
-from conf.logging import log_event
+from conf.logging import log_event, app_logger
 from clients.embedding_client import get_embeddings
 from infra.circuit_breaker import before_call, record_success, record_failure
 from infra.retry import retry_async
