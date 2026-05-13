@@ -66,7 +66,10 @@ async def run_index_document_task_async(
 
             app_logger.bind(module="index_task").info(
                 f"index task completed task_id={task_id} document_id={document_id} "
-                f"chunk_count={result.chunk_count} vector_batch_count={result.vector_batch_count} "
+                f"chunk_count={result.chunk_count} "
+                f"deleted_memory_entry_count={result.deleted_memory_entry_count} "
+                f"memory_entry_count={result.memory_entry_count} "
+                f"vector_batch_count={result.vector_batch_count} "
                 f"vector_batch_size={result.vector_batch_size}"
             )
             await transition_task_status(db,task_id=task_id,to_status="completed",)
