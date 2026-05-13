@@ -561,7 +561,7 @@ Neo4j 用于回答：
 (:MemoryEntry)-[:CONTRADICTS]->(:MemoryEntry)
 (:MemoryEntry)-[:REFINES]->(:MemoryEntry)
 (:MemoryEntry)-[:REPEATED_IN]->(:Document)
-```
+```                                                                                                                                                                                   
 
 ### 9.4 GraphRAG 流程
 
@@ -1408,3 +1408,633 @@ Mneme 下一阶段最值得优化的方向是：
 把 Neo4j 从图展示变成 GraphRAG 检索层，
 把 RAG 从一次性生成变成证据驱动、可评测、可演化的长期记忆系统。
 ```
+
+---
+
+# 25. 参考 AtlasClaw 的架构借鉴清单
+
+这里不照搬 `D:\python_files\atlasclaw` 的平台能力，只提炼对 `Mneme` 真正有用的架构做法。
+
+Mneme 当前的主要问题是：
+
+```text
+main.py 入口偏重
+routers / services / models / schemas / crud 平铺
+documents 等路由直接编排 storage / graph sync / task queue
+pipeline 已承载主链路，但副作用边界还不够清楚
+```
+
+## 25.1 值得直接参考的部分
+
+### A. 薄入口 + bootstrap 分层
+
+参考 AtlasClaw，把应用拆成：
+
+```text
+main.py
+  -> create_app()
+  -> lifespan()
+
+bootstrap/
+  -> app_factory.py
+  -> startup.py
+  -> shutdown.py
+  -> router_registry.py
+```
+
+目的：
+
+```text
+让 main.py 只负责装配
+把日志、数据库、Milvus、Neo4j、Celery、资源检查从入口下沉
+```
+
+### B. 请求级依赖收口
+
+当前很多接口直接依赖：
+
+```text
+Depends(get_current_user)
+Depends(get_database)
+```
+
+后面引入更多能力后，建议统一成一个轻量上下文对象：
+
+```text
+RequestContext
+  user
+  db
+  request_id
+  knowledge_base_scope
+  trace metadata
+  feature flags
+```
+
+目的是减少路由层重复代码，不是做复杂 IoC。
+
+### C. `api/` 装配层
+
+建议增加轻量的 API 收口层：
+
+```text
+api/
+  router.py
+  deps.py
+  errors.py
+  response.py
+```
+
+职责：
+
+```text
+router.py 统一 include_router
+deps.py 统一 DB / user / request scope
+errors.py 统一异常映射
+response.py 统一响应结构
+```
+
+### D. 领域优先目录
+
+相比继续扩大：
+
+```text
+routers/
+services/
+schemas/
+models/
+crud/
+clients/
+pipelines/
+```
+
+更适合逐步转成：
+
+```text
+app/
+  mneme/
+    api/
+    core/
+    infra/
+    domains/
+      auth/
+      users/
+      documents/
+      retrieval/
+      memory/
+      graph/
+      profile/
+      tasks/
+      analysis/
+```
+
+每个领域内部再放：
+
+```text
+router.py
+schemas.py
+service.py
+repository.py
+models.py
+events.py
+```
+
+### E. 全局资源容器
+
+可引入轻量版 `AppContainer`：
+
+```text
+AppContainer
+  settings
+  db_engine
+  vector_client
+  graph_client
+  task_dispatcher
+  retrieval_service
+  graph_projection_service
+```
+
+目的：
+
+```text
+减少全局 import 穿透
+方便测试替换依赖
+方便启动期统一校验资源
+```
+
+### F. 更清楚的运行时边界
+
+目标边界应收敛为：
+
+```text
+router
+  -> application service
+application service
+  -> repository / domain service / dispatcher
+pipeline
+  -> 只负责阶段执行
+projection / outbox / async task
+  -> 独立处理副作用
+```
+
+这比继续让 `documents` 路由直接操作多个基础设施更可维护。
+
+## 25.2 适合中期借鉴的部分
+
+```text
+1. Retrieval Orchestrator
+   统一 query analysis / recall / rerank / context assembly / debug payload
+
+2. Runtime 目录治理
+   明确 storage/raw、parsed、debug、eval、reports 等目录边界
+
+3. 测试分层
+   至少建立 api / services / pipelines / retrieval / graph / tasks
+
+4. docs/architecture.md
+   把系统上下文、索引链路、检索链路、异步任务链路写成事实文档
+```
+
+## 25.3 当前不建议照搬的部分
+
+下面这些不是当前 Mneme 的第一优先级：
+
+```text
+多渠道接入
+Provider Registry / 插件化外部系统
+复杂 RBAC 与租户隔离
+Hook Runtime / Heartbeat Runtime
+TokenPool / 多模型多令牌调度
+平台型后台能力
+```
+
+当前资源更应该优先投入：
+
+```text
+长期记忆闭环
+Hybrid Search
+GraphRAG
+Evidence 回答
+任务可靠性
+评测闭环
+模块边界稳定
+```
+
+## 25.4 引入 LlamaIndex / MongoDB 的裁剪式策略
+
+这两个方向都可以帮助 Mneme 减重，但职责不同：
+
+```text
+LlamaIndex 适合减少 RAG 编排代码量
+MongoDB 适合承接半结构化数据与可选的检索统一层
+```
+
+### A. LlamaIndex 建议引入
+
+优先让 LlamaIndex 接管这些能力：
+
+```text
+1. ingestion pipeline
+   文档加载、切分、节点化、metadata 处理、去重
+
+2. retrieval pipeline
+   retriever、rerank、query engine、context assembly
+
+3. GraphRAG PoC
+   优先尝试 PropertyGraphIndex + Neo4j
+```
+
+这意味着可以逐步减薄当前这些自研层：
+
+```text
+clients/document_loader_client.py
+clients/text_splitter_client.py
+部分 vector retrieval 编排
+部分 memory / graph 检索编排
+```
+
+### B. LlamaIndex 暂不接管
+
+下面这些暂时不要交给 LlamaIndex：
+
+```text
+FastAPI 路由层
+鉴权与用户体系
+TaskRecord 状态机
+Celery 分发与任务治理
+Document / User / KnowledgeBase 主数据事务
+```
+
+原因：
+
+```text
+这些是系统骨架，不是 RAG 框架最擅长的部分
+```
+
+### C. MongoDB 建议引入的方式
+
+MongoDB 目前更适合先做两类角色：
+
+```text
+1. 半结构化副存储
+   ProfileSnapshot
+   RetrievalDebugInfo
+   EvalResult
+   Memory 主题归档
+   实验与分析报告
+
+2. 检索统一层候选
+   如果后面希望把 metadata filter + vector search + text search 尽量收敛到一处，
+   可以评估 MongoDB Atlas Vector Search 作为 Milvus 的替代候选
+```
+
+### D. MongoDB 当前不建议直接替换
+
+暂时不建议直接用 MongoDB 替掉这些主事务对象：
+
+```text
+users
+documents
+knowledge_bases
+task_records
+核心业务事实表
+```
+
+原因：
+
+```text
+当前项目已经基于 SQLAlchemy + Alembic + PostgreSQL 建好主数据层
+TaskRecord / Document / User 这类对象仍然更适合关系型事务边界
+如果现在直接替主库，复杂度会明显高于收益
+```
+
+### E. 推荐引入顺序
+
+推荐顺序如下：
+
+```text
+Phase A
+  保留 PostgreSQL + Milvus + Neo4j
+  引入 LlamaIndex，只替换 ingestion / retrieval / GraphRAG 编排
+
+Phase B
+  引入 MongoDB 作为 snapshot / debug / eval / retrieval logs 的副存储
+
+Phase C
+  如果 MongoDB Atlas Vector Search 实测足够稳定，再评估是否替换 Milvus
+
+Phase D
+  最后才讨论 MongoDB 是否进入主业务数据层
+```
+
+### F. 对 Mneme 的直接意义
+
+如果按这个方式引入，收益是：
+
+```text
+减少自研 RAG 编排代码
+减少未来维护 loader / splitter / retriever / query engine 的成本
+保留 PostgreSQL 事务主干稳定性
+给后续 Hybrid Search / GraphRAG / Eval 留出更快的实验空间
+```
+
+---
+
+# 26. 参考 AtlasClaw 的架构改造步骤
+
+这里保留最终效果不变，只压缩为更短的执行路线。
+
+## 26.1 阶段 0：先定边界
+
+目标：
+
+```text
+先确定 api / application / domain / infra 四层职责，再做迁移
+```
+
+要点：
+
+```text
+pipeline 只做阶段执行
+router 不直接做 graph sync / queue dispatch / storage orchestration
+repository 管 DB 读写
+service 管业务编排
+clients 只封装外部调用
+```
+
+产出：
+
+```text
+docs/architecture.md 初稿
+模块职责表
+迁移优先级列表
+```
+
+## 26.2 阶段 1：把 `main.py` 变薄
+
+目标结构：
+
+```text
+app/mneme/
+  main.py
+  bootstrap/
+    app_factory.py
+    startup.py
+    shutdown.py
+    router_registry.py
+```
+
+动作：
+
+```text
+提取 create_app()
+提取 lifespan()
+提取 routers / middlewares / exception handlers 注册
+提取 startup resource checks
+```
+
+验收：
+
+```text
+路由与中间件行为不变
+应用仍可正常启动
+main.py 只保留薄装配
+```
+
+## 26.3 阶段 2：引入 `core` 和 `api`
+
+目标结构：
+
+```text
+app/mneme/
+  core/
+    config.py
+    deps.py
+    container.py
+    logging.py
+  api/
+    router.py
+    deps.py
+    response.py
+    errors.py
+```
+
+动作：
+
+```text
+把配置和 DB 依赖收口
+定义 RequestContext
+定义 AppContainer
+把 success_response / exception handler 收口到 api 层
+```
+
+验收：
+
+```text
+DB / user / request scope 获取方式统一
+异常与响应有单一入口
+```
+
+## 26.4 阶段 3：先重构 `documents`
+
+之所以先做它，是因为它同时牵涉：
+
+```text
+上传
+文件存储
+文档记录
+task_record
+pipeline
+memory rebuild
+graph projection
+vector upsert
+```
+
+目标结构：
+
+```text
+domains/documents/
+  router.py
+  schemas.py
+  repository.py
+  service.py
+  storage.py
+  events.py
+```
+
+动作：
+
+```text
+router 只做参数解析、鉴权、响应
+文件保存下沉到 storage service
+文档 CRUD 下沉到 repository
+索引提交放到 documents service
+graph projection 改成事件或 dispatcher 触发
+```
+
+验收：
+
+```text
+documents/router.py 不再直接编排多个副作用
+上传、索引、删除链路行为保持一致
+```
+
+## 26.5 阶段 4：抽 `retrieval`
+
+目标结构：
+
+```text
+domains/retrieval/
+  service.py
+  schemas.py
+  rerank.py
+  context_builder.py
+  debug.py
+```
+
+动作：
+
+```text
+定义 ContextItem
+抽 RetrievalService
+抽 QueryAnalysis / RecallMerger / RetrievalDebugPayload
+让 chat / analysis / advice / companion 共享 retrieval service
+```
+
+验收：
+
+```text
+召回逻辑不再重复
+retrieval_debug_info 结构统一
+GraphRAG 接入点唯一
+```
+
+## 26.6 阶段 5：抽 `memory` 与 `graph`
+
+目标结构：
+
+```text
+domains/memory/
+  service.py
+  extractor.py
+  merger.py
+  repository.py
+
+domains/graph/
+  service.py
+  projection.py
+  queries.py
+  repository.py
+```
+
+动作：
+
+```text
+Memory 提供 extract / merge / query
+Graph 提供 project / expand / rebuild
+pipeline 只调用领域接口
+Neo4j 写入逐步改成 outbox 驱动
+```
+
+## 26.7 阶段 6：独立 `workflow / jobs`
+
+目标结构：
+
+```text
+workflow/
+  jobs/
+    document_index.py
+  dispatcher.py
+  task_state.py
+  events.py
+```
+
+动作：
+
+```text
+`infra/task_queue.py` 只做 dispatch
+`tasks/index_tasks.py` 迁到 workflow/jobs
+`services/task_state_service.py` 迁到 workflow/task_state.py
+统一任务状态枚举与 progress / result / error payload
+```
+
+验收：
+
+```text
+任务执行层与 HTTP 路由解耦
+状态机集中维护
+```
+
+## 26.8 阶段 7：整体目录收口到包内
+
+推荐目标：
+
+```text
+app/
+  mneme/
+    main.py
+    bootstrap/
+    api/
+    core/
+    infra/
+    workflow/
+    domains/
+      auth/
+      users/
+      documents/
+      retrieval/
+      memory/
+      graph/
+      profile/
+      tasks/
+      analysis/
+      companion/
+    tests/
+```
+
+说明：
+
+```text
+这一步放在前面阶段完成后再做
+否则只是搬目录，不是真正降耦合
+```
+
+## 26.9 阶段 8：补测试与文档闭环
+
+动作：
+
+```text
+为 documents / retrieval / memory / graph / workflow 建最小测试集
+为 startup / config / deps 建基础测试
+新增 docs/architecture.md / docs/runtime-flows.md / docs/module-boundaries.md
+```
+
+验收：
+
+```text
+核心主链路重构后可回归验证
+文档可支持后续持续演进
+```
+
+---
+
+# 27. 简化结论
+
+Mneme 最值得学习 AtlasClaw 的，不是平台化功能，而是：
+
+```text
+把启动、依赖、领域、运行时副作用分层收口
+```
+
+最建议的顺序仍然不变：
+
+```text
+1. main.py 变薄
+2. 引入 api / core / container
+3. 先重构 documents
+4. 抽 retrieval orchestrator
+5. 抽 memory / graph 边界
+6. 独立 workflow / jobs
+7. 最后再做整体目录迁移
+```
+
+这样做既能减小重构风险，也能真正托住后面的 MemoryEntry、GraphRAG 和 Eval 演进。
