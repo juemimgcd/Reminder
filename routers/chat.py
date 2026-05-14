@@ -50,7 +50,8 @@ async def query_chat(
     )
     app_logger.bind(module="chat_router").info(
         f"chat query success user_id={current_user.id} knowledge_base_id={payload.knowledge_base_id} "
-        f"source_count={len(result['sources'])}"
+        f"source_count={len(result['sources'])} citation_count={len(result['citations'])} "
+        f"confidence={result['confidence']}"
     )
     data = ChatQueryData(**result)
     return success_response(data=data)
