@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from conf.database import get_database
+from conf.database import get_write_database
 from conf.logging import app_logger
 from crud.auth_user import create_user_account, update_user_last_login_at
 from crud.knowledge_base import get_or_create_default_knowledge_base
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 @router.post("/register")
 async def register_user(
         payload: RegisterRequest,
-        db: AsyncSession = Depends(get_database),
+        db: AsyncSession = Depends(get_write_database),
 ):
     user = await get_user_by_username(db, username=payload.username)
     if user:
@@ -53,7 +53,7 @@ async def register_user(
 @router.post("/login")
 async def login_user(
         payload: LoginRequest,
-        db: AsyncSession = Depends(get_database),
+        db: AsyncSession = Depends(get_write_database),
 ):
     log = app_logger.bind(module="auth")
 

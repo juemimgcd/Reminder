@@ -3,9 +3,9 @@ from collections import defaultdict
 
 from langchain_core.documents import Document as LCDocument
 from langchain_core.output_parsers import PydanticOutputParser
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from clients.llm_client import get_llm
+from conf.database import open_read_session, open_write_session
 from conf.logging import log_event
 from crud.chunk import list_chunks_by_document_id
 from crud.document import list_documents
@@ -195,36 +195,20 @@ async def extract_entries_from_chunks(chunk_docs: list[LCDocument]) -> list[dict
 
 
 async def rebuild_memory_entries_for_document(
-        db: AsyncSession,
         *,
         document: Document,
 ) -> dict[str, int]:
-    chunk_rows = await list_chunks_by_document_id(
-        db,
-        document_id=document.id,
-    )
-    deleted_entry_count = await delete_memory_entries_by_document_id(
-        db,
-        document_id=document.id,
-    )
+    async with open_read_session() as db:
+        chunk_rows = await list_chunks_by_document_id(
+            db,
+            document_id=document.id,
+        )
 
     if not chunk_rows:
-        knowledge_base = await get_knowledge_base_by_id(
-            db,
-            knowledge_base_id=document.knowledge_base_id,
+        deleted_entry_count, _ = await replace_memory_entries_for_document(
+            document=document,
+            entries=[],
         )
-        user = await get_user_by_id(
-            db,
-            user_id=document.user_id,
-        )
-        if knowledge_base and user:
-            await sync_document_memory_projection(
-                db,
-                user=user,
-                knowledge_base=knowledge_base,
-                document=document,
-                memory_entries=[],
-            )
         log_event(
             "memory_service",
             "info",
@@ -244,26 +228,10 @@ async def rebuild_memory_entries_for_document(
         chunk_rows=chunk_rows,
     )
     entries = await extract_entries_from_chunks(chunk_docs)
-    persisted_entries = []
-    if entries:
-        persisted_entries = await create_memory_entries(db, entries=entries)
-
-    knowledge_base = await get_knowledge_base_by_id(
-        db,
-        knowledge_base_id=document.knowledge_base_id,
+    deleted_entry_count, persisted_entries = await replace_memory_entries_for_document(
+        document=document,
+        entries=entries,
     )
-    user = await get_user_by_id(
-        db,
-        user_id=document.user_id,
-    )
-    if knowledge_base and user:
-        await sync_document_memory_projection(
-            db,
-            user=user,
-            knowledge_base=knowledge_base,
-            document=document,
-            memory_entries=persisted_entries,
-        )
 
     log_event(
         "memory_service",
@@ -282,15 +250,15 @@ async def rebuild_memory_entries_for_document(
 
 
 async def rebuild_memory_entries_for_knowledge_base(
-        db: AsyncSession,
         *,
         knowledge_base_pk: int,
         knowledge_base_id: str,
 ) -> dict[str, int | str]:
-    documents = await list_documents(
-        db,
-        knowledge_base_pk=knowledge_base_pk,
-    )
+    async with open_read_session() as db:
+        documents = await list_documents(
+            db,
+            knowledge_base_pk=knowledge_base_pk,
+        )
 
     processed_document_count = 0
     total_chunk_count = 0
@@ -299,7 +267,6 @@ async def rebuild_memory_entries_for_knowledge_base(
 
     for document in documents:
         result = await rebuild_memory_entries_for_document(
-            db,
             document=document,
         )
         if result["chunk_count"] > 0:
@@ -327,3 +294,38 @@ async def rebuild_memory_entries_for_knowledge_base(
         "deleted_entry_count": total_deleted_entry_count,
         "entry_count": total_entry_count,
     }
+
+
+async def replace_memory_entries_for_document(
+        *,
+        document: Document,
+        entries: list[dict],
+) -> tuple[int, list]:
+    async with open_write_session() as db:
+        deleted_entry_count = await delete_memory_entries_by_document_id(
+            db,
+            document_id=document.id,
+        )
+
+        persisted_entries = []
+        if entries:
+            persisted_entries = await create_memory_entries(db, entries=entries)
+
+        knowledge_base = await get_knowledge_base_by_id(
+            db,
+            knowledge_base_id=document.knowledge_base_id,
+        )
+        user = await get_user_by_id(
+            db,
+            user_id=document.user_id,
+        )
+        if knowledge_base and user:
+            await sync_document_memory_projection(
+                db,
+                user=user,
+                knowledge_base=knowledge_base,
+                document=document,
+                memory_entries=persisted_entries,
+            )
+
+        return deleted_entry_count, persisted_entries

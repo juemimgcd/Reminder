@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from conf.database import get_database
+from conf.database import get_database, get_write_database
 from conf.logging import app_logger
 from crud.document import get_document_by_id
 from crud.knowledge_base import get_knowledge_base_by_id
@@ -66,7 +66,7 @@ async def get_memory_library(
 async def rebuild_memory_library(
         knowledge_base_id: str,
         current_user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_database),
+        db: AsyncSession = Depends(get_write_database),
 ):
     app_logger.bind(module="memory_router").info(
         f"memory rebuild request knowledge_base_id={knowledge_base_id} current_user_id={current_user.id}"
@@ -78,11 +78,9 @@ async def rebuild_memory_library(
         raise BusinessException(message="知识库不属于该用户", code=4007)
 
     result = await rebuild_memory_entries_for_knowledge_base(
-        db,
         knowledge_base_pk=knowledge_base.pk,
         knowledge_base_id=knowledge_base.id,
     )
-    await db.commit()
     app_logger.bind(module="memory_router").info(
         f"memory rebuild success knowledge_base_id={knowledge_base_id} "
         f"processed_document_count={result['processed_document_count']} entry_count={result['entry_count']}"
