@@ -1,14 +1,16 @@
 import re
 
-from langchain_core.output_parsers import StrOutputParser
+from langchain_core.output_parsers import StrOutputParser, PydanticOutputParser
+
 
 from clients.llm_client import get_llm
 from conf.config import settings
 from conf.logging import app_logger, log_event
 from infra.circuit_breaker import before_call, record_success, record_failure
 from infra.retry import retry_async
+from schemas.chat import EvidenceAnswerDraft, EvidenceCitationDraft
 from services.context_service import build_query_context
-from utils.prompt_builder import get_general_chat_prompt, get_rag_prompt
+from utils.prompt_builder import get_general_chat_prompt, get_rag_prompt, get_evidence_rag_prompt
 
 
 # 判断 LLM 调用抛出的异常是否属于 Day10 第一版可重试错误。
@@ -170,12 +172,15 @@ async def generate_rag_answer(
         return {
             "answer": "我无法从已检索内容中找到相关答案。请先确认文档已经完成索引。",
             "sources": [],
+            "citations": [],
+            "confidence": "low",
+            "uncertainty": "当前没有可用证据来源。",
         }
 
-    answer = await invoke_llm_answer(
-        prompt=get_rag_prompt(),
+    evidence_result = await invoke_evidence_answer(
         question=question,
         context_text=context_packet["context_text"],
+        sources=context_packet["sources"],
         knowledge_base_id=knowledge_base_id,
         user_id=user_id,
     )
@@ -186,19 +191,67 @@ async def generate_rag_answer(
         knowledge_base_id=knowledge_base_id,
         user_id=user_id,
         source_count=len(context_packet["sources"]),
-        answer_length=len(answer),
+        answer_length=len(evidence_result),
     )
 
     return {
-        "answer": answer,
+        "answer": evidence_result["answer"],
         "sources": context_packet["sources"],
+        "citations": evidence_result["citations"],
+        "confidence": evidence_result["confidence"],
+        "uncertainty": evidence_result["uncertainty"],
     }
 
 
 
+def resolve_citations(citation_drafts: list[EvidenceCitationDraft], sources: list[dict]) -> list[dict]:
+    source_lookup = {
+        item["source_id"]: item
+        for item in sources
+        if item.get("source_id")
+    }
+    citations: list[dict] = []
+    for item in citation_drafts:
+        source = source_lookup.get(item.source_id)
+        if not source:
+            continue
+        citations.append(
+            {
+                "source_id": item.source_id,
+                "document_id": source["document_id"],
+                "chunk_id": source["chunk_id"],
+                "page_no": source.get("page_no"),
+                "quote": item.quote,
+                "reason": item.reason,
+            }
+        )
+    return citations
 
 
 
 
-
-
+async def invoke_evidence_answer(
+    *,
+    question: str,
+    context_text: str,
+    sources: list[dict],
+    knowledge_base_id: str | None = None,
+    user_id: int | None = None,
+) -> dict:
+    parser = PydanticOutputParser(pydantic_object=EvidenceAnswerDraft)
+    prompt = get_evidence_rag_prompt(parser.get_format_instructions())
+    llm = get_llm()
+    chain = prompt | llm | parser
+    result = await chain.ainvoke(
+        {
+            "context": context_text,
+            "question": question,
+        }
+    )
+    citations = resolve_citations(result.citations, sources)
+    return {
+        "answer": result.answer,
+        "citations": citations,
+        "confidence": result.confidence,
+        "uncertainty": result.uncertainty,
+    }
