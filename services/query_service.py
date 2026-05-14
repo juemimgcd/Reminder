@@ -1,19 +1,19 @@
 import re
+from typing import Any
 
-from langchain_core.output_parsers import StrOutputParser, PydanticOutputParser
-
+from langchain_core.output_parsers import PydanticOutputParser, StrOutputParser
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from clients.llm_client import get_llm
 from conf.config import settings
 from conf.logging import app_logger, log_event
-from infra.circuit_breaker import before_call, record_success, record_failure
+from infra.circuit_breaker import before_call, record_failure, record_success
 from infra.retry import retry_async
 from schemas.chat import EvidenceAnswerDraft, EvidenceCitationDraft
 from services.context_service import build_query_context
-from utils.prompt_builder import get_general_chat_prompt, get_rag_prompt, get_evidence_rag_prompt
+from utils.prompt_builder import get_evidence_rag_prompt, get_general_chat_prompt
 
 
-# 判断 LLM 调用抛出的异常是否属于 Day10 第一版可重试错误。
 def is_retryable_external_error(exc: Exception) -> bool:
     return isinstance(exc, (TimeoutError, ConnectionError, OSError))
 
@@ -23,13 +23,8 @@ GENERAL_CHAT_PATTERNS = [
     r"你是做什么的",
     r"你能做什么",
     r"你可以做什么",
-    r"你会什么",
-    r"你有什么能力",
-    r"介绍一下你自己",
     r"怎么使用",
     r"如何使用",
-    r"怎么用",
-    r"如何用",
     r"帮助",
     r"你好",
     r"hello",
@@ -46,12 +41,12 @@ def is_general_assistant_question(question: str) -> bool:
 
 
 async def invoke_llm_answer(
-        *,
-        prompt,
-        question: str,
-        context_text: str | None = None,
-        knowledge_base_id: str | None = None,
-        user_id: int | None = None,
+    *,
+    prompt: Any,
+    question: str,
+    context_text: str | None = None,
+    knowledge_base_id: str | None = None,
+    user_id: int | None = None,
 ) -> str:
     llm = get_llm()
     chain = prompt | llm | StrOutputParser()
@@ -106,15 +101,14 @@ async def invoke_llm_answer(
     )
 
 
-
-# 组装治理后的上下文并生成最终 RAG 回答。
 async def generate_rag_answer(
-        question: str,
-        *,
-        knowledge_base_id: str,
-        user_id: int | None = None,
-        top_k: int = 4,
-) -> dict:
+    question: str,
+    *,
+    db: AsyncSession | None = None,
+    knowledge_base_id: str,
+    user_id: int | None = None,
+    top_k: int = 4,
+) -> dict[str, Any]:
     log_event(
         "query_service",
         "info",
@@ -124,6 +118,7 @@ async def generate_rag_answer(
         top_k=top_k,
         question_length=len(question),
     )
+
     if is_general_assistant_question(question):
         log_event(
             "query_service",
@@ -141,10 +136,17 @@ async def generate_rag_answer(
         return {
             "answer": answer,
             "sources": [],
+            "citations": [],
+            "confidence": "medium",
+            "uncertainty": "This response did not use knowledge-base evidence.",
         }
+
+    if db is None:
+        raise ValueError("db is required for retrieval-augmented answers")
 
     context_packet = await build_query_context(
         query=question,
+        db=db,
         top_k=top_k,
         user_id=user_id,
         knowledge_base_id=knowledge_base_id,
@@ -170,11 +172,11 @@ async def generate_rag_answer(
             user_id=user_id,
         )
         return {
-            "answer": "我无法从已检索内容中找到相关答案。请先确认文档已经完成索引。",
+            "answer": "我没有从当前知识库中检索到足够相关的证据，请先确认文档已经完成索引。",
             "sources": [],
             "citations": [],
             "confidence": "low",
-            "uncertainty": "当前没有可用证据来源。",
+            "uncertainty": "当前没有可用的检索证据来源。",
         }
 
     evidence_result = await invoke_evidence_answer(
@@ -191,7 +193,7 @@ async def generate_rag_answer(
         knowledge_base_id=knowledge_base_id,
         user_id=user_id,
         source_count=len(context_packet["sources"]),
-        answer_length=len(evidence_result),
+        answer_length=len(evidence_result["answer"]),
     )
 
     return {
@@ -203,14 +205,13 @@ async def generate_rag_answer(
     }
 
 
-
-def resolve_citations(citation_drafts: list[EvidenceCitationDraft], sources: list[dict]) -> list[dict]:
+def resolve_citations(citation_drafts: list[EvidenceCitationDraft], sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
     source_lookup = {
         item["source_id"]: item
         for item in sources
         if item.get("source_id")
     }
-    citations: list[dict] = []
+    citations: list[dict[str, Any]] = []
     for item in citation_drafts:
         source = source_lookup.get(item.source_id)
         if not source:
@@ -228,20 +229,19 @@ def resolve_citations(citation_drafts: list[EvidenceCitationDraft], sources: lis
     return citations
 
 
-
-
 async def invoke_evidence_answer(
     *,
     question: str,
     context_text: str,
-    sources: list[dict],
+    sources: list[dict[str, Any]],
     knowledge_base_id: str | None = None,
     user_id: int | None = None,
-) -> dict:
+) -> dict[str, Any]:
     parser = PydanticOutputParser(pydantic_object=EvidenceAnswerDraft)
     prompt = get_evidence_rag_prompt(parser.get_format_instructions())
     llm = get_llm()
     chain = prompt | llm | parser
+
     result = await chain.ainvoke(
         {
             "context": context_text,
