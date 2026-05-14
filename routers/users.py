@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from conf.database import get_database
+from conf.database import get_database, get_write_database
 from crud.document import list_documents
 from crud.knowledge_base import create_knowledge_base, get_knowledge_base_by_id, list_knowledge_bases_by_user_id
 from models.user import User
@@ -36,7 +36,7 @@ async def create_knowledge_base_api(
         user_id: int,
         payload: KnowledgeBaseCreateRequest,
         current_user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_database),
+        db: AsyncSession = Depends(get_write_database),
 ):
     ensure_current_user_matches(current_user, user_id)
 
@@ -72,7 +72,7 @@ async def delete_knowledge_base_api(
         user_id: int,
         knowledge_base_id: str,
         current_user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_database),
+        db: AsyncSession = Depends(get_write_database),
 ):
     ensure_current_user_matches(current_user, user_id)
 
@@ -95,7 +95,6 @@ async def delete_knowledge_base_api(
         knowledge_base_id=knowledge_base.id,
         knowledge_base_pk=knowledge_base.pk,
     )
-    await db.commit()
     return success_response(
         data=KnowledgeBaseDeleteData(**result),
         message="knowledge base deleted",

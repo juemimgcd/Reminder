@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from conf.database import get_database
+from conf.database import get_database, get_write_database
 from crud.document import get_document_by_id
 from crud.task_record import get_task_record_by_id
 from models.user import User
@@ -42,7 +42,7 @@ async def get_task_status(
 async def cancel_task(
         task_id: str,
         current_user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_database),
+        db: AsyncSession = Depends(get_write_database),
 ):
     result = await cancel_document_index_task(
         db,
@@ -59,7 +59,7 @@ async def cancel_task(
 async def retry_task(
         task_id: str,
         current_user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_database),
+        db: AsyncSession = Depends(get_write_database),
 ):
     result = await retry_document_index_task(
         db,
