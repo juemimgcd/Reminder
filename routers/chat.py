@@ -19,9 +19,9 @@ router = APIRouter(prefix="/kb/chat", tags=["chat"])
 
 @router.post("/query")
 async def query_chat(
-        payload: ChatQueryRequest,
-        current_user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_database),
+    payload: ChatQueryRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_database),
 ):
     app_logger.bind(module="chat_router").info(
         f"chat query request user_id={current_user.id} knowledge_base_id={payload.knowledge_base_id} "
@@ -40,10 +40,11 @@ async def query_chat(
         raise BusinessException(message="知识库不存在", code=4042, status_code=404)
 
     if knowledge_base.user_id != current_user.id:
-        raise BusinessException(message="知识库不属于该用户", code=4007)
+        raise BusinessException(message="知识库不属于当前用户", code=4007)
 
     result = await generate_rag_answer(
         question=payload.question,
+        db=db,
         knowledge_base_id=payload.knowledge_base_id,
         user_id=current_user.id,
         top_k=payload.top_k,
@@ -53,5 +54,6 @@ async def query_chat(
         f"source_count={len(result['sources'])} citation_count={len(result['citations'])} "
         f"confidence={result['confidence']}"
     )
+
     data = ChatQueryData(**result)
     return success_response(data=data)
