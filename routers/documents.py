@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from conf.config import settings
-from conf.database import get_database
+from conf.database import get_database, get_write_database
 from conf.logging import app_logger
 from crud.document import create_document, get_document_by_id, list_documents
 from crud.knowledge_base import get_knowledge_base_by_id, get_or_create_default_knowledge_base
@@ -48,7 +48,7 @@ async def upload_document(
         knowledge_base_id: str | None = Form(default=None),
         file: UploadFile = File(...),
         current_user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_database),
+        db: AsyncSession = Depends(get_write_database),
 ):
     resolved_user_id = ensure_user_context_matches(current_user, user_id)
     app_logger.bind(module="documents_router").info(
@@ -188,7 +188,7 @@ async def get_document_list(
 async def index_document_api(
         document_id: str,
         current_user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_database),
+        db: AsyncSession = Depends(get_write_database),
 ):
     app_logger.bind(module="documents_router").info(
         f"index request received document_id={document_id} current_user_id={current_user.id}"
@@ -224,7 +224,7 @@ async def index_document_api(
 async def delete_document_api(
         document_id: str,
         current_user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_database),
+        db: AsyncSession = Depends(get_write_database),
 ):
     document = await get_document_by_id(
         db,
@@ -241,7 +241,6 @@ async def delete_document_api(
         db,
         document=document,
     )
-    await db.commit()
     return success_response(
         data=DocumentDeleteData(**result),
         message="document deleted",
