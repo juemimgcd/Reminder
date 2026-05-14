@@ -1,7 +1,8 @@
 from langchain_core.documents import Document as LCDocument
-from sqlalchemy import delete, insert, select
+from sqlalchemy import delete, insert, select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from models import Document
 from models.chunk import Chunk
 
 BULK_INSERT_BATCH_SIZE = 5000
@@ -87,7 +88,30 @@ async def delete_chunks_by_document_id(
     return res.rowcount or 0
 
 
+async def search_chunks_by_keywords(
+    db: AsyncSession,
+    *,
+    knowledge_base_id: str,
+    user_id: int | None = None,
+    query_terms: list[str],
+    limit: int = 6,
+) -> list[Chunk]:
+    terms = [term.strip() for term in query_terms if term and term.strip()]
+    if not terms:
+        return []
 
+    document_table = Document.__table__
+    conditions = [Chunk.content.ilike(f"%{term}%") for term in terms]
+    sql = select(Chunk).join(document_table, Chunk.document_pk == document_table.c.pk).where(
+        document_table.c.knowledge_base_id == knowledge_base_id,
+        or_(*conditions),
+    )
+    if user_id is not None:
+        sql = sql.where(document_table.c.user_id == user_id)
+
+    sql = sql.order_by(Chunk.document_pk.asc(), Chunk.chunk_index.asc()).limit(limit)
+    res = await db.execute(sql)
+    return list(res.scalars().all())
 
 
 
