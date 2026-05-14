@@ -77,12 +77,20 @@ async def run_document_index_pipeline(
     await emit_stage("chunking", on_stage_change=on_stage_change)
 
     chunk_docs = await split_documents(document_id=doc.id, documents=docs, )
+    section_count = len(
+        {
+            chunk.metadata.get("section_id")
+            for chunk in chunk_docs
+            if chunk.metadata.get("section_id")
+        }
+    )
     log_event(
         "document_pipeline",
         "info",
         "document_index.chunked",
         document_id=doc.id,
         chunk_count=len(chunk_docs),
+        section_count=section_count,
     )
 
     await create_chunks(
@@ -127,12 +135,14 @@ async def run_document_index_pipeline(
         "document_index.completed",
         document_id=doc.id,
         status="indexed",
+        section_count=section_count,
     )
 
     return DocumentIndexPipelineResult(
         document_id=doc.id,
         knowledge_base_id=doc.knowledge_base_id,
         chunk_count=len(chunk_docs),
+        section_count=section_count,
         deleted_memory_entry_count=memory_result["deleted_entry_count"],
         memory_entry_count=memory_result["entry_count"],
         vector_batch_count=vector_result["batch_count"],
