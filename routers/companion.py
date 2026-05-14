@@ -19,10 +19,10 @@ router = APIRouter(prefix="/companion", tags=["companion"])
 
 @router.post("/knowledge-bases/{knowledge_base_id}/reply")
 async def get_companion_reply(
-        knowledge_base_id: str,
-        payload: CompanionQueryRequest,
-        current_user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_database),
+    knowledge_base_id: str,
+    payload: CompanionQueryRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_database),
 ):
     app_logger.bind(module="companion_router").info(
         f"companion request knowledge_base_id={knowledge_base_id} "
@@ -34,10 +34,11 @@ async def get_companion_reply(
         raise BusinessException(message="知识库不存在", code=4042, status_code=404)
 
     if knowledge_base.user_id != current_user.id:
-        raise BusinessException(message="知识库不属于该用户", code=4007)
+        raise BusinessException(message="知识库不属于当前用户", code=4007)
 
     result = await generate_rag_answer(
         question=payload.question,
+        db=db,
         top_k=payload.top_k,
         knowledge_base_id=knowledge_base_id,
         user_id=current_user.id,

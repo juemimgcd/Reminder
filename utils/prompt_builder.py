@@ -32,14 +32,16 @@ from langchain_core.prompts import ChatPromptTemplate
 
 
 
-def get_rag_prompt() -> ChatPromptTemplate:
-    prompt = ChatPromptTemplate.from_messages(
+def get_evidence_rag_prompt(format_instructions: str):
+    return ChatPromptTemplate.from_messages(
         [
             (
                 "system",
-                "你是一个基于知识库回答问题的助手。"
-                "请优先依据提供的 context 回答。"
-                "如果 context 里没有足够信息，请明确说“我无法从已检索内容中确定答案”，不要编造。",
+                "你是一个基于知识库证据回答问题的助手。"
+                "你必须只依据给定 context 回答。"
+                "每条 citation 只能引用 context 中提供的 source_id。"
+                "如果证据不足，请在 uncertainty 中明确说明。"
+                f"请严格按下面格式输出：\n{format_instructions}",
             ),
             (
                 "human",
@@ -47,8 +49,6 @@ def get_rag_prompt() -> ChatPromptTemplate:
             ),
         ]
     )
-
-    return prompt
 
 
 def get_general_chat_prompt() -> ChatPromptTemplate:

@@ -18,35 +18,35 @@ class Document(Base):
         BigInteger,
         Identity(always=False),
         primary_key=True,
-        comment="内部主键",
+        comment="Internal primary key",
     )
-    id: Mapped[str] = mapped_column(String(64), nullable=False, comment="文档公开ID")
+    id: Mapped[str] = mapped_column(String(64), nullable=False, comment="Public document ID")
     user_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey("users.id"),
         nullable=False,
-        comment="所属用户ID",
+        comment="Owner user ID",
     )
     knowledge_base_id: Mapped[str] = mapped_column(
         String(64),
         nullable=False,
-        comment="所属知识库公开ID",
+        comment="Owning knowledge base public ID",
     )
     knowledge_base_pk: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey("knowledge_bases.pk"),
         nullable=False,
-        comment="所属知识库内部主键",
+        comment="Owning knowledge base internal primary key",
     )
-    file_name: Mapped[str] = mapped_column(String(255), nullable=False, comment="原始文件名")
-    file_path: Mapped[str] = mapped_column(String(500), nullable=False, comment="文件存储路径")
-    file_type: Mapped[str] = mapped_column(String(50), nullable=False, comment="文件类型")
-    file_size: Mapped[int] = mapped_column(Integer, nullable=False, comment="文件大小，单位字节")
+    file_name: Mapped[str] = mapped_column(String(255), nullable=False, comment="Original file name")
+    file_path: Mapped[str] = mapped_column(String(500), nullable=False, comment="Stored file path")
+    file_type: Mapped[str] = mapped_column(String(50), nullable=False, comment="File type")
+    file_size: Mapped[int] = mapped_column(Integer, nullable=False, comment="File size in bytes")
     status: Mapped[str] = mapped_column(
         String(50),
         nullable=False,
         default="uploaded",
-        comment="文档状态",
+        comment="Document status",
     )
 
     def __repr__(self) -> str:

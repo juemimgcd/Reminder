@@ -11,31 +11,41 @@ class Chunk(Base):
     __table_args__ = (
         Index("idx_chunks_document_pk", "document_pk"),
         Index("idx_chunks_document_pk_chunk_index", "document_pk", "chunk_index"),
+        Index("idx_chunks_document_pk_section_id", "document_pk", "section_id"),
     )
 
     pk: Mapped[int] = mapped_column(
         BigInteger,
         Identity(always=False),
         primary_key=True,
-        comment="内部主键",
+        comment="Internal primary key",
     )
-    id: Mapped[str] = mapped_column(String(64), nullable=False, comment="Chunk 公开ID")
+    id: Mapped[str] = mapped_column(String(64), nullable=False, comment="Public chunk ID")
     document_id: Mapped[str] = mapped_column(
         String(64),
         nullable=False,
-        comment="所属文档公开ID",
+        comment="Owning document public ID",
     )
     document_pk: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey("documents.pk"),
         nullable=False,
-        comment="所属文档内部主键",
+        comment="Owning document internal primary key",
     )
-    chunk_index: Mapped[int] = mapped_column(Integer, nullable=False, comment="Chunk 顺序号")
-    content: Mapped[str] = mapped_column(Text, nullable=False, comment="文本块内容")
-    page_no: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, comment="页码")
-    start_offset: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, comment="起始偏移量")
-    end_offset: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, comment="结束偏移量")
+    chunk_index: Mapped[int] = mapped_column(Integer, nullable=False, comment="Global chunk order")
+    content: Mapped[str] = mapped_column(Text, nullable=False, comment="Chunk content")
+    page_no: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, comment="Page number")
+    start_offset: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, comment="Start offset")
+    end_offset: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, comment="End offset")
+    section_id: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    section_title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    section_level: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    section_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    section_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    section_chunk_index: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     def __repr__(self) -> str:
-        return f"<Chunk(pk={self.pk}, id={self.id}, document_id={self.document_id}, chunk_index={self.chunk_index})>"
+        return (
+            f"<Chunk(pk={self.pk}, id={self.id}, "
+            f"document_id={self.document_id}, chunk_index={self.chunk_index})>"
+        )

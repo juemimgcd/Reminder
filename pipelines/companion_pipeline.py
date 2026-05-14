@@ -21,6 +21,7 @@ async def run_companion_pipeline(
     )
     rag_result = await generate_rag_answer(
         question=question,
+        db=db,
         knowledge_base_id=knowledge_base_id,
         user_id=user_id,
         top_k=top_k,
