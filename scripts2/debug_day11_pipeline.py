@@ -47,7 +47,7 @@ async def main():
 
     with (
         patch(
-            "pipelines.document_index_pipeline.update_document_status",
+            "pipelines.document_index_pipeline.update_document_status_with_projection",
             new=AsyncMock(side_effect=[fake_document, fake_document]),
         ),
         patch(
@@ -59,8 +59,18 @@ async def main():
             new=AsyncMock(return_value=fake_chunk_docs),
         ),
         patch(
-            "pipelines.document_index_pipeline.create_chunks",
+            "pipelines.document_index_pipeline.persist_chunks_for_document",
             new=AsyncMock(return_value=None),
+        ),
+        patch(
+            "pipelines.document_index_pipeline.rebuild_memory_entries_for_document",
+            new=AsyncMock(
+                return_value={
+                    "chunk_count": 1,
+                    "deleted_entry_count": 0,
+                    "entry_count": 0,
+                }
+            ),
         ),
         patch(
             "pipelines.document_index_pipeline.add_documents_to_vector_store_in_batches",
@@ -74,7 +84,6 @@ async def main():
         ),
     ):
         result = await run_document_index_pipeline(
-            db=SimpleNamespace(),
             document=fake_document,
             on_stage_change=report_stage,
         )

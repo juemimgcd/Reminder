@@ -16,7 +16,7 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 async def get_current_user(
         creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
-        db: AsyncSession = Depends(get_database),
+        db: AsyncSession = Depends(get_database, use_cache=False),
 ) -> User:
     if creds is None or creds.scheme.lower() != "bearer":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="not authenticated")
@@ -25,7 +25,7 @@ async def get_current_user(
     try:
         payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALG])
         sub = payload.get("sub")
-        if not sub:
+        if not isinstance(sub, str) or not sub:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
         user_id = int(sub)
     except Exception:
