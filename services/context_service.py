@@ -13,16 +13,11 @@ from crud.memory_entry import search_memory_entries_by_keywords
 from models import Chunk, MemoryEntry
 from schemas.chat import ContextItem
 
-# 表达检索阶段使用的 metadata 过滤条件，结构示例：
-# {
-#     "user_id": 1,
-#     "knowledge_base_id": "kb_demo_001",
-# }
+
 MetadataFilter = dict[str, int | str]
 
 
-# 为检索结果构建稳定去重键，优先使用 chunk_id。
-def build_document_key(doc: LCDocument) -> tuple:
+def build_document_key(doc: LCDocument) -> tuple[Any, ...]:
     chunk_id = doc.metadata.get("chunk_id")
     if chunk_id:
         return ("chunk_id", str(chunk_id))
@@ -36,10 +31,9 @@ def build_document_key(doc: LCDocument) -> tuple:
     )
 
 
-# 对普通列表做保持原始顺序的去重。
-def dedupe_preserve_order(items: list) -> list:
-    seen: set = set()
-    result: list = []
+def dedupe_preserve_order(items: list[Any]) -> list[Any]:
+    seen: set[Any] = set()
+    result: list[Any] = []
 
     for item in items:
         if item in seen:
@@ -50,16 +44,7 @@ def dedupe_preserve_order(items: list) -> list:
     return result
 
 
-# 确保文档片段具备 source_* 级别的来源元数据，方便后续合并和返回 sources。
 def ensure_source_metadata(doc: LCDocument) -> LCDocument:
-    # 补齐后的 metadata 结构示例：
-    # {
-    #     "chunk_id": "doc_demo_001_chunk_0_a1b2c3",
-    #     "page_no": 1,
-    #     "source_chunk_ids": ["doc_demo_001_chunk_0_a1b2c3"],
-    #     "source_page_nos": [1],
-    #     "merged_chunk_count": 1,
-    # }
     source_chunk_ids = doc.metadata.get("source_chunk_ids")
     if not isinstance(source_chunk_ids, list) or not source_chunk_ids:
         chunk_id = doc.metadata.get("chunk_id")
@@ -74,12 +59,11 @@ def ensure_source_metadata(doc: LCDocument) -> LCDocument:
     return doc
 
 
-# 判断两个相邻片段是否满足 Day9 第一版的合并条件。
 def can_merge_documents(
-        prev_doc: LCDocument,
-        current_doc: LCDocument,
-        *,
-        max_merged_length: int,
+    prev_doc: LCDocument,
+    current_doc: LCDocument,
+    *,
+    max_merged_length: int,
 ) -> bool:
     prev_index = prev_doc.metadata.get("chunk_index")
     current_index = current_doc.metadata.get("chunk_index")
@@ -90,6 +74,11 @@ def can_merge_documents(
         and current_index == prev_index + 1
     )
     if not (same_document and consecutive):
+        return False
+
+    prev_section = prev_doc.metadata.get("section_id")
+    current_section = current_doc.metadata.get("section_id")
+    if prev_section != current_section:
         return False
 
     prev_page = prev_doc.metadata.get("page_no")
@@ -105,12 +94,11 @@ def can_merge_documents(
     return len(prev_doc.page_content) + len(current_doc.page_content) <= max_merged_length
 
 
-# 将两个可合并片段拼成一个片段，并同步更新来源元数据。
 def merge_two_documents(
-        prev_doc: LCDocument,
-        prev_score: float,
-        current_doc: LCDocument,
-        current_score: float,
+    prev_doc: LCDocument,
+    prev_score: float,
+    current_doc: LCDocument,
+    current_score: float,
 ) -> tuple[LCDocument, float]:
     prev_doc.page_content = f"{prev_doc.page_content}\n{current_doc.page_content}"
     source_page_nos = dedupe_preserve_order(
@@ -128,22 +116,19 @@ def merge_two_documents(
     return prev_doc, min(prev_score, current_score)
 
 
-# 组装相似度检索使用的 metadata filter。
 def build_metadata_filter(
-        *,
-        user_id: int | None = None,
-        knowledge_base_id: str | None = None,
+    *,
+    user_id: int | None = None,
+    knowledge_base_id: str | None = None,
 ) -> MetadataFilter:
     metadata_filter: MetadataFilter = {}
-    if user_id:
+    if user_id is not None:
         metadata_filter["user_id"] = user_id
     if knowledge_base_id:
         metadata_filter["knowledge_base_id"] = knowledge_base_id
     return metadata_filter
 
 
-
-# 将 metadata filter 转成 Milvus expr 字符串。
 def build_milvus_expr(metadata_filter: MetadataFilter) -> str | None:
     if not metadata_filter:
         return None
@@ -151,20 +136,19 @@ def build_milvus_expr(metadata_filter: MetadataFilter) -> str | None:
     expr_parts: list[str] = []
     for key, value in metadata_filter.items():
         if isinstance(value, str):
-            escaped_value = value.replace('\\', '\\\\').replace('"', '\\"')
+            escaped_value = value.replace("\\", "\\\\").replace('"', '\\"')
             expr_parts.append(f'{key} == "{escaped_value}"')
         else:
             expr_parts.append(f"{key} == {value}")
     return " and ".join(expr_parts)
 
 
-# 统一构造相似度检索参数，避免 query 层自己拼 search kwargs。
 def build_similarity_search_kwargs(
-        query: str,
-        *,
-        top_k: int = 4,
-        user_id: int | None = None,
-        knowledge_base_id: str | None = None,
+    query: str,
+    *,
+    top_k: int = 4,
+    user_id: int | None = None,
+    knowledge_base_id: str | None = None,
 ) -> dict[str, Any]:
     metadata_filter = build_metadata_filter(
         user_id=user_id,
@@ -180,14 +164,13 @@ def build_similarity_search_kwargs(
     return search_kwargs
 
 
-# 执行带过滤条件的相似度检索，并通过 resilient client 获得结果。
 async def retrieve_documents_with_scores(
-        query: str,
-        top_k: int = 4,
-        *,
-        user_id: int | None = None,
-        knowledge_base_id: str | None = None,
-):
+    query: str,
+    top_k: int = 4,
+    *,
+    user_id: int | None = None,
+    knowledge_base_id: str | None = None,
+) -> list[tuple[LCDocument, float]]:
     search_kwargs = build_similarity_search_kwargs(
         query,
         top_k=top_k,
@@ -206,8 +189,7 @@ async def retrieve_documents_with_scores(
     return await similarity_search_with_score_resilient(**search_kwargs)
 
 
-# 将治理后的片段转换成接口返回可消费的 source item。
-def build_source_item(doc: LCDocument, *, source_id: str) -> dict:
+def build_source_item(doc: LCDocument, *, source_id: str) -> dict[str, Any]:
     ensure_source_metadata(doc)
     source_chunk_ids = doc.metadata["source_chunk_ids"]
     source_page_nos = doc.metadata["source_page_nos"]
@@ -229,14 +211,12 @@ def build_source_item(doc: LCDocument, *, source_id: str) -> dict:
     }
 
 
-
-# 对召回结果做第一轮确定性去重，避免重复 chunk 和重复文本进入后续治理。
 def deduplicate_retrieved_documents(
-        items: list[tuple[LCDocument, float]],
+    items: list[tuple[LCDocument, float]],
 ) -> list[tuple[LCDocument, float]]:
     deduped: list[tuple[LCDocument, float]] = []
-    seen_keys: set[tuple] = set()
-    seen_text_keys: set[tuple] = set()
+    seen_keys: set[tuple[Any, ...]] = set()
+    seen_text_keys: set[tuple[Any, ...]] = set()
 
     for doc, score in items:
         key = build_document_key(doc)
@@ -258,12 +238,10 @@ def deduplicate_retrieved_documents(
     return deduped
 
 
-
-# 按相邻 chunk 规则合并检索结果，减少碎片化上下文。
 def merge_adjacent_scored_documents(
-        items: list[tuple[LCDocument, float]],
-        *,
-        max_merged_length: int = 1200,
+    items: list[tuple[LCDocument, float]],
+    *,
+    max_merged_length: int = 1200,
 ) -> list[tuple[LCDocument, float]]:
     merged: list[tuple[LCDocument, float]] = []
 
@@ -276,9 +254,9 @@ def merge_adjacent_scored_documents(
 
         prev_doc, prev_score = merged[-1]
         if can_merge_documents(
-                prev_doc,
-                current_doc,
-                max_merged_length=max_merged_length,
+            prev_doc,
+            current_doc,
+            max_merged_length=max_merged_length,
         ):
             merged[-1] = merge_two_documents(
                 prev_doc,
@@ -293,11 +271,10 @@ def merge_adjacent_scored_documents(
     return merged
 
 
-# 按字符预算裁剪最终要进入 prompt 的上下文片段。
 def trim_scored_documents_by_budget(
-        items: list[tuple[LCDocument, float]],
-        *,
-        max_chars: int,
+    items: list[tuple[LCDocument, float]],
+    *,
+    max_chars: int,
 ) -> list[tuple[LCDocument, float]]:
     if max_chars <= 0:
         return []
@@ -319,8 +296,6 @@ def trim_scored_documents_by_budget(
     return kept
 
 
-
-# 将最终保留的片段格式化成 prompt 侧直接可消费的 context 文本。
 def format_context_docs(docs: list[LCDocument]) -> str:
     sections: list[str] = []
     for index, doc in enumerate(docs, start=1):
@@ -336,6 +311,9 @@ def format_context_docs(docs: list[LCDocument]) -> str:
                     f"chunk_id={doc.metadata.get('chunk_id')}",
                     f"source_chunk_ids={doc.metadata.get('source_chunk_ids')}",
                     f"page_no={doc.metadata.get('page_no')}",
+                    f"section_title={doc.metadata.get('section_title')}",
+                    f"section_path={doc.metadata.get('section_path')}",
+                    f"section_summary={doc.metadata.get('section_summary')}",
                     f"text={doc.page_content}",
                 ]
             )
@@ -343,8 +321,6 @@ def format_context_docs(docs: list[LCDocument]) -> str:
     return "\n\n".join(sections)
 
 
-
-# 执行完整的检索后治理流程，并返回 context_text + sources + 治理统计。
 async def build_query_context(
     query: str,
     *,
@@ -353,23 +329,24 @@ async def build_query_context(
     user_id: int | None = None,
     knowledge_base_id: str | None = None,
     context_budget: int = 4000,
-) -> dict:
+) -> dict[str, Any]:
+    if not knowledge_base_id:
+        raise HTTPException(status_code=400, detail="Knowledge base id not provided")
+
     raw_vector_items = await retrieve_documents_with_scores(
         query=query,
         top_k=top_k,
         user_id=user_id,
         knowledge_base_id=knowledge_base_id,
     )
-
+    deduped_vector_items = deduplicate_retrieved_documents(raw_vector_items)
+    merged_vector_docs = merge_adjacent_scored_documents(deduped_vector_items)
     vector_items = [
         build_context_item_from_vector(doc, score)
-        for doc, score in deduplicate_retrieved_documents(raw_vector_items)
+        for doc, score in merged_vector_docs
     ]
 
     query_terms = extract_query_terms(query)
-
-    if not knowledge_base_id:
-        raise HTTPException(status_code=400, detail="Knowledge base id not provided")
 
     chunk_rows = await search_chunks_by_keywords(
         db,
@@ -400,7 +377,9 @@ async def build_query_context(
             matched_terms=[
                 term
                 for term in query_terms
-                if term in row.entry_name or term in row.summary or term in row.evidence_text
+                if term in (row.entry_name or "")
+                or term in (row.summary or "")
+                or term in (row.evidence_text or "")
             ],
         )
         for row in memory_rows
@@ -418,7 +397,7 @@ async def build_query_context(
         final_items.append(item)
         total_chars += item_len
 
-    final_docs = []
+    final_docs: list[LCDocument] = []
     for item in final_items:
         final_docs.append(
             LCDocument(
@@ -431,6 +410,12 @@ async def build_query_context(
                     "source_chunk_ids": item.source_chunk_ids or [item.chunk_id],
                     "source_page_nos": item.source_page_nos,
                     "merged_chunk_count": item.merged_chunk_count,
+                    "section_id": item.section_id,
+                    "section_title": item.section_title,
+                    "section_level": item.section_level,
+                    "section_path": item.section_path,
+                    "section_summary": item.section_summary,
+                    "section_chunk_index": item.section_chunk_index,
                 },
             )
         )
@@ -442,6 +427,7 @@ async def build_query_context(
             for index, doc in enumerate(final_docs, start=1)
         ],
         "raw_count": len(raw_vector_items),
+        "dedup_count": len(deduped_vector_items),
         "vector_count": len(vector_items),
         "keyword_count": len(keyword_items),
         "memory_count": len(memory_items),
@@ -455,8 +441,8 @@ def extract_query_terms(query: str) -> list[str]:
     if not normalized:
         return []
 
-    raw_terms = re.findall(r"[A-Za-z0-9_\\-]+|[\\u4e00-\\u9fff]{2,}", normalized)
-    noise_words = {"什么", "怎么", "如何", "一下", "一个", "这个", "那个"}
+    raw_terms = re.findall(r"[A-Za-z0-9_-]+|[\u4e00-\u9fff]{2,}", normalized)
+    noise_words = {"什么", "怎么", "如何", "这个", "那个", "一个", "一下"}
     result: list[str] = []
     for term in raw_terms:
         item = term.strip()
@@ -485,6 +471,12 @@ def build_context_item_from_vector(doc: LCDocument, score: float) -> ContextItem
         source_chunk_ids=[str(item) for item in source_chunk_ids if item],
         source_page_nos=[item for item in source_page_nos if isinstance(item, int)],
         merged_chunk_count=int(doc.metadata.get("merged_chunk_count", 1)),
+        section_id=doc.metadata.get("section_id"),
+        section_title=doc.metadata.get("section_title"),
+        section_level=doc.metadata.get("section_level"),
+        section_path=doc.metadata.get("section_path"),
+        section_summary=doc.metadata.get("section_summary"),
+        section_chunk_index=doc.metadata.get("section_chunk_index"),
     )
 
 
@@ -506,6 +498,12 @@ def build_context_item_from_chunk(
         source_page_nos=[chunk.page_no] if chunk.page_no is not None else [],
         merged_chunk_count=1,
         matched_terms=matched_terms,
+        section_id=chunk.section_id,
+        section_title=chunk.section_title,
+        section_level=chunk.section_level,
+        section_path=chunk.section_path,
+        section_summary=chunk.section_summary,
+        section_chunk_index=chunk.section_chunk_index,
     )
 
 
@@ -520,7 +518,7 @@ def build_context_item_from_memory(
         knowledge_base_id=memory_entry.knowledge_base_id,
         document_id=memory_entry.document_id,
         chunk_id=memory_entry.chunk_id,
-        text=memory_entry.evidence_text or memory_entry.summary,
+        text=memory_entry.evidence_text or memory_entry.summary or "",
         source_chunk_ids=[memory_entry.chunk_id],
         source_page_nos=[],
         merged_chunk_count=1,
@@ -530,22 +528,60 @@ def build_context_item_from_memory(
     )
 
 
+def _merge_recall_types(left: str, right: str) -> str:
+    types = dedupe_preserve_order(left.split("+") + right.split("+"))
+    return "+".join(types)
+
+
+def _fill_missing_context_fields(base: ContextItem, other: ContextItem) -> None:
+    if not base.knowledge_base_id:
+        base.knowledge_base_id = other.knowledge_base_id
+    if base.page_no is None:
+        base.page_no = other.page_no
+    if not base.text:
+        base.text = other.text
+    if not base.memory_entry_id:
+        base.memory_entry_id = other.memory_entry_id
+    if not base.entry_name:
+        base.entry_name = other.entry_name
+    if not base.section_id:
+        base.section_id = other.section_id
+    if not base.section_title:
+        base.section_title = other.section_title
+    if base.section_level is None:
+        base.section_level = other.section_level
+    if not base.section_path:
+        base.section_path = other.section_path
+    if not base.section_summary:
+        base.section_summary = other.section_summary
+    if base.section_chunk_index is None:
+        base.section_chunk_index = other.section_chunk_index
+
+    base.source_chunk_ids = dedupe_preserve_order(base.source_chunk_ids + other.source_chunk_ids)
+    base.source_page_nos = dedupe_preserve_order(base.source_page_nos + other.source_page_nos)
+    base.matched_terms = dedupe_preserve_order(base.matched_terms + other.matched_terms)
+    base.merged_chunk_count = max(base.merged_chunk_count, other.merged_chunk_count)
+    base.recall_type = _merge_recall_types(base.recall_type, other.recall_type)
+
+
 def merge_context_items(items: list[ContextItem]) -> list[ContextItem]:
     merged: dict[tuple[str, str], ContextItem] = {}
+
     for item in items:
         key = (item.document_id, item.chunk_id)
         existing = merged.get(key)
         if not existing:
-            merged[key] = item
+            merged[key] = item.model_copy(deep=True)
             continue
+
         if item.score > existing.score:
             base = item.model_copy(deep=True)
+            other = existing
         else:
             base = existing.model_copy(deep=True)
-        base.matched_terms = list(dict.fromkeys(existing.matched_terms + item.matched_terms))
-        if existing.recall_type != item.recall_type:
-            base.recall_type = f"{base.recall_type}+{item.recall_type}"
+            other = item
+
+        _fill_missing_context_fields(base, other)
         merged[key] = base
+
     return list(merged.values())
-
-
