@@ -87,6 +87,12 @@ class Settings(BaseSettings):
     MILVUS_SEARCH_PARAMS: str = '{"metric_type":"IP"}'
     MILVUS_CONSISTENCY_LEVEL: str = "Strong"
     MILVUS_DROP_OLD: bool = False
+    ELASTICSEARCH_ENABLED: bool = False
+    ELASTICSEARCH_URL: str = "http://127.0.0.1:9200"
+    ELASTICSEARCH_USERNAME: str = ""
+    ELASTICSEARCH_PASSWORD: str = ""
+    ELASTICSEARCH_INDEX_NAME: str = "mneme_chunks"
+    ELASTICSEARCH_TIMEOUT_SECONDS: float = 5.0
     NEO4J_ENABLED: bool = False
     NEO4J_URI: str = "bolt://127.0.0.1:7687"
     NEO4J_USER: str = "neo4j"
