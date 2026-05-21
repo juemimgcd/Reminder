@@ -6,12 +6,15 @@ from fastapi import HTTPException
 from langchain_core.documents import Document as LCDocument
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from clients.elasticsearch_client import ElasticsearchChunkHit, search_chunks_by_bm25
 from clients.vector_store_client import similarity_search_with_score_resilient
 from conf.logging import log_event
 from crud.chunk import search_chunks_by_keywords
 from crud.memory_entry import search_memory_entries_by_keywords
 from models import Chunk, MemoryEntry
 from schemas.chat import ContextItem
+from services.retrieval_debug_service import build_retrieval_debug_packet
+from services.retrieval_fusion_service import fuse_and_rerank_context_items
 
 
 MetadataFilter = dict[str, int | str]
@@ -348,21 +351,38 @@ async def build_query_context(
 
     query_terms = extract_query_terms(query)
 
-    chunk_rows = await search_chunks_by_keywords(
-        db,
+    bm25_hits = await search_chunks_by_bm25(
+        query=query,
         knowledge_base_id=knowledge_base_id,
         user_id=user_id,
-        query_terms=query_terms,
         limit=top_k,
     )
-    keyword_items = [
-        build_context_item_from_chunk(
-            chunk,
+    if bm25_hits is None:
+        chunk_rows = await search_chunks_by_keywords(
+            db,
             knowledge_base_id=knowledge_base_id,
-            matched_terms=[term for term in query_terms if term in chunk.content],
+            user_id=user_id,
+            query_terms=query_terms,
+            limit=top_k,
         )
-        for chunk in chunk_rows
-    ]
+        keyword_items = [
+            build_context_item_from_chunk(
+                chunk,
+                knowledge_base_id=knowledge_base_id,
+                matched_terms=[term for term in query_terms if term in chunk.content],
+            )
+            for chunk in chunk_rows
+        ]
+        lexical_backend = "sql_like"
+    else:
+        keyword_items = [
+            build_context_item_from_bm25_hit(
+                hit,
+                matched_terms=[term for term in query_terms if term in hit.content],
+            )
+            for hit in bm25_hits
+        ]
+        lexical_backend = "elasticsearch_bm25"
 
     memory_rows = await search_memory_entries_by_keywords(
         db,
@@ -385,12 +405,16 @@ async def build_query_context(
         for row in memory_rows
     ]
 
-    merged_items = merge_context_items(vector_items + keyword_items + memory_items)
-    sorted_items = sorted(merged_items, key=lambda item: item.score, reverse=True)
+    reranked_items = fuse_and_rerank_context_items(
+        vector_items=vector_items,
+        lexical_items=keyword_items,
+        memory_items=memory_items,
+        query_terms=query_terms,
+    )
 
     final_items: list[ContextItem] = []
     total_chars = 0
-    for item in sorted_items:
+    for item in reranked_items:
         item_len = len(item.text)
         if final_items and total_chars + item_len > context_budget:
             break
@@ -416,9 +440,27 @@ async def build_query_context(
                     "section_path": item.section_path,
                     "section_summary": item.section_summary,
                     "section_chunk_index": item.section_chunk_index,
+                    "recall_type": item.recall_type,
+                    "fusion_score": item.fusion_score,
+                    "rerank_score": item.rerank_score,
+                    "exact_match_count": item.exact_match_count,
+                    "recall_ranks": item.recall_ranks,
+                    "rerank_reasons": item.rerank_reasons,
                 },
             )
         )
+
+    counts = {
+        "raw_count": len(raw_vector_items),
+        "dedup_count": len(deduped_vector_items),
+        "vector_count": len(vector_items),
+        "lexical_count": len(keyword_items),
+        "memory_count": len(memory_items),
+        "candidate_count": len(vector_items) + len(keyword_items) + len(memory_items),
+        "fusion_count": len(reranked_items),
+        "rerank_count": len(reranked_items),
+        "final_count": len(final_items),
+    }
 
     return {
         "context_text": format_context_docs(final_docs),
@@ -426,13 +468,27 @@ async def build_query_context(
             build_source_item(doc, source_id=f"S{index}")
             for index, doc in enumerate(final_docs, start=1)
         ],
-        "raw_count": len(raw_vector_items),
-        "dedup_count": len(deduped_vector_items),
-        "vector_count": len(vector_items),
-        "keyword_count": len(keyword_items),
-        "memory_count": len(memory_items),
-        "merged_count": len(merged_items),
-        "final_count": len(final_items),
+        "raw_count": counts["raw_count"],
+        "dedup_count": counts["dedup_count"],
+        "vector_count": counts["vector_count"],
+        "keyword_count": counts["lexical_count"],
+        "lexical_backend": lexical_backend,
+        "memory_count": counts["memory_count"],
+        "candidate_count": counts["candidate_count"],
+        "merged_count": counts["fusion_count"],
+        "fusion_count": counts["fusion_count"],
+        "rerank_count": counts["rerank_count"],
+        "final_count": counts["final_count"],
+        "debug": build_retrieval_debug_packet(
+            query_terms=query_terms,
+            lexical_backend=lexical_backend,
+            counts=counts,
+            vector_items=vector_items,
+            lexical_items=keyword_items,
+            memory_items=memory_items,
+            fused_items=reranked_items,
+            final_items=final_items,
+        ),
     }
 
 
@@ -504,6 +560,32 @@ def build_context_item_from_chunk(
         section_path=chunk.section_path,
         section_summary=chunk.section_summary,
         section_chunk_index=chunk.section_chunk_index,
+    )
+
+
+def build_context_item_from_bm25_hit(
+    hit: ElasticsearchChunkHit,
+    *,
+    matched_terms: list[str],
+) -> ContextItem:
+    return ContextItem(
+        recall_type="bm25",
+        score=hit.score,
+        knowledge_base_id=hit.knowledge_base_id,
+        document_id=hit.document_id,
+        chunk_id=hit.chunk_id,
+        page_no=hit.page_no,
+        text=hit.content,
+        source_chunk_ids=[hit.chunk_id],
+        source_page_nos=[hit.page_no] if hit.page_no is not None else [],
+        merged_chunk_count=1,
+        matched_terms=matched_terms,
+        section_id=hit.section_id,
+        section_title=hit.section_title,
+        section_level=hit.section_level,
+        section_path=hit.section_path,
+        section_summary=hit.section_summary,
+        section_chunk_index=hit.section_chunk_index,
     )
 
 
