@@ -11,32 +11,58 @@ if str(PROJECT_ROOT) not in sys.path:
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(errors="replace")
 
-from services.memory_service import extract_entries_from_chunk
+from clients.elasticsearch_client import index_chunks_to_elasticsearch, is_elasticsearch_enabled, search_chunks_by_bm25
+from conf.config import settings
 
 
 async def main():
-    doc = LCDocument(
-        page_content=(
-            "我在安徽理工大学学习计算机相关课程，"
-            "曾使用 FastAPI、JWT、Docker 完成一个后端项目，"
-            "最近对后端架构和个人成长记录非常感兴趣。"
-        ),
+    print("开始执行 Day 8 Elasticsearch BM25 调试脚本...", flush=True)
+    print(f"ELASTICSEARCH_ENABLED={settings.ELASTICSEARCH_ENABLED}", flush=True)
+    print(f"ELASTICSEARCH_URL={settings.ELASTICSEARCH_URL}", flush=True)
+    print(f"ELASTICSEARCH_INDEX_NAME={settings.ELASTICSEARCH_INDEX_NAME}", flush=True)
+
+    sample_doc = LCDocument(
+        page_content="FastAPI 项目中负责接口设计、JWT 鉴权、Milvus 检索和 Elasticsearch BM25 召回。",
         metadata={
-            "document_id": "doc_demo_001",
-            "chunk_id": "chunk_demo_001",
+            "chunk_id": "debug_day8_chunk_1",
+            "document_id": "debug_day8_doc",
+            "knowledge_base_id": "debug_day8_kb",
+            "user_id": 1,
+            "file_name": "debug_day8.md",
+            "chunk_index": 0,
             "page_no": 1,
+            "section_id": "debug_day8_doc_sec_0",
+            "section_title": "Hybrid Search",
+            "section_path": "Hybrid Search",
+            "section_summary": "Hybrid Search: Elasticsearch BM25 召回验证",
+            "section_chunk_index": 0,
         },
     )
 
-    entries = await extract_entries_from_chunk(doc)
+    if not is_elasticsearch_enabled():
+        result = await index_chunks_to_elasticsearch([sample_doc])
+        hits = await search_chunks_by_bm25(
+            query="Elasticsearch BM25",
+            knowledge_base_id="debug_day8_kb",
+            user_id=1,
+            limit=3,
+        )
+        print("ES 未启用，本地验证 fallback 语义：", flush=True)
+        print(f"index_result={result}", flush=True)
+        print(f"search_result={hits}", flush=True)
+        return
 
-    print(f"entry_count={len(entries)}")
-    for item in entries:
-        print("=" * 60)
-        print(item["entry_name"])
-        print(item["entry_type"])
-        print(item["summary"])
-        print(item["evidence_text"])
+    index_result = await index_chunks_to_elasticsearch([sample_doc])
+    hits = await search_chunks_by_bm25(
+        query="Elasticsearch BM25",
+        knowledge_base_id="debug_day8_kb",
+        user_id=1,
+        limit=3,
+    )
+    print(f"index_result={index_result}", flush=True)
+    print(f"hit_count={len(hits or [])}", flush=True)
+    for hit in hits or []:
+        print(f"{hit.chunk_id} score={hit.score} section={hit.section_path}", flush=True)
 
 
 if __name__ == "__main__":

@@ -1,8 +1,6 @@
 import sys
 from pathlib import Path
 
-from langchain_core.documents import Document as LCDocument
-
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -10,94 +8,110 @@ if str(PROJECT_ROOT) not in sys.path:
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(errors="replace")
 
-from services.context_service import (
-    build_source_item,
-    deduplicate_retrieved_documents,
-    format_context_docs,
-    merge_adjacent_scored_documents,
-    trim_scored_documents_by_budget,
-)
+from schemas.chat import ContextItem
+from services.retrieval_fusion_service import fuse_and_rerank_context_items
 
 
-def build_doc(
-        *,
-        text: str,
-        document_id: str,
-        chunk_id: str,
-        chunk_index: int,
-        page_no: int,
-        knowledge_base_id: str = "kb_demo_001",
-) -> LCDocument:
-    return LCDocument(
-        page_content=text,
-        metadata={
-            "knowledge_base_id": knowledge_base_id,
-            "document_id": document_id,
-            "chunk_id": chunk_id,
-            "chunk_index": chunk_index,
-            "page_no": page_no,
-        },
+def build_item(
+    *,
+    recall_type: str,
+    score: float,
+    document_id: str,
+    chunk_id: str,
+    text: str,
+    section_title: str | None = None,
+    matched_terms: list[str] | None = None,
+) -> ContextItem:
+    return ContextItem(
+        recall_type=recall_type,
+        score=score,
+        knowledge_base_id="debug_day9_kb",
+        document_id=document_id,
+        chunk_id=chunk_id,
+        page_no=1,
+        text=text,
+        source_chunk_ids=[chunk_id],
+        source_page_nos=[1],
+        section_title=section_title,
+        section_path=section_title,
+        section_summary=section_title,
+        matched_terms=matched_terms or [],
     )
 
 
 def main():
-    raw_items = [
-        (
-            build_doc(
-                text="FastAPI 项目中负责接口设计、JWT 鉴权和数据库联调。",
-                document_id="doc_a",
-                chunk_id="doc_a_chunk_2",
-                chunk_index=2,
-                page_no=1,
-            ),
-            0.08,
+    query_terms = ["FastAPI", "JWT", "Milvus"]
+    vector_items = [
+        build_item(
+            recall_type="vector",
+            score=0.92,
+            document_id="doc_a",
+            chunk_id="chunk_1",
+            text="FastAPI 后端项目包含接口设计、鉴权和数据库联调。",
+            section_title="后端项目经验",
         ),
-        (
-            build_doc(
-                text="FastAPI 项目中负责接口设计、JWT 鉴权和数据库联调。",
-                document_id="doc_a",
-                chunk_id="doc_a_chunk_2_dup",
-                chunk_index=2,
-                page_no=1,
-            ),
-            0.09,
-        ),
-        (
-            build_doc(
-                text="还实现了 Docker 部署、日志整理和接口文档输出。",
-                document_id="doc_a",
-                chunk_id="doc_a_chunk_3",
-                chunk_index=3,
-                page_no=1,
-            ),
-            0.12,
-        ),
-        (
-            build_doc(
-                text="也做过 Milvus 检索接入和知识库问答实验。",
-                document_id="doc_b",
-                chunk_id="doc_b_chunk_1",
-                chunk_index=1,
-                page_no=2,
-            ),
-            0.15,
+        build_item(
+            recall_type="vector",
+            score=0.88,
+            document_id="doc_b",
+            chunk_id="chunk_2",
+            text="知识库系统接入了向量检索和长期记忆抽取。",
+            section_title="RAG 系统",
         ),
     ]
+    bm25_items = [
+        build_item(
+            recall_type="bm25",
+            score=7.8,
+            document_id="doc_a",
+            chunk_id="chunk_1",
+            text="FastAPI 后端项目包含接口设计、JWT 鉴权和数据库联调。",
+            section_title="FastAPI JWT",
+            matched_terms=["FastAPI", "JWT"],
+        ),
+        build_item(
+            recall_type="bm25",
+            score=6.2,
+            document_id="doc_c",
+            chunk_id="chunk_3",
+            text="Milvus 检索接入主要解决向量召回和过滤问题。",
+            section_title="Milvus 检索",
+            matched_terms=["Milvus"],
+        ),
+    ]
+    memory_items = [
+        build_item(
+            recall_type="memory",
+            score=0.7,
+            document_id="doc_a",
+            chunk_id="chunk_1",
+            text="曾经负责 FastAPI、JWT 鉴权和 Milvus 检索接入。",
+            section_title="项目记忆",
+            matched_terms=["FastAPI", "JWT", "Milvus"],
+        )
+    ]
 
-    deduped_items = deduplicate_retrieved_documents(raw_items)
-    merged_items = merge_adjacent_scored_documents(deduped_items, max_merged_length=200)
-    final_items = trim_scored_documents_by_budget(merged_items, max_chars=80)
-    final_docs = [doc for doc, _ in final_items]
+    ranked_items = fuse_and_rerank_context_items(
+        vector_items=vector_items,
+        lexical_items=bm25_items,
+        memory_items=memory_items,
+        query_terms=query_terms,
+    )
 
-    print(f"raw_count={len(raw_items)}")
-    print(f"dedup_count={len(deduped_items)}")
-    print(f"merged_count={len(merged_items)}")
-    print(f"final_count={len(final_items)}")
-    print("=" * 60)
-    print(format_context_docs(final_docs))
-    print("=" * 60)
-    for doc in final_docs:
-        print(build_source_item(doc))
+    print("开始执行 Day 9 Fusion/Rerank 调试脚本...", flush=True)
+    for index, item in enumerate(ranked_items, start=1):
+        print("=" * 60, flush=True)
+        print(f"rank={index}", flush=True)
+        print(f"chunk_id={item.chunk_id}", flush=True)
+        print(f"recall_type={item.recall_type}", flush=True)
+        print(f"vector_score={item.vector_score}", flush=True)
+        print(f"bm25_score={item.bm25_score}", flush=True)
+        print(f"memory_score={item.memory_score}", flush=True)
+        print(f"fusion_score={item.fusion_score:.6f}", flush=True)
+        print(f"rerank_score={item.rerank_score:.6f}", flush=True)
+        print(f"exact_match_count={item.exact_match_count}", flush=True)
+        print(f"recall_ranks={item.recall_ranks}", flush=True)
+        print(f"rerank_reasons={item.rerank_reasons}", flush=True)
 
 
 if __name__ == "__main__":
