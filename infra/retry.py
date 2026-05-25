@@ -41,14 +41,13 @@ async def retry_async(
             delay = min(
                 base_delay_seconds * (2 ** (attempt - 1)),
                 max_delay_seconds,
-                )
+            )
             log_event(
                 "retry",
                 "warning",
                 "retry.scheduled",
                 attempt=attempt,
-                max_attempts=max_attem
-                pts,
+                max_attempts=max_attempts,
                 delay_seconds=delay,
                 error_type=type(exc).__name__,
                 error=exc,
