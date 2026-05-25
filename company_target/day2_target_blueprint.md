@@ -23,8 +23,8 @@
 - `Phase A`：Day 3 - Day 7：MemoryEntry、Evidence、Hybrid Retrieval
 - `Phase B`：Day 8 - Day 11：GraphRAG、Graph Projection、Outbox
 - `Phase C`：Day 12 - Day 14：CanonicalMemory、Snapshot、Timeline
-- `Phase D`：Day 15 - Day 17：Debug、Eval、DuckDB Analysis
-- `Phase E`：Day 18 - Day 20：thin entry、分层收口、LlamaIndex / MongoDB 减重
+- `Phase D`：Day 15 - Day 17：Debug、Eval、PostgreSQL Analysis
+- `Phase E`：Day 18 - Day 20：thin entry、分层收口、数据库栈减重
 
 ## Day 3 要接住的事情
 - 把 `MemoryEntry` 正式拉进主链。

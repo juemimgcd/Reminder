@@ -93,7 +93,7 @@ cp deploy/env/backend.production.example .env
 说明：
 
 - `APP_HOST_PORT=127.0.0.1:8000` 表示后端只监听服务器本机，外网访问交给 Nginx。
-- `docker-compose.yml` 会让容器内应用使用 `postgres`、`redis`、`milvus` 这些容器名互连，你不用手工改容器内部地址。
+- `docker-compose.yml` 会让容器内应用使用 `postgres`、`redis`、`milvus`、`neo4j` 这些容器名互连，你不用手工改容器内部地址。
 
 ## 6. 首次启动后端服务
 
@@ -104,7 +104,7 @@ docker compose ps
 curl http://127.0.0.1:8000/health
 ```
 
-如果 `health` 正常返回，说明后端、数据库、Redis、Milvus、迁移链路都起来了。
+如果 `health` 正常返回，说明后端、数据库、Redis、Milvus、Neo4j、迁移链路都起来了。
 
 ## 7. 配置 systemd 开机自启
 
