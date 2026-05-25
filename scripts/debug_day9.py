@@ -59,10 +59,10 @@ def main():
             section_title="RAG 系统",
         ),
     ]
-    bm25_items = [
+    keyword_items = [
         build_item(
-            recall_type="bm25",
-            score=7.8,
+            recall_type="keyword",
+            score=1.0,
             document_id="doc_a",
             chunk_id="chunk_1",
             text="FastAPI 后端项目包含接口设计、JWT 鉴权和数据库联调。",
@@ -70,8 +70,8 @@ def main():
             matched_terms=["FastAPI", "JWT"],
         ),
         build_item(
-            recall_type="bm25",
-            score=6.2,
+            recall_type="keyword",
+            score=1.0,
             document_id="doc_c",
             chunk_id="chunk_3",
             text="Milvus 检索接入主要解决向量召回和过滤问题。",
@@ -93,7 +93,7 @@ def main():
 
     ranked_items = fuse_and_rerank_context_items(
         vector_items=vector_items,
-        lexical_items=bm25_items,
+        lexical_items=keyword_items,
         memory_items=memory_items,
         query_terms=query_terms,
     )
@@ -105,7 +105,7 @@ def main():
         print(f"chunk_id={item.chunk_id}", flush=True)
         print(f"recall_type={item.recall_type}", flush=True)
         print(f"vector_score={item.vector_score}", flush=True)
-        print(f"bm25_score={item.bm25_score}", flush=True)
+        print(f"keyword_score={item.keyword_score}", flush=True)
         print(f"memory_score={item.memory_score}", flush=True)
         print(f"fusion_score={item.fusion_score:.6f}", flush=True)
         print(f"rerank_score={item.rerank_score:.6f}", flush=True)

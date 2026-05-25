@@ -6,7 +6,6 @@ from fastapi import HTTPException
 from langchain_core.documents import Document as LCDocument
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from clients.elasticsearch_client import ElasticsearchChunkHit, search_chunks_by_bm25
 from clients.vector_store_client import similarity_search_with_score_resilient
 from conf.logging import log_event
 from crud.chunk import search_chunks_by_keywords
@@ -351,38 +350,22 @@ async def build_query_context(
 
     query_terms = extract_query_terms(query)
 
-    bm25_hits = await search_chunks_by_bm25(
-        query=query,
+    chunk_rows = await search_chunks_by_keywords(
+        db,
         knowledge_base_id=knowledge_base_id,
         user_id=user_id,
+        query_terms=query_terms,
         limit=top_k,
     )
-    if bm25_hits is None:
-        chunk_rows = await search_chunks_by_keywords(
-            db,
+    keyword_items = [
+        build_context_item_from_chunk(
+            chunk,
             knowledge_base_id=knowledge_base_id,
-            user_id=user_id,
-            query_terms=query_terms,
-            limit=top_k,
+            matched_terms=[term for term in query_terms if term in chunk.content],
         )
-        keyword_items = [
-            build_context_item_from_chunk(
-                chunk,
-                knowledge_base_id=knowledge_base_id,
-                matched_terms=[term for term in query_terms if term in chunk.content],
-            )
-            for chunk in chunk_rows
-        ]
-        lexical_backend = "sql_like"
-    else:
-        keyword_items = [
-            build_context_item_from_bm25_hit(
-                hit,
-                matched_terms=[term for term in query_terms if term in hit.content],
-            )
-            for hit in bm25_hits
-        ]
-        lexical_backend = "elasticsearch_bm25"
+        for chunk in chunk_rows
+    ]
+    lexical_backend = "postgres_keyword"
 
     memory_rows = await search_memory_entries_by_keywords(
         db,
@@ -560,32 +543,6 @@ def build_context_item_from_chunk(
         section_path=chunk.section_path,
         section_summary=chunk.section_summary,
         section_chunk_index=chunk.section_chunk_index,
-    )
-
-
-def build_context_item_from_bm25_hit(
-    hit: ElasticsearchChunkHit,
-    *,
-    matched_terms: list[str],
-) -> ContextItem:
-    return ContextItem(
-        recall_type="bm25",
-        score=hit.score,
-        knowledge_base_id=hit.knowledge_base_id,
-        document_id=hit.document_id,
-        chunk_id=hit.chunk_id,
-        page_no=hit.page_no,
-        text=hit.content,
-        source_chunk_ids=[hit.chunk_id],
-        source_page_nos=[hit.page_no] if hit.page_no is not None else [],
-        merged_chunk_count=1,
-        matched_terms=matched_terms,
-        section_id=hit.section_id,
-        section_title=hit.section_title,
-        section_level=hit.section_level,
-        section_path=hit.section_path,
-        section_summary=hit.section_summary,
-        section_chunk_index=hit.section_chunk_index,
     )
 
 

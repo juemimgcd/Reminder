@@ -47,7 +47,8 @@ async def retry_async(
                 "warning",
                 "retry.scheduled",
                 attempt=attempt,
-                max_attempts=max_attempts,
+                max_attempts=max_attem
+                pts,
                 delay_seconds=delay,
                 error_type=type(exc).__name__,
                 error=exc,
