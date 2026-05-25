@@ -1,4 +1,3 @@
-import asyncio
 import sys
 from pathlib import Path
 
@@ -9,42 +8,30 @@ if str(PROJECT_ROOT) not in sys.path:
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(errors="replace")
 
-from conf.config import settings
-from services.query_service import generate_rag_answer
+from services.query_router_service import route_query
 
 
-async def main():
-    question = "我这个文档的主要内容是什么，简要概括"
+def main():
+    questions = [
+        "你好，你能做什么？",
+        "这篇文档的主要内容是什么？",
+        "我之前提到过哪些 FastAPI 项目经验？",
+        "根据这些记忆，帮我总结一下我的画像",
+        "最近 30 天我的成长卡点是什么？",
+        "帮我删除这个知识库里的旧文档",
+    ]
 
-    print("开始执行 Day 7 调试脚本...", flush=True)
-    print(f"question={question}", flush=True)
-
-    if not settings.DASHSCOPE_API_KEY:
-        print("未检测到 DASHSCOPE_API_KEY，暂时无法调用千问模型。", flush=True)
-        print("先在终端里配置阿里百炼 key，再重新运行这个脚本。", flush=True)
-        return
-
-    response = await generate_rag_answer(question, top_k=4)
-
-    answer = response.get("answer")
-    sources = response.get("sources", [])
-
-    print("=" * 60, flush=True)
-    print("answer:", flush=True)
-    print(answer, flush=True)
-    print("=" * 60, flush=True)
-    print(f"source_count={len(sources)}", flush=True)
-
-    for source in sources[:2]:
-        print("-" * 40, flush=True)
-        print(
-            source.get("document_id"),
-            source.get("chunk_id"),
-            source.get("page_no"),
-            flush=True,
-        )
-        print(source.get("text", "")[:120], flush=True)
+    print("开始执行 Day 7 Query Router 调试脚本...", flush=True)
+    for question in questions:
+        decision = route_query(question)
+        print("=" * 60, flush=True)
+        print(f"question={question}", flush=True)
+        print(f"query_type={decision.query_type}", flush=True)
+        print(f"requires_retrieval={decision.requires_retrieval}", flush=True)
+        print(f"target_pipeline={decision.target_pipeline}", flush=True)
+        print(f"confidence={decision.confidence}", flush=True)
+        print(f"reason={decision.reason}", flush=True)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

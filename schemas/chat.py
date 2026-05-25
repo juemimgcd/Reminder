@@ -1,4 +1,24 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+
+QueryType = Literal[
+    "general_chat",
+    "kb_qa",
+    "memory_query",
+    "profile_query",
+    "analysis_query",
+    "action_request",
+]
+
+
+class QueryRouteDecision(BaseModel):
+    query_type: QueryType = Field(..., description="Router-selected query type")
+    requires_retrieval: bool = Field(..., description="Whether the query should enter retrieval")
+    target_pipeline: str = Field(..., description="Selected downstream pipeline")
+    confidence: str = Field(..., description="high / medium / low")
+    reason: str = Field(..., description="Short explanation for the routing decision")
 
 
 class ChatQueryRequest(BaseModel):
@@ -24,6 +44,22 @@ class ChatCitationItem(BaseModel):
     page_no: int | None = Field(default=None, description="Source page number")
     quote: str = Field(..., description="Quoted evidence text")
     reason: str = Field(..., description="Why this evidence supports the answer")
+    validation_status: str | None = Field(default=None, description="valid / invalid")
+    quote_found: bool | None = Field(default=None, description="Whether quote exists in source text")
+    validation_reason: str | None = Field(default=None, description="Citation validation detail")
+
+
+class RetrievalDebugData(BaseModel):
+    route: dict | None = None
+    query_terms: list[str] = Field(default_factory=list)
+    lexical_backend: str | None = None
+    counts: dict[str, int] = Field(default_factory=dict)
+    vector_candidates: list[dict] = Field(default_factory=list)
+    lexical_candidates: list[dict] = Field(default_factory=list)
+    memory_candidates: list[dict] = Field(default_factory=list)
+    fused_candidates: list[dict] = Field(default_factory=list)
+    final_context: list[dict] = Field(default_factory=list)
+    answer_debug: dict | None = None
 
 
 class ChatQueryData(BaseModel):
@@ -32,6 +68,8 @@ class ChatQueryData(BaseModel):
     citations: list[ChatCitationItem]
     confidence: str
     uncertainty: str | None = None
+    route: QueryRouteDecision | None = None
+    debug: RetrievalDebugData | None = None
 
 
 class EvidenceCitationDraft(BaseModel):
@@ -50,6 +88,14 @@ class EvidenceAnswerDraft(BaseModel):
 class ContextItem(BaseModel):
     recall_type: str = Field(..., description="vector / keyword / memory")
     score: float = Field(..., description="Normalized recall score")
+    vector_score: float | None = Field(default=None)
+    keyword_score: float | None = Field(default=None)
+    memory_score: float | None = Field(default=None)
+    fusion_score: float | None = Field(default=None)
+    rerank_score: float | None = Field(default=None)
+    exact_match_count: int = Field(default=0)
+    recall_ranks: dict[str, int] = Field(default_factory=dict)
+    rerank_reasons: list[str] = Field(default_factory=list)
     knowledge_base_id: str | None = Field(default=None)
     document_id: str = Field(...)
     chunk_id: str = Field(...)

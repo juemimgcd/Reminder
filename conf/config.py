@@ -75,7 +75,7 @@ class Settings(BaseSettings):
     HF_HUB_DOWNLOAD_TIMEOUT: int = 10
     HF_TOKEN: str = ""
     VECTOR_BACKEND: str = "milvus"
-    GRAPH_BACKEND: str = "postgres"
+    GRAPH_BACKEND: str = "neo4j"
     # 本机直接启动应用时默认连宿主机映射端口；
     # Docker Compose 中 app 容器会被环境变量覆盖为 http://milvus:19530。
     MILVUS_URI: str = "http://124.223.14.145:19530"
@@ -87,7 +87,7 @@ class Settings(BaseSettings):
     MILVUS_SEARCH_PARAMS: str = '{"metric_type":"IP"}'
     MILVUS_CONSISTENCY_LEVEL: str = "Strong"
     MILVUS_DROP_OLD: bool = False
-    NEO4J_ENABLED: bool = False
+    NEO4J_ENABLED: bool = True
     NEO4J_URI: str = "bolt://127.0.0.1:7687"
     NEO4J_USER: str = "neo4j"
     NEO4J_PASSWORD: str = "change-this-in-production"
