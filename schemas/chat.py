@@ -86,10 +86,9 @@ class EvidenceAnswerDraft(BaseModel):
 
 
 class ContextItem(BaseModel):
-    recall_type: str = Field(..., description="vector / bm25 / keyword / memory")
+    recall_type: str = Field(..., description="vector / keyword / memory")
     score: float = Field(..., description="Normalized recall score")
     vector_score: float | None = Field(default=None)
-    bm25_score: float | None = Field(default=None)
     keyword_score: float | None = Field(default=None)
     memory_score: float | None = Field(default=None)
     fusion_score: float | None = Field(default=None)
