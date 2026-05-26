@@ -8,20 +8,20 @@ if str(PROJECT_ROOT) not in sys.path:
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(errors="replace")
 
-from services.query_router_service import route_query
+from app.mneme.services.query_router_service import route_query
 
 
 def main():
     questions = [
-        "你好，你能做什么？",
-        "这篇文档的主要内容是什么？",
-        "我之前提到过哪些 FastAPI 项目经验？",
-        "根据这些记忆，帮我总结一下我的画像",
-        "最近 30 天我的成长卡点是什么？",
-        "帮我删除这个知识库里的旧文档",
+        "浣犲ソ锛屼綘鑳藉仛浠€涔堬紵",
+        "杩欑瘒鏂囨。鐨勪富瑕佸唴瀹规槸浠€涔堬紵",
+        "What FastAPI project experience did I mention before?",
+        "Summarize my profile from these memories.",
+        "鏈€杩?30 澶╂垜鐨勬垚闀垮崱鐐规槸浠€涔堬紵",
+        "甯垜鍒犻櫎杩欎釜鐭ヨ瘑搴撻噷鐨勬棫鏂囨。",
     ]
 
-    print("开始执行 Day 7 Query Router 调试脚本...", flush=True)
+    print("寮€濮嬫墽琛?Day 7 Query Router 璋冭瘯鑴氭湰...", flush=True)
     for question in questions:
         decision = route_query(question)
         print("=" * 60, flush=True)

@@ -5,7 +5,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from clients.embedding_client import get_embeddings, resolve_embedding_source
+from app.mneme.clients.embedding_client import get_embeddings, resolve_embedding_source
 
 
 def main() -> None:

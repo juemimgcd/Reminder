@@ -14,10 +14,10 @@ stdout_reconfigure = getattr(sys.stdout, "reconfigure", None)
 if callable(stdout_reconfigure):
     stdout_reconfigure(errors="replace")
 
-from conf.database import AsyncSessionLocal
-from models.chunk import Chunk
-from models.document import Document
-from clients.vector_store_client import (
+from app.mneme.conf.database import AsyncSessionLocal
+from app.mneme.models.chunk import Chunk
+from app.mneme.models.document import Document
+from app.mneme.clients.vector_store_client import (
     add_documents_to_vector_store,
     delete_documents_from_vector_store,
     drop_vector_collection,

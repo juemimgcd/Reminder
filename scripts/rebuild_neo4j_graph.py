@@ -1,8 +1,8 @@
 import asyncio
 
-from conf.database import AsyncSessionLocal
-from crud.user import list_users
-from services.graph_admin_service import rebuild_graph_projection_for_user
+from app.mneme.conf.database import AsyncSessionLocal
+from app.mneme.crud.user import list_users
+from app.mneme.services.graph_admin_service import rebuild_graph_projection_for_user
 
 
 async def rebuild_neo4j_graph() -> None:

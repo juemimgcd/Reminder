@@ -6,10 +6,9 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from conf.config import settings
-from models.base import Base
-import models
-
+from app.mneme.conf.config import settings
+from app.mneme.models.base import Base
+import app.mneme.models as models
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
@@ -19,9 +18,9 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# 关键修复：
-# 不再使用 alembic.ini 里的模板默认值 driver://user:pass@localhost/dbname，
-# 而是统一使用项目配置里的真实数据库地址。
+# 鍏抽敭淇锛?
+# 涓嶅啀浣跨敤 alembic.ini 閲岀殑妯℃澘榛樿鍊?driver://user:pass@localhost/dbname锛?
+# 鑰屾槸缁熶竴浣跨敤椤圭洰閰嶇疆閲岀殑鐪熷疄鏁版嵁搴撳湴鍧€銆?
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 # add your model's MetaData object here

@@ -6,12 +6,12 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from services.context_service import build_query_context
+from app.mneme.services.context_service import build_query_context
 
 
 async def main():
     packet = await build_query_context(
-        query="请总结这个知识库里关于 FastAPI 后端经验的内容",
+        query="Summarize FastAPI backend experience in this knowledge base",
         top_k=6,
         user_id=1,
         knowledge_base_id="kb_demo_001",

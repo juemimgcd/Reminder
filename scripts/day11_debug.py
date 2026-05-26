@@ -1,54 +1,54 @@
 import asyncio
 from datetime import datetime
 
-from services.growth_service import build_growth_report
-from services.profile_service import build_personal_profile
+from app.mneme.services.growth_service import build_growth_report
+from app.mneme.services.profile_service import build_personal_profile
 
 
 memory_library = {
     "timeline": [
         {
             "entry_id": "entry_001",
-            "entry_name": "Java 后端开发",
+        "entry_name": "Java backend development",
             "entry_type": "ability",
-            "summary": "早期主要在 Java 后端方向积累经验",
+            "summary": "鏃╂湡涓昏鍦?Java 鍚庣鏂瑰悜绉疮缁忛獙",
             "created_at": datetime(2026, 2, 1, 10, 0, 0),
         },
         {
             "entry_id": "entry_002",
-            "entry_name": "个人成长记录",
+            "entry_name": "涓汉鎴愰暱璁板綍",
             "entry_type": "theme",
-            "summary": "持续进行成长复盘与阶段总结",
+            "summary": "鎸佺画杩涜鎴愰暱澶嶇洏涓庨樁娈垫€荤粨",
             "created_at": datetime(2026, 2, 15, 10, 0, 0),
         },
         {
             "entry_id": "entry_003",
-            "entry_name": "FastAPI 后端开发",
+        "entry_name": "FastAPI backend development",
             "entry_type": "ability",
-            "summary": "最近开始深入使用 FastAPI 构建 AI 后端",
+            "summary": "鏈€杩戝紑濮嬫繁鍏ヤ娇鐢?FastAPI 鏋勫缓 AI 鍚庣",
             "created_at": datetime(2026, 3, 25, 10, 0, 0),
         },
         {
             "entry_id": "entry_004",
             "entry_name": "Agentic RAG",
             "entry_type": "theme",
-            "summary": "最近持续关注 Agentic RAG 与记忆系统",
+        "summary": "Recently focusing on Agentic RAG and memory systems",
             "created_at": datetime(2026, 4, 2, 10, 0, 0),
         },
     ],
     "by_type": {
-        "ability": ["Java 后端开发", "FastAPI 后端开发"],
-        "theme": ["个人成长记录", "Agentic RAG"],
+        "ability": ["Java backend development", "FastAPI backend development"],
+        "theme": ["涓汉鎴愰暱璁板綍", "Agentic RAG"],
     },
     "by_theme": [
         {
-            "theme_name": "个人成长记录",
-            "entries": ["持续进行成长复盘与阶段总结"],
+            "theme_name": "涓汉鎴愰暱璁板綍",
+            "entries": ["鎸佺画杩涜鎴愰暱澶嶇洏涓庨樁娈垫€荤粨"],
             "count": 1,
         },
         {
             "theme_name": "Agentic RAG",
-            "entries": ["最近持续关注 Agentic RAG 与记忆系统"],
+        "entries": ["Recently focusing on Agentic RAG and memory systems"],
             "count": 1,
         },
     ],

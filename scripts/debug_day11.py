@@ -8,8 +8,8 @@ if str(PROJECT_ROOT) not in sys.path:
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(errors="replace")
 
-from schemas.eval import EvalCase, EvalDataset, EvalPrediction
-from services.eval_service import build_eval_run
+from app.mneme.schemas.eval import EvalCase, EvalDataset, EvalPrediction
+from app.mneme.services.eval_service import build_eval_run
 
 
 def build_debug_packet(*, final_chunk_ids: list[str]) -> dict:
@@ -66,7 +66,7 @@ def main():
         cases=[
             EvalCase(
                 case_id="case_hit",
-                question="FastAPI JWT Milvus 的检索调试怎么做？",
+                question="FastAPI JWT Milvus 鐨勬绱㈣皟璇曟€庝箞鍋氾紵",
                 expected_answer="FastAPI JWT Milvus Retrieval Debug",
                 expected_source_chunk_ids=["chunk_expected"],
                 tags=["retrieval", "debug"],
@@ -74,8 +74,8 @@ def main():
             ),
             EvalCase(
                 case_id="case_miss",
-                question="系统是否能召回不存在的 chunk？",
-                expected_answer="证据不足",
+            question="Can the system recall a missing chunk?",
+                expected_answer="璇佹嵁涓嶈冻",
                 expected_source_chunk_ids=["chunk_missing"],
                 tags=["negative"],
                 difficulty="easy",
@@ -84,7 +84,7 @@ def main():
     )
     predictions = {
         "case_hit": EvalPrediction(
-            answer="FastAPI JWT Milvus 的 Retrieval Debug 需要记录 router、recall、fusion 和 rerank。",
+            answer="FastAPI JWT Milvus retrieval debug needs router, recall, fusion, and rerank traces.",
             sources=[
                 {
                     "source_id": "S1",
@@ -107,7 +107,7 @@ def main():
             retrieval_count=3,
         ),
         "case_miss": EvalPrediction(
-            answer="当前证据不足，无法确认。",
+            answer="Current evidence is insufficient to confirm.",
             sources=[],
             citations=[],
             debug=build_debug_packet(final_chunk_ids=["chunk_other"]),
@@ -124,7 +124,7 @@ def main():
         k=2,
     )
 
-    print("开始执行 Day 11 RAG Eval 调试脚本...", flush=True)
+    print("寮€濮嬫墽琛?Day 11 RAG Eval 璋冭瘯鑴氭湰...", flush=True)
     print(f"case_count={eval_run.summary['case_count']}", flush=True)
     print(f"avg_recall_at_k={eval_run.summary['avg_recall_at_k']:.4f}", flush=True)
     print(f"avg_mrr={eval_run.summary['avg_mrr']:.4f}", flush=True)
