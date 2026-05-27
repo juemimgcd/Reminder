@@ -1,0 +1,8 @@
+{
+  "name": "Mneme",
+  "description": "A private digital garden and knowledge base designed for clarity and deep focus.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
