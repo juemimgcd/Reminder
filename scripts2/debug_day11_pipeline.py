@@ -10,7 +10,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from pipelines.document_index_pipeline import run_document_index_pipeline
+from app.mneme.pipelines.document_index_pipeline import run_document_index_pipeline
 
 
 async def main():
@@ -31,11 +31,11 @@ async def main():
     )
 
     fake_loaded_docs = [
-        LCDocument(page_content="第一段原文", metadata={}),
+            LCDocument(page_content="First source paragraph", metadata={}),
     ]
     fake_chunk_docs = [
         LCDocument(
-            page_content="第一段 chunk",
+            page_content="绗竴娈?chunk",
             metadata={
                 "chunk_id": "doc_demo_001_chunk_0_x1",
                 "chunk_index": 0,

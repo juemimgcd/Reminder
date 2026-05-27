@@ -6,16 +6,16 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from infra.circuit_breaker import _BREAKER_STATE, before_call, record_failure
-from infra.rate_limit import enforce_fixed_window_rate_limit
-from infra.retry import retry_async
+from app.mneme.infra.circuit_breaker import _BREAKER_STATE, before_call, record_failure
+from app.mneme.infra.rate_limit import enforce_fixed_window_rate_limit
+from app.mneme.infra.retry import retry_async
 
 
-# 记录 flaky_call 已经被调用了多少次，方便观察 retry 是否生效。
+# 璁板綍 flaky_call 宸茬粡琚皟鐢ㄤ簡澶氬皯娆★紝鏂逛究瑙傚療 retry 鏄惁鐢熸晥銆?
 CALL_COUNT = {"flaky": 0}
 
 
-# 模拟一个前两次超时、第三次成功的外部调用。
+# 妯℃嫙涓€涓墠涓ゆ瓒呮椂銆佺涓夋鎴愬姛鐨勫閮ㄨ皟鐢ㄣ€?
 async def flaky_call():
     CALL_COUNT["flaky"] += 1
     if CALL_COUNT["flaky"] < 3:
@@ -23,12 +23,12 @@ async def flaky_call():
     return "success"
 
 
-# 指定当前调试脚本里哪些异常应被 retry_async 视为可重试。
+# 鎸囧畾褰撳墠璋冭瘯鑴氭湰閲屽摢浜涘紓甯稿簲琚?retry_async 瑙嗕负鍙噸璇曘€?
 def is_retryable(exc: Exception) -> bool:
     return isinstance(exc, TimeoutError)
 
 
-# 依次演示 Day10 的限流、退避重试和熔断三种基础能力。
+# 渚濇婕旂ず Day10 鐨勯檺娴併€侀€€閬块噸璇曞拰鐔旀柇涓夌鍩虹鑳藉姏銆?
 async def main():
     print("rate_limit_demo")
     for index in range(1, 5):

@@ -6,10 +6,10 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from conf.config import settings
-from services.context_service import build_query_context
-from pipelines.document_index_pipeline import run_document_index_pipeline
-from pipelines.memory_extract_pipeline import run_memory_extract_pipeline
+from app.mneme.conf.config import settings
+from app.mneme.services.context_service import build_query_context
+from app.mneme.pipelines.document_index_pipeline import run_document_index_pipeline
+from app.mneme.pipelines.memory_extract_pipeline import run_memory_extract_pipeline
 
 
 async def main():

@@ -1,46 +1,46 @@
 import asyncio
 
-from services.advice_service import build_growth_advice
+from app.mneme.services.advice_service import build_growth_advice
 
 
 profile = {
     "knowledge_base_id": "kb_demo_001",
     "entry_count": 8,
-    "profile_summary": "长期关注个人成长、知识管理和 AI 后端系统构建。",
+        "profile_summary": "Long-term focus on personal growth, knowledge management, and AI backend systems.",
     "main_themes": [
         {
-            "theme_name": "知识管理",
-            "reason": "多条内容围绕长期沉淀和复用展开",
-            "evidence_entries": ["知识管理", "个人成长记录"],
+            "theme_name": "鐭ヨ瘑绠＄悊",
+            "reason": "澶氭潯鍐呭鍥寸粫闀挎湡娌夋穩鍜屽鐢ㄥ睍寮€",
+            "evidence_entries": ["鐭ヨ瘑绠＄悊", "涓汉鎴愰暱璁板綍"],
         }
     ],
     "ability_tags": [
         {
-            "ability_name": "FastAPI 后端开发",
-            "reason": "持续在做接口和业务能力实现",
-            "evidence_entries": ["FastAPI 后端开发"],
+            "ability_name": "FastAPI backend development",
+            "reason": "Continuously implementing API and business capabilities",
+            "evidence_entries": ["FastAPI backend development"],
         }
     ],
-    "expression_style": "偏结构化、复盘式表达",
-    "growth_focus": ["把系统能力沉淀成产品闭环"],
+    "expression_style": "鍋忕粨鏋勫寲銆佸鐩樺紡琛ㄨ揪",
+        "growth_focus": ["Turn system capabilities into a product loop"],
 }
 
 growth_report = {
     "knowledge_base_id": "kb_demo_001",
-    "analysis_window": "最近 30 天 vs 更早阶段",
-    "stage_summary": "最近明显从底层实现，转向产品化组合与可展示输出。",
-    "recent_focus": ["陪伴式输出", "成长建议"],
+    "analysis_window": "鏈€杩?30 澶?vs 鏇存棭闃舵",
+        "stage_summary": "Recently moved from low-level implementation to productized composition and presentable output.",
+        "recent_focus": ["closed-loop output", "growth advice"],
     "theme_changes": [
         {
-            "theme_name": "产品化输出",
+                "theme_name": "productized output",
             "change_type": "stronger",
-            "reason": "最近内容多次强调统一结果页和行动导向",
-            "evidence_entries": ["统一输出层", "成长建议"],
+            "reason": "鏈€杩戝唴瀹瑰娆″己璋冪粺涓€缁撴灉椤靛拰琛屽姩瀵煎悜",
+                "evidence_entries": ["unified output layer", "growth advice"],
         }
     ],
-    "highlights": ["已经从单功能实现开始转向完整产品闭环"],
-    "blockers": ["建议层还不够可执行"],
-    "next_actions": ["做建议 schema、建议 prompt 和建议路由"],
+        "highlights": ["Moved from single-feature implementation toward a product loop"],
+        "blockers": ["Advice layer is not executable enough"],
+        "next_actions": ["Implement advice schema, advice prompt, and advice routing"],
 }
 
 
@@ -50,7 +50,7 @@ async def main():
         knowledge_base_id="kb_demo_001",
         profile=profile,
         growth_report=growth_report,
-        focus_goal="优先把项目做成更完整的可演示产品",
+        focus_goal="浼樺厛鎶婇」鐩仛鎴愭洿瀹屾暣鐨勫彲婕旂ず浜у搧",
     )
 
     print("advice_summary")

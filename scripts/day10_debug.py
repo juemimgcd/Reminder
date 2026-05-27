@@ -1,46 +1,46 @@
 import asyncio
 from datetime import datetime
 
-from services.profile_service import build_personal_profile
+from app.mneme.services.profile_service import build_personal_profile
 
 
 memory_library = {
     "timeline": [
         {
             "entry_id": "entry_001",
-            "entry_name": "FastAPI 后端开发",
+        "entry_name": "FastAPI backend development",
             "entry_type": "ability",
-            "summary": "有 FastAPI 后端开发经验",
+        "summary": "Has FastAPI backend development experience",
             "created_at": datetime(2026, 4, 1, 10, 0, 0),
         },
         {
             "entry_id": "entry_002",
-            "entry_name": "个人成长记录",
+            "entry_name": "涓汉鎴愰暱璁板綍",
             "entry_type": "theme",
-            "summary": "长期关注成长、复盘与记录",
+            "summary": "闀挎湡鍏虫敞鎴愰暱銆佸鐩樹笌璁板綍",
             "created_at": datetime(2026, 4, 2, 10, 0, 0),
         },
         {
             "entry_id": "entry_003",
-            "entry_name": "知识管理",
+            "entry_name": "鐭ヨ瘑绠＄悊",
             "entry_type": "theme",
-            "summary": "希望把个人内容沉淀为长期可用的记忆库",
+        "summary": "Wants to turn personal content into reusable long-term memory",
             "created_at": datetime(2026, 4, 3, 10, 0, 0),
         },
     ],
     "by_type": {
-        "ability": ["FastAPI 后端开发"],
-        "theme": ["个人成长记录", "知识管理"],
+        "ability": ["FastAPI backend development"],
+        "theme": ["涓汉鎴愰暱璁板綍", "鐭ヨ瘑绠＄悊"],
     },
     "by_theme": [
         {
-            "theme_name": "个人成长记录",
-            "entries": ["长期关注成长、复盘与记录"],
+            "theme_name": "涓汉鎴愰暱璁板綍",
+            "entries": ["闀挎湡鍏虫敞鎴愰暱銆佸鐩樹笌璁板綍"],
             "count": 1,
         },
         {
-            "theme_name": "知识管理",
-            "entries": ["希望把个人内容沉淀为长期可用的记忆库"],
+            "theme_name": "鐭ヨ瘑绠＄悊",
+        "entries": ["Wants to turn personal content into reusable long-term memory"],
             "count": 1,
         },
     ],

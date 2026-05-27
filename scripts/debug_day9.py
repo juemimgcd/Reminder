@@ -8,8 +8,8 @@ if str(PROJECT_ROOT) not in sys.path:
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(errors="replace")
 
-from schemas.chat import ContextItem
-from services.retrieval_fusion_service import fuse_and_rerank_context_items
+from app.mneme.schemas.chat import ContextItem
+from app.mneme.services.retrieval_fusion_service import fuse_and_rerank_context_items
 
 
 def build_item(
@@ -47,16 +47,16 @@ def main():
             score=0.92,
             document_id="doc_a",
             chunk_id="chunk_1",
-            text="FastAPI 后端项目包含接口设计、鉴权和数据库联调。",
-            section_title="后端项目经验",
+            text="FastAPI backend project includes API design, authentication, and database integration.",
+            section_title="鍚庣椤圭洰缁忛獙",
         ),
         build_item(
             recall_type="vector",
             score=0.88,
             document_id="doc_b",
             chunk_id="chunk_2",
-            text="知识库系统接入了向量检索和长期记忆抽取。",
-            section_title="RAG 系统",
+            text="The knowledge base system integrates vector retrieval and long-term memory extraction.",
+            section_title="RAG 绯荤粺",
         ),
     ]
     keyword_items = [
@@ -65,7 +65,7 @@ def main():
             score=1.0,
             document_id="doc_a",
             chunk_id="chunk_1",
-            text="FastAPI 后端项目包含接口设计、JWT 鉴权和数据库联调。",
+            text="FastAPI backend project includes API design, JWT auth, and database integration.",
             section_title="FastAPI JWT",
             matched_terms=["FastAPI", "JWT"],
         ),
@@ -74,8 +74,8 @@ def main():
             score=1.0,
             document_id="doc_c",
             chunk_id="chunk_3",
-            text="Milvus 检索接入主要解决向量召回和过滤问题。",
-            section_title="Milvus 检索",
+            text="Milvus retrieval mainly solves vector recall and filtering.",
+            section_title="Milvus retrieval",
             matched_terms=["Milvus"],
         ),
     ]
@@ -85,8 +85,8 @@ def main():
             score=0.7,
             document_id="doc_a",
             chunk_id="chunk_1",
-            text="曾经负责 FastAPI、JWT 鉴权和 Milvus 检索接入。",
-            section_title="项目记忆",
+            text="Previously worked on FastAPI, JWT auth, and Milvus retrieval integration.",
+            section_title="椤圭洰璁板繂",
             matched_terms=["FastAPI", "JWT", "Milvus"],
         )
     ]
@@ -98,7 +98,7 @@ def main():
         query_terms=query_terms,
     )
 
-    print("开始执行 Day 9 Fusion/Rerank 调试脚本...", flush=True)
+    print("寮€濮嬫墽琛?Day 9 Fusion/Rerank 璋冭瘯鑴氭湰...", flush=True)
     for index, item in enumerate(ranked_items, start=1):
         print("=" * 60, flush=True)
         print(f"rank={index}", flush=True)

@@ -6,18 +6,18 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from infra.circuit_breaker import _BREAKER_STATE
-from infra.rate_limit import _WINDOW_COUNTERS
-from services.context_service import (
+from app.mneme.infra.circuit_breaker import _BREAKER_STATE
+from app.mneme.infra.rate_limit import _WINDOW_COUNTERS
+from app.mneme.services.context_service import (
     build_similarity_search_kwargs,
     deduplicate_retrieved_documents,
     merge_adjacent_scored_documents,
     trim_scored_documents_by_budget,
 )
-from tasks.index_tasks import index_document_task
-from services.task_state_service import ALLOWED_TASK_TRANSITIONS
-from pipelines.document_index_pipeline import run_document_index_pipeline
-from pipelines.memory_extract_pipeline import run_memory_extract_pipeline
+from app.mneme.tasks.index_tasks import index_document_task
+from app.mneme.services.task_state_service import ALLOWED_TASK_TRANSITIONS
+from app.mneme.pipelines.document_index_pipeline import run_document_index_pipeline
+from app.mneme.pipelines.memory_extract_pipeline import run_memory_extract_pipeline
 
 
 async def main():

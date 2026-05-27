@@ -10,13 +10,13 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from pipelines.memory_extract_pipeline import run_memory_extract_pipeline
+from app.mneme.pipelines.memory_extract_pipeline import run_memory_extract_pipeline
 
 
 async def main():
     chunk_docs = [
         LCDocument(
-            page_content="用户长期在做知识管理和成长复盘。",
+            page_content="The user is working on knowledge management and growth review.",
             metadata={
                 "user_id": 1,
                 "knowledge_base_id": "kb_demo_001",
@@ -39,10 +39,10 @@ async def main():
             "document_pk": 1,
             "chunk_id": "doc_demo_001_chunk_0_x1",
             "page_no": 1,
-            "entry_name": "知识管理",
+            "entry_name": "鐭ヨ瘑绠＄悊",
             "entry_type": "theme",
-            "summary": "长期关注知识管理与沉淀",
-            "evidence_text": "用户长期在做知识管理和成长复盘。",
+            "summary": "闀挎湡鍏虫敞鐭ヨ瘑绠＄悊涓庢矇娣€",
+                "evidence_text": "The user is working on knowledge management and growth review.",
             "importance_score": 0.8,
         },
         {
@@ -54,10 +54,10 @@ async def main():
             "document_pk": 1,
             "chunk_id": "doc_demo_001_chunk_0_x1",
             "page_no": 1,
-            "entry_name": "知识管理",
+            "entry_name": "鐭ヨ瘑绠＄悊",
             "entry_type": "theme",
-            "summary": "长期关注知识管理与沉淀",
-            "evidence_text": "用户长期在做知识管理和成长复盘。",
+            "summary": "闀挎湡鍏虫敞鐭ヨ瘑绠＄悊涓庢矇娣€",
+                "evidence_text": "The user is working on knowledge management and growth review.",
             "importance_score": 0.8,
         },
     ]

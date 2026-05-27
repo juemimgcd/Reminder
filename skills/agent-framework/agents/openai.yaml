@@ -1,4 +1,0 @@
-interface:
-  display_name: "Agent Framework"
-  short_description: "Plan FastAPI agent blueprints and day docs"
-  default_prompt: "Use $agent-framework to turn an agent idea into a layered FastAPI project plan and optional day-by-day build docs."

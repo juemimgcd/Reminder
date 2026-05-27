@@ -8,8 +8,8 @@ if str(PROJECT_ROOT) not in sys.path:
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(errors="replace")
 
-from schemas.chat import EvidenceCitationDraft
-from services.citation_validation_service import apply_citation_confidence_policy, validate_citation_drafts
+from app.mneme.schemas.chat import EvidenceCitationDraft
+from app.mneme.services.citation_validation_service import apply_citation_confidence_policy, validate_citation_drafts
 
 
 def main():
@@ -19,24 +19,24 @@ def main():
             "document_id": "doc_1",
             "chunk_id": "chunk_1",
             "page_no": 1,
-            "text": "FastAPI 项目中负责接口设计、JWT 鉴权和 Milvus 检索接入。",
+            "text": "FastAPI project covers API design, JWT auth, and Milvus retrieval integration.",
         }
     ]
     citation_drafts = [
         EvidenceCitationDraft(
             source_id="S1",
-            quote="JWT 鉴权和 Milvus 检索接入",
-            reason="这段证据直接说明了项目经验。",
+            quote="JWT auth and Milvus retrieval integration",
+            reason="This evidence directly describes project experience.",
         ),
         EvidenceCitationDraft(
             source_id="S1",
-            quote="不存在的引用文本",
-            reason="这条 quote 不在 source text 里。",
+            quote="涓嶅瓨鍦ㄧ殑寮曠敤鏂囨湰",
+            reason="This quote does not appear in the source text.",
         ),
         EvidenceCitationDraft(
             source_id="S9",
-            quote="FastAPI 项目",
-            reason="这条 source_id 不存在。",
+            quote="FastAPI 椤圭洰",
+            reason="This source_id does not exist.",
         ),
     ]
     validation = validate_citation_drafts(citation_drafts, sources)
@@ -46,7 +46,7 @@ def main():
         citation_validation=validation,
     )
 
-    print("开始执行 Day 12 Citation Validation 调试脚本...", flush=True)
+    print("寮€濮嬫墽琛?Day 12 Citation Validation 璋冭瘯鑴氭湰...", flush=True)
     print(f"valid_citation_count={validation['summary']['valid_citation_count']}", flush=True)
     print(f"invalid_citation_count={validation['summary']['invalid_citation_count']}", flush=True)
     print(f"has_valid_citation={validation['summary']['has_valid_citation']}", flush=True)
