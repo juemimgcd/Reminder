@@ -1,20 +1,38 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Reminder Frontend
 
-# Run and deploy your AI Studio app
-
-This contains everything you need to run your app locally.
-
-View your app in AI Studio: https://ai.studio/apps/3f7cc971-94a8-45cd-9e46-ba4b32002c47
+这个前端现在直接对接 Reminder 后端接口，不再是静态 AI Studio 原型。
 
 ## Run Locally
 
-**Prerequisites:**  Node.js
+Prerequisites:
 
+- Node.js 20+
+- 可访问的 Reminder 后端
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+1. 安装依赖
+
+```bash
+npm install
+```
+
+2. 如有需要，配置接口地址
+
+```bash
+cp .env.example .env.local
+```
+
+默认开发模式下会请求 `http://127.0.0.1:8000`。
+
+3. 启动前端开发服务器
+
+```bash
+npm run dev
+```
+
+4. 如果你走的是仓库根目录的嵌入式启动方式，也可以在项目根目录执行：
+
+```bash
+bash start.sh
+```
+
+这会同时启动后端 `uvicorn` 和前端 `vite build --watch`，最终由后端统一托管页面。
