@@ -25,9 +25,11 @@ polish
 *.jpeg
 *.webp
 *.zip
-README.md
-docker-compose.yml
-.env-example
+app/mneme_frontend_v0.2.1/node_modules
+app/mneme_frontend_v0.2.1/dist
+app/mneme_frontend_v0.2.1/.env.local
+app/mneme_frontend_v0.2.1/.env.development.local
+app/mneme_frontend_v0.2.1/.env.production.local
 alembic/__pycache__
 clients/__pycache__
 conf/__pycache__

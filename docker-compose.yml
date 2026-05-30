@@ -1,4 +1,4 @@
-name: mneme
+name: reminder
 
 x-app-base: &app-base
   build:
@@ -8,7 +8,7 @@ x-app-base: &app-base
       PYTHON_VERSION: ${PYTHON_VERSION:-3.12}
       PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
       PIP_EXTRA_INDEX_URL: ${PIP_EXTRA_INDEX_URL:-}
-  image: mneme-app:local
+  image: reminder-app:local
   restart: unless-stopped
   init: true
   env_file:
@@ -42,7 +42,7 @@ x-logging: &default-logging
 services:
   postgres:
     image: postgres:17
-    container_name: mneme-postgres
+    container_name: reminder-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
@@ -61,7 +61,7 @@ services:
 
   etcd:
     image: quay.io/coreos/etcd:v3.5.18
-    container_name: mneme-etcd
+    container_name: reminder-etcd
     restart: unless-stopped
     environment:
       ETCD_AUTO_COMPACTION_MODE: revision
@@ -84,7 +84,7 @@ services:
 
   minio:
     image: minio/minio:RELEASE.2025-02-28T09-55-16Z
-    container_name: mneme-minio
+    container_name: reminder-minio
     restart: unless-stopped
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
@@ -99,7 +99,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: mneme-redis
+    container_name: reminder-redis
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
     ports:
@@ -115,7 +115,7 @@ services:
 
   milvus:
     image: milvusdb/milvus:v2.5.16
-    container_name: mneme-milvus
+    container_name: reminder-milvus
     restart: unless-stopped
     command: ["milvus", "run", "standalone"]
     cpus: ${MILVUS_CPU_LIMIT:-2.0}
@@ -139,7 +139,7 @@ services:
 
   neo4j:
     image: neo4j:5.28
-    container_name: mneme-neo4j
+    container_name: reminder-neo4j
     restart: unless-stopped
     environment:
       NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-change-this-in-production}
@@ -157,7 +157,7 @@ services:
 
   migrate:
     <<: *app-base
-    container_name: mneme-migrate
+    container_name: reminder-migrate
     restart: "no"
     depends_on:
       postgres:
@@ -173,12 +173,12 @@ services:
 
   app:
     <<: *app-base
-    container_name: mneme-app
+    container_name: reminder-app
     depends_on:
       migrate:
         condition: service_completed_successfully
     ports:
-      - "${APP_HOST_PORT:-8000}:${APP_PORT:-8000}"
+      - "${APP_HOST_PORT:-127.0.0.1:8000}:${APP_PORT:-8000}"
     healthcheck:
       test: ["CMD", "python", "-c", "from urllib.request import urlopen; import sys; sys.exit(0 if urlopen('http://127.0.0.1:8000/health').status == 200 else 1)"]
       interval: 60s
@@ -190,7 +190,7 @@ services:
 
   worker:
     <<: *app-base
-    container_name: mneme-worker
+    container_name: reminder-worker
     depends_on:
       migrate:
         condition: service_completed_successfully

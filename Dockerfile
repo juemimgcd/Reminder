@@ -1,4 +1,14 @@
 ARG PYTHON_VERSION=3.12
+FROM node:20-bookworm-slim AS frontend-builder
+
+WORKDIR /frontend
+
+COPY app/mneme_frontend_v0.2.1/package.json app/mneme_frontend_v0.2.1/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+
+COPY app/mneme_frontend_v0.2.1/ ./
+RUN npm run build
+
 FROM python:${PYTHON_VERSION}-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -43,6 +53,7 @@ RUN python -m pip install --upgrade pip setuptools wheel && \
     fi
 
 COPY . .
+COPY --from=frontend-builder /frontend/dist /app/app/mneme_frontend_v0.2.1/dist
 
 EXPOSE 8000
 
