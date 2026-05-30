@@ -1,11 +1,19 @@
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi import HTTPException
+from fastapi.responses import FileResponse
 
 from app.mneme.bootstrap.lifespan import lifespan
 from app.mneme.bootstrap.root_routes import router as root_router
 from app.mneme.bootstrap.router_registry import register_routers
 from app.mneme.conf.config import settings
 from app.mneme.utils.exceptions import BusinessException, business_exception_handler
+
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+FRONTEND_DIST_DIR = REPO_ROOT / "app" / "mneme_frontend_v0.2.1" / "dist"
 
 
 def configure_cors(app: FastAPI) -> None:
@@ -23,6 +31,28 @@ def configure_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(BusinessException, business_exception_handler)
 
 
+def configure_frontend(app: FastAPI) -> None:
+    @app.get("/{frontend_path:path}", include_in_schema=False)
+    async def frontend_entry(frontend_path: str):
+        index_file = FRONTEND_DIST_DIR / "index.html"
+        if not index_file.exists():
+            raise HTTPException(status_code=404)
+
+        if not frontend_path:
+            return FileResponse(FRONTEND_DIST_DIR / "index.html")
+
+        candidate = (FRONTEND_DIST_DIR / frontend_path).resolve()
+        try:
+            candidate.relative_to(FRONTEND_DIST_DIR.resolve())
+        except ValueError:
+            return FileResponse(FRONTEND_DIST_DIR / "index.html")
+
+        if candidate.is_file():
+            return FileResponse(candidate)
+
+        return FileResponse(FRONTEND_DIST_DIR / "index.html")
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         lifespan=lifespan,
@@ -34,4 +64,5 @@ def create_app() -> FastAPI:
     configure_exception_handlers(app)
     app.include_router(root_router)
     register_routers(app)
+    configure_frontend(app)
     return app
