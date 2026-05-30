@@ -1,6 +1,6 @@
-PROJECT_NAME=Agentic RAG Assistant
+PROJECT_NAME=Reminder
 VERSION=0.1.0
-DESCRIPTION=Mneme production environment
+DESCRIPTION=Reminder production environment
 LOG_LEVEL=INFO
 
 PYTHON_VERSION=3.12
@@ -8,11 +8,11 @@ PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 PIP_EXTRA_INDEX_URL=
 
 APP_PORT=8000
-APP_HOST_PORT=8000
+APP_HOST_PORT=127.0.0.1:8000
 UVICORN_WORKERS=2
 WAIT_FOR_TIMEOUT_SECONDS=180
 
-CORS_ALLOWED_ORIGINS=["http://8.147.57.104","http://8.147.57.104:80","https://8.147.57.104"]
+CORS_ALLOWED_ORIGINS=["https://your-domain.com","http://your-domain.com"]
 CORS_ALLOW_ORIGIN_REGEX=
 CORS_ALLOW_CREDENTIALS=true
 CORS_ALLOW_METHODS=["*"]

@@ -1,41 +1,26 @@
-# Mneme 服务器部署说明
+# Reminder 部署说明
 
-这套仓库更适合用下面这条链路部署：
+本文档基于当前仓库的推荐部署方式整理：单台 Linux 服务器、Docker Compose 启动全套服务、Nginx 对外代理、根目录 `upgrade.sh` 负责升级。
 
-本地开发机：
-`git add` -> `git commit` -> `git push origin master`
+## 1. 部署模型
 
-云服务器：
-`git pull` -> `docker compose up -d --build`
+当前推荐的是这条链路：
 
-GitHub 只负责中转代码，云服务器负责拉代码、构建镜像、启动服务。
-
-## 1. 先把本地代码推到 GitHub
-
-第一次推送：
-
-```bash
-git remote add origin git@github.com:your-name/your-repo.git
-git branch -M master
-git add .
-git commit -m "prepare deployment"
-git push -u origin master
+```text
+本地开发 -> git push -> 服务器执行 bash upgrade.sh
 ```
 
-如果仓库里已经把 `storage/`、前端 `node_modules/`、模型缓存之类的大文件跟踪进 Git 了，建议先从索引里移除，再提交一次：
+线上只有一个公开入口：
 
-```bash
-git rm -r --cached storage frontend_build/mneme_frontend/node_modules frontend_build/mneme_frontend/dist
-git rm --cached sentence_transformers.zip
-git commit -m "stop tracking local artifacts"
-git push
-```
+- Nginx 监听 `80/443`
+- Nginx 把所有请求代理到 `127.0.0.1:8000`
+- 前端页面和后端 API 都由 `reminder-app` 统一提供
 
-上面只会取消 Git 跟踪，不会删除你本地磁盘上的文件。
+这意味着你不需要再单独部署一套前端静态站点。
 
-## 2. 云服务器安装基础环境
+## 2. 服务器依赖
 
-以下命令以 Ubuntu 为例：
+以下示例基于 Ubuntu：
 
 ```bash
 sudo apt update
@@ -46,222 +31,136 @@ sudo usermod -aG docker $USER
 
 执行完 `usermod` 后重新登录一次服务器。
 
-## 3. 给云服务器配置 GitHub 拉代码权限
-
-如果仓库是私有仓库，推荐在服务器上用 deploy key：
+## 3. 克隆项目
 
 ```bash
-ssh-keygen -t ed25519 -C "mneme-deploy"
-cat ~/.ssh/id_ed25519.pub
+sudo mkdir -p /opt/reminder
+sudo chown -R $USER:$USER /opt/reminder
+git clone <your-repo-url> /opt/reminder
+cd /opt/reminder
 ```
 
-把公钥加到：
-`GitHub -> 仓库 -> Settings -> Deploy keys -> Add deploy key`
+如果仓库是私有仓库，建议先配置 deploy key 或服务器 SSH key，再执行 `git clone`。
 
-然后测试：
+## 4. 配置环境变量
 
-```bash
-ssh -T git@github.com
-```
-
-## 4. 在服务器上克隆项目
-
-```bash
-sudo mkdir -p /opt/mneme
-sudo chown -R $USER:$USER /opt/mneme
-git clone git@github.com:your-name/your-repo.git /opt/mneme
-cd /opt/mneme
-```
-
-## 5. 配置后端环境变量
-
-复制模板：
+复制生产环境模板：
 
 ```bash
 cp deploy/env/backend.production.example .env
 ```
 
-你至少要改这些值：
+至少要修改这些值：
 
 - `APP_HOST_PORT=127.0.0.1:8000`
-- `CORS_ALLOWED_ORIGINS=["https://your-domain.com"]`
+- `CORS_ALLOWED_ORIGINS=["https://your-domain.com","http://your-domain.com"]`
 - `POSTGRES_PASSWORD`
 - `MINIO_ROOT_PASSWORD`
+- `NEO4J_PASSWORD`
 - `DASHSCOPE_API_KEY`
 - `JWT_SECRET`
 
 说明：
 
-- `APP_HOST_PORT=127.0.0.1:8000` 表示后端只监听服务器本机，外网访问交给 Nginx。
-- `docker-compose.yml` 会让容器内应用使用 `postgres`、`redis`、`milvus`、`neo4j` 这些容器名互连，你不用手工改容器内部地址。
+- `APP_HOST_PORT=127.0.0.1:8000` 表示应用只暴露给本机，公网访问统一走 Nginx。
+- Compose 内部会自动使用 `postgres`、`redis`、`milvus`、`neo4j` 这些容器名互连，不需要你手工改容器间地址。
 
-## 6. 首次启动后端服务
+## 5. 首次启动
 
 ```bash
-cd /opt/mneme
 docker compose up -d --build
 docker compose ps
 curl http://127.0.0.1:8000/health
 ```
 
-如果 `health` 正常返回，说明后端、数据库、Redis、Milvus、Neo4j、迁移链路都起来了。
+如果 `health` 返回正常，说明：
 
-## 7. 配置 systemd 开机自启
+- 数据库迁移容器已经跑完
+- 应用容器已经启动
+- 前端已经打包进镜像
+- 后端和嵌入式前端都可以通过 `127.0.0.1:8000` 访问
 
-先把模板复制到系统目录：
+这时本机访问：
 
-```bash
-sudo cp deploy/systemd/mneme-compose.service /etc/systemd/system/mneme-compose.service
-```
+- `http://127.0.0.1:8000/` 是应用首页
+- `http://127.0.0.1:8000/docs` 是 API 文档
 
-如果你的项目目录不是 `/opt/mneme`，先改这个文件里的 `WorkingDirectory`。
+## 6. Nginx 配置
 
-然后启用：
+仓库已经提供了单机代理模板：
 
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now mneme-compose.service
-sudo systemctl status mneme-compose.service
-```
+- [deploy/nginx/reminder.conf](/E:/python_files/agentic_rag/deploy/nginx/reminder.conf)
 
-以后常用命令：
+安装方式：
 
 ```bash
-sudo systemctl restart mneme-compose.service
-sudo systemctl reload mneme-compose.service
-sudo journalctl -u mneme-compose.service -n 100 --no-pager
+sudo cp deploy/nginx/reminder.conf /etc/nginx/sites-available/reminder.conf
+sudo ln -sfn /etc/nginx/sites-available/reminder.conf /etc/nginx/sites-enabled/reminder.conf
 ```
 
-## 8. 如果要部署前端
+然后把模板里的：
 
-先安装 Node.js 20 以上，然后在服务器执行：
-
-```bash
-cd /opt/mneme/frontend_build/mneme_frontend
-cp ../../deploy/env/frontend.production.example .env.production.local
-npm ci
-npm run build
-sudo mkdir -p /var/www/mneme-frontend
-sudo cp -r dist/. /var/www/mneme-frontend/
+```nginx
+server_name _;
 ```
 
-前端生产环境模板里已经把 API 地址设成了 `/api`，配合下面的 Nginx 反向代理即可。
-
-## 9. 配置 Nginx
-
-复制模板：
-
-```bash
-sudo cp deploy/nginx/mneme.conf /etc/nginx/sites-available/mneme.conf
-sudo ln -s /etc/nginx/sites-available/mneme.conf /etc/nginx/sites-enabled/mneme.conf
-```
-
-把模板里的：
-
-- `server_name your-domain.com;`
-- `root /var/www/mneme-frontend;`
-
-改成你的实际域名和前端目录。
-
-检查并重载：
+改成你的真实域名，之后检查并重载：
 
 ```bash
 sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-如果已经绑定域名，再签 HTTPS：
+如果已经完成域名解析，可以继续签 HTTPS：
 
 ```bash
 sudo certbot --nginx -d your-domain.com
 ```
 
-## 10. 以后更新代码
+## 7. systemd 开机自启
 
-本地：
+仓库里已经有 Compose 服务模板：
 
-```bash
-git add .
-git commit -m "your update"
-git push origin master
-```
+- [deploy/systemd/reminder-compose.service](/E:/python_files/agentic_rag/deploy/systemd/reminder-compose.service)
 
-服务器：
+安装：
 
 ```bash
-cd /opt/mneme
-bash deploy/scripts/update_server.sh
+sudo cp deploy/systemd/reminder-compose.service /etc/systemd/system/reminder-compose.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now reminder-compose.service
+sudo systemctl status reminder-compose.service
 ```
 
-这个脚本会：
+如果你的项目目录不是 `/opt/reminder`，先修改 service 文件里的 `WorkingDirectory`。
 
-- 拉取最新代码
-- 重新构建并重启 Compose 服务
-- 输出当前容器状态
+## 8. 日常升级
 
-## 双服务器部署示例
+代码更新推荐统一走根目录脚本：
 
-如果你按下面这套分工部署：
-
-- 腾讯云 `124.223.14.145`：后端
-- 阿里云 `8.147.57.104`：前端
-
-那就按这个思路配置。
-
-### 后端服务器 `124.223.14.145`
-
-后端 `.env` 里建议至少确认这些值：
-
-```env
-APP_HOST_PORT=8000
-CORS_ALLOWED_ORIGINS=["http://8.147.57.104","http://8.147.57.104:80","https://8.147.57.104"]
+```bash
+cd /opt/reminder
+bash upgrade.sh
 ```
 
-解释：
+这个脚本会自动完成：
 
-- `APP_HOST_PORT=8000` 表示 Docker 会把后端服务暴露到公网 `124.223.14.145:8000`
-- 前端最终是用户浏览器直接访问后端，所以跨域要放行前端页面所在的源，也就是 `8.147.57.104`
+1. 拉取最新代码
+2. 重新构建并重启 Compose 服务
+3. 同步 `deploy/nginx/reminder.conf`
+4. 检查并重载 Nginx
+5. 输出容器状态
 
-同时你要在腾讯云控制台放行安全组端口：
+如果你这次只想更新容器，不想覆盖 Nginx：
 
-- `8000/tcp`：给前端和浏览器访问后端 API
-
-如果以后你改成域名访问，再把 `CORS_ALLOWED_ORIGINS` 改成正式域名即可。
-
-### 前端服务器 `8.147.57.104`
-
-前端构建时，把 `frontend_build/mneme_frontend/.env.production.local` 配成：
-
-```env
-VITE_API_BASE_URL=http://124.223.14.145:8000
-VITE_API_PREFIX=
-VITE_USE_MOCKS=false
+```bash
+cd /opt/reminder
+ENABLE_NGINX_SYNC=0 bash upgrade.sh
 ```
 
-这样前端打包后，浏览器会直接请求：
+`deploy/scripts/update_server.sh` 现在只是兼容入口，本质上会转到根目录 `upgrade.sh`。
 
-```text
-http://124.223.14.145:8000/...
-```
-
-这种双机部署下，前端服务器的 Nginx 只负责托管静态文件，不需要反向代理 `/api`。
-可直接使用：
-
-- `deploy/nginx/mneme.frontend-static.conf`
-
-阿里云控制台要放行端口：
-
-- `80/tcp`：给用户访问前端页面
-- `443/tcp`：如果后面你要上 HTTPS
-
-### 你现在这套双机部署的关键点
-
-- 不是阿里云服务器去请求腾讯云服务器，而是用户浏览器加载前端后，再去请求腾讯云后端
-- 所以后端必须对公网可访问，不能只绑定 `127.0.0.1`
-- 跨域放行的是前端页面的来源 `http://8.147.57.104`
-- 如果前端走 HTTPS，而后端还是 HTTP，浏览器后面可能会拦 mixed content；长期建议两边都挂域名并上 HTTPS
-
-## 11. 常见排查
+## 9. 常用排查命令
 
 看容器状态：
 
@@ -272,20 +171,39 @@ docker compose ps
 看应用日志：
 
 ```bash
-docker compose logs app --tail=200
-docker compose logs worker --tail=200
-docker compose logs migrate --tail=200
+docker compose logs -f app
+docker compose logs -f worker
+docker compose logs -f migrate
 ```
 
-看 Nginx 日志：
+看 Nginx 错误日志：
 
 ```bash
 sudo tail -f /var/log/nginx/error.log
 ```
 
-如果 `git pull` 失败，优先检查：
+如果升级失败，优先检查：
 
-- 服务器 SSH key 是否加到了 GitHub
-- 服务器当前目录是不是正确的仓库目录
-- 远端分支是不是 `master`
-- 本地是否把部署所需文件都提交到了 GitHub
+- `git remote -v` 是否正确
+- 服务器 SSH key 是否有拉取权限
+- 当前目录是不是仓库根目录
+- `.env` 是否还在
+- `docker compose ps` 里是不是有未健康的基础服务
+
+## 10. 直接公网暴露的情况
+
+如果你不准备使用 Nginx，也可以把：
+
+```env
+APP_HOST_PORT=8000
+```
+
+这样 `docker compose` 会把应用直接暴露到宿主机公网 `:8000`。
+
+但在正式环境里，还是更建议保留：
+
+```env
+APP_HOST_PORT=127.0.0.1:8000
+```
+
+然后把 TLS、域名和公网流量入口统一交给 Nginx。
