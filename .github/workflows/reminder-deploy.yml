@@ -53,6 +53,35 @@ jobs:
       - frontend-check
       - backend-check
     steps:
+      - name: Validate deploy configuration
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_APP_DIR: ${{ vars.DEPLOY_APP_DIR }}
+        run: |
+          set -euo pipefail
+          missing=()
+
+          [[ -n "${DEPLOY_HOST}" ]] || missing+=("DEPLOY_HOST")
+          [[ -n "${DEPLOY_USER}" ]] || missing+=("DEPLOY_USER")
+          [[ -n "${DEPLOY_SSH_KEY}" ]] || missing+=("DEPLOY_SSH_KEY")
+
+          if (( ${#missing[@]} > 0 )); then
+            echo "::error::Missing required GitHub Actions secrets: ${missing[*]}"
+            echo "::error::Please configure repository secrets first. See github-actions.secrets.example in the repo root."
+            exit 1
+          fi
+
+          if [[ -z "${DEPLOY_APP_DIR}" ]]; then
+            echo "::warning::DEPLOY_APP_DIR is not set. Falling back to /opt/reminder."
+          fi
+
+          if [[ -z "${DEPLOY_PORT}" ]]; then
+            echo "::notice::DEPLOY_PORT is not set. Falling back to 22."
+          fi
+
       - name: Configure SSH
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
