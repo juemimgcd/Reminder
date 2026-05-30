@@ -549,6 +549,14 @@ bash upgrade.sh
 ENABLE_NGINX_SYNC=0 bash upgrade.sh
 ```
 
+如果你希望在代码 push 到 GitHub 后自动完成检查和远程部署，仓库现在也提供了这套文件：
+
+- `.github/workflows/reminder-deploy.yml`
+- `github-actions.deploy.sh`
+- `github-actions.secrets.example`
+
+其中真正的 GitHub Actions 工作流文件必须放在 `.github/workflows/`，根目录则保留了服务器执行脚本和 Secrets / Variables 示例，方便直接修改。
+
 ---
 
 ## 适用场景

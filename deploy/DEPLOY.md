@@ -160,7 +160,43 @@ ENABLE_NGINX_SYNC=0 bash upgrade.sh
 
 `deploy/scripts/update_server.sh` 现在只是兼容入口，本质上会转到根目录 `upgrade.sh`。
 
-## 9. 常用排查命令
+## 9. GitHub Actions 自动部署
+
+如果你不想每次手动 SSH 到服务器执行 `bash upgrade.sh`，也可以开启仓库里的 GitHub Actions 自动部署。
+
+相关文件：
+
+- [github-actions.deploy.sh](/E:/python_files/agentic_rag/github-actions.deploy.sh)
+- [github-actions.secrets.example](/E:/python_files/agentic_rag/github-actions.secrets.example)
+- `.github/workflows/reminder-deploy.yml`
+
+说明：
+
+- 真正的 workflow 文件必须放在 `.github/workflows/`
+- 根目录 `github-actions.deploy.sh` 会在服务器上调用 `upgrade.sh`
+- 根目录 `github-actions.secrets.example` 用来说明 GitHub 仓库需要配置哪些 Secrets 和 Variables
+
+至少需要在 GitHub 仓库里配置这些 Secrets：
+
+- `DEPLOY_HOST`
+- `DEPLOY_PORT`
+- `DEPLOY_USER`
+- `DEPLOY_SSH_KEY`
+
+推荐配置这些 Variables：
+
+- `DEPLOY_APP_DIR=/opt/reminder`
+- `DEPLOY_BRANCH=master`
+- `DEPLOY_ENABLE_NGINX_SYNC=1`
+
+默认行为：
+
+- push 到 `master` 时自动执行
+- 也支持在 GitHub Actions 页面手动触发
+- 先做前端检查和后端源码编译检查
+- 检查通过后再 SSH 到服务器执行部署脚本
+
+## 10. 常用排查命令
 
 看容器状态：
 
@@ -190,7 +226,7 @@ sudo tail -f /var/log/nginx/error.log
 - `.env` 是否还在
 - `docker compose ps` 里是不是有未健康的基础服务
 
-## 10. 直接公网暴露的情况
+## 11. 直接公网暴露的情况
 
 如果你不准备使用 Nginx，也可以把：
 
