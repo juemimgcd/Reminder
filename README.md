@@ -564,6 +564,19 @@ ENABLE_NGINX_SYNC=0 bash upgrade.sh
 
 如果你当前是通过 FinalShell 的用户名 + 密码登录服务器，也可以先直接配置 `DEPLOY_PASSWORD` 跑通，再在后面切换到 SSH key。
 
+另外，`DEPLOY_HOST`、`DEPLOY_USER`、`DEPLOY_PORT` 现在支持两种来源：
+
+- `Repository variables`：推荐
+- `Repository secrets`：也可以
+
+也就是说，真正必须放进 Secrets 的通常只有：
+
+- `DEPLOY_SSH_KEY`
+
+或者密码模式下的：
+
+- `DEPLOY_PASSWORD`
+
 ---
 
 ## 适用场景

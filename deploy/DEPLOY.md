@@ -176,18 +176,20 @@ ENABLE_NGINX_SYNC=0 bash upgrade.sh
 - 根目录 `github-actions.deploy.sh` 会在服务器上调用 `upgrade.sh`
 - 根目录 `github-actions.secrets.example` 用来说明 GitHub 仓库需要配置哪些 Secrets 和 Variables
 
-至少需要在 GitHub 仓库里配置这些 Secrets：
+至少需要在 GitHub 仓库里配置这些认证 Secrets 之一：
 
-- `DEPLOY_HOST`
-- `DEPLOY_PORT`
-- `DEPLOY_USER`
 - `DEPLOY_SSH_KEY` 或 `DEPLOY_PASSWORD`
 
 推荐配置这些 Variables：
 
+- `DEPLOY_HOST=your-server-ip-or-domain`
+- `DEPLOY_PORT=22`
+- `DEPLOY_USER=your-server-user`
 - `DEPLOY_APP_DIR=/opt/reminder`
 - `DEPLOY_BRANCH=master`
 - `DEPLOY_ENABLE_NGINX_SYNC=1`
+
+`DEPLOY_HOST`、`DEPLOY_PORT`、`DEPLOY_USER` 现在既支持放在 Variables，也支持放在 Secrets；更推荐放在 Variables，管理起来更直观。
 
 默认行为：
 

@@ -55,15 +55,21 @@ jobs:
     steps:
       - name: Validate deploy configuration
         env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_HOST_SECRET: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_HOST_VAR: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_PORT_SECRET: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_PORT_VAR: ${{ vars.DEPLOY_PORT }}
+          DEPLOY_USER_SECRET: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_USER_VAR: ${{ vars.DEPLOY_USER }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
           DEPLOY_APP_DIR: ${{ vars.DEPLOY_APP_DIR }}
         run: |
           set -euo pipefail
           missing=()
+          DEPLOY_HOST="${DEPLOY_HOST_SECRET:-${DEPLOY_HOST_VAR:-}}"
+          DEPLOY_PORT="${DEPLOY_PORT_SECRET:-${DEPLOY_PORT_VAR:-}}"
+          DEPLOY_USER="${DEPLOY_USER_SECRET:-${DEPLOY_USER_VAR:-}}"
 
           [[ -n "${DEPLOY_HOST}" ]] || missing+=("DEPLOY_HOST")
           [[ -n "${DEPLOY_USER}" ]] || missing+=("DEPLOY_USER")
@@ -90,13 +96,16 @@ jobs:
 
       - name: Prepare SSH client
         env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_HOST_SECRET: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_HOST_VAR: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_PORT_SECRET: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_PORT_VAR: ${{ vars.DEPLOY_PORT }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
         run: |
           set -euo pipefail
-          DEPLOY_PORT="${DEPLOY_PORT:-22}"
+          DEPLOY_HOST="${DEPLOY_HOST_SECRET:-${DEPLOY_HOST_VAR:-}}"
+          DEPLOY_PORT="${DEPLOY_PORT_SECRET:-${DEPLOY_PORT_VAR:-22}}"
 
           if [[ -n "${DEPLOY_SSH_KEY}" ]]; then
             install -m 700 -d ~/.ssh
@@ -110,9 +119,12 @@ jobs:
 
       - name: Run remote deploy script
         env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_HOST_SECRET: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_HOST_VAR: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_PORT_SECRET: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_PORT_VAR: ${{ vars.DEPLOY_PORT }}
+          DEPLOY_USER_SECRET: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_USER_VAR: ${{ vars.DEPLOY_USER }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
           DEPLOY_APP_DIR: ${{ vars.DEPLOY_APP_DIR }}
@@ -120,7 +132,9 @@ jobs:
           DEPLOY_ENABLE_NGINX_SYNC: ${{ vars.DEPLOY_ENABLE_NGINX_SYNC }}
         run: |
           set -euo pipefail
-          DEPLOY_PORT="${DEPLOY_PORT:-22}"
+          DEPLOY_HOST="${DEPLOY_HOST_SECRET:-${DEPLOY_HOST_VAR:-}}"
+          DEPLOY_PORT="${DEPLOY_PORT_SECRET:-${DEPLOY_PORT_VAR:-22}}"
+          DEPLOY_USER="${DEPLOY_USER_SECRET:-${DEPLOY_USER_VAR:-}}"
           DEPLOY_APP_DIR="${DEPLOY_APP_DIR:-/opt/reminder}"
           DEPLOY_BRANCH="${DEPLOY_BRANCH:-master}"
           DEPLOY_ENABLE_NGINX_SYNC="${DEPLOY_ENABLE_NGINX_SYNC:-1}"
