@@ -557,6 +557,13 @@ ENABLE_NGINX_SYNC=0 bash upgrade.sh
 
 其中真正的 GitHub Actions 工作流文件必须放在 `.github/workflows/`，根目录则保留了服务器执行脚本和 Secrets / Variables 示例，方便直接修改。
 
+这套 workflow 同时支持两种远程登录方式：
+
+- 推荐：`DEPLOY_SSH_KEY`
+- 兼容：`DEPLOY_PASSWORD`
+
+如果你当前是通过 FinalShell 的用户名 + 密码登录服务器，也可以先直接配置 `DEPLOY_PASSWORD` 跑通，再在后面切换到 SSH key。
+
 ---
 
 ## 适用场景

@@ -181,7 +181,7 @@ ENABLE_NGINX_SYNC=0 bash upgrade.sh
 - `DEPLOY_HOST`
 - `DEPLOY_PORT`
 - `DEPLOY_USER`
-- `DEPLOY_SSH_KEY`
+- `DEPLOY_SSH_KEY` 或 `DEPLOY_PASSWORD`
 
 推荐配置这些 Variables：
 
@@ -195,6 +195,14 @@ ENABLE_NGINX_SYNC=0 bash upgrade.sh
 - 也支持在 GitHub Actions 页面手动触发
 - 先做前端检查和后端源码编译检查
 - 检查通过后再 SSH 到服务器执行部署脚本
+
+如果你当前服务器还是 FinalShell 这类“用户名 + 密码”登录方式，也可以先直接配置：
+
+- `DEPLOY_HOST`
+- `DEPLOY_USER`
+- `DEPLOY_PASSWORD`
+
+这时 workflow 会自动切到密码登录模式，不强制要求先准备 SSH key。
 
 ## 10. 常用排查命令
 
