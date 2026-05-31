@@ -6,6 +6,9 @@ on:
       - master
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: reminder-deploy-${{ github.ref }}
   cancel-in-progress: true
@@ -47,11 +50,40 @@ jobs:
       - name: Compile backend sources
         run: python -m compileall app main.py
 
+  deploy-ready:
+    runs-on: ubuntu-latest
+    outputs:
+      enabled: ${{ steps.check.outputs.enabled }}
+    steps:
+      - name: Check deploy configuration
+        id: check
+        env:
+          DEPLOY_HOST_SECRET: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_HOST_VAR: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER_SECRET: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_USER_VAR: ${{ vars.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          DEPLOY_HOST="${DEPLOY_HOST_SECRET:-${DEPLOY_HOST_VAR:-}}"
+          DEPLOY_USER="${DEPLOY_USER_SECRET:-${DEPLOY_USER_VAR:-}}"
+
+          if [[ -z "${DEPLOY_HOST}" || -z "${DEPLOY_USER}" || ( -z "${DEPLOY_SSH_KEY}" && -z "${DEPLOY_PASSWORD}" ) ]]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Deploy job skipped because required deploy configuration is missing."
+            exit 0
+          fi
+
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+
   deploy:
     runs-on: ubuntu-latest
     needs:
       - frontend-check
       - backend-check
+      - deploy-ready
+    if: ${{ needs.deploy-ready.outputs.enabled == 'true' }}
     steps:
       - name: Validate deploy configuration
         env:
