@@ -55,7 +55,7 @@ def enforce_fixed_window_rate_limit(
             window_seconds=window_seconds,
         )
         raise BusinessException(
-            message=f"璇锋眰杩囦簬棰戠箒锛岃绋嶅悗鍐嶈瘯: {bucket}",
+            message=f"too many requests, please try again later: {bucket}",
             code=4290,
             status_code=429,
         )

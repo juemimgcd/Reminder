@@ -82,7 +82,27 @@ type RequestOptions = Omit<RequestInit, "body"> & {
   rawBody?: boolean;
 };
 
+const inflightRequests = new Map<string, Promise<unknown>>();
+
+function resolveRequestKey(path: string, options: RequestOptions) {
+  const method = (options.method ?? "GET").toUpperCase();
+  if (method !== "GET" && method !== "HEAD") {
+    return null;
+  }
+
+  return `${method}:${options.token ?? ""}:${path}`;
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const requestKey = resolveRequestKey(path, options);
+  if (requestKey) {
+    const inflight = inflightRequests.get(requestKey);
+    if (inflight) {
+      return inflight as Promise<T>;
+    }
+  }
+
+  const executor = async () => {
   const headers = new Headers(options.headers);
 
   if (options.token) {
@@ -133,6 +153,19 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   return apiPayload.data;
+  };
+
+  const nextRequest = executor();
+  if (!requestKey) {
+    return nextRequest;
+  }
+
+  inflightRequests.set(requestKey, nextRequest);
+  try {
+    return await nextRequest;
+  } finally {
+    inflightRequests.delete(requestKey);
+  }
 }
 
 export const api = {

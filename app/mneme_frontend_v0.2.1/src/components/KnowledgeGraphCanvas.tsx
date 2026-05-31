@@ -25,6 +25,8 @@ export default function KnowledgeGraphCanvas({
   onSelectNode,
 }: KnowledgeGraphCanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
+  const simulationRef = useRef<d3.Simulation<SimulationGraphNode, undefined> | null>(null);
+  const outerRingRef = useRef<d3.Selection<SVGCircleElement, SimulationGraphNode, SVGGElement, unknown> | null>(null);
 
   const counts = useMemo(() => {
     if (!data) {
@@ -35,12 +37,19 @@ export default function KnowledgeGraphCanvas({
   }, [data]);
 
   useEffect(() => {
-    if (!svgRef.current || !data) {
+    if (!svgRef.current) {
       return;
     }
 
     const svg = d3.select(svgRef.current);
+    simulationRef.current?.stop();
     svg.selectAll("*").remove();
+    outerRingRef.current = null;
+
+    if (!data) {
+      simulationRef.current = null;
+      return;
+    }
 
     const width = svgRef.current.clientWidth || 960;
     const height = svgRef.current.clientHeight || 540;
@@ -146,6 +155,8 @@ export default function KnowledgeGraphCanvas({
       .attr("dx", 16)
       .attr("dy", 4);
 
+    outerRingRef.current = node.select<SVGCircleElement>("circle");
+
     simulation.on("tick", () => {
       link
         .attr("x1", (edge) => (edge.source as SimulationGraphNode).x ?? 0)
@@ -159,10 +170,24 @@ export default function KnowledgeGraphCanvas({
         .attr("y", (datum) => datum.y ?? 0);
     });
 
+    simulationRef.current = simulation;
+
     return () => {
       simulation.stop();
+      simulationRef.current = null;
+      outerRingRef.current = null;
     };
-  }, [data, onSelectNode, selectedNodeId]);
+  }, [data, onSelectNode]);
+
+  useEffect(() => {
+    if (!data || !outerRingRef.current) {
+      return;
+    }
+
+    outerRingRef.current
+      .attr("stroke", (datum) => (datum.id === selectedNodeId ? "#ef4444" : NODE_COLORS[datum.node_type] ?? "#64748b"))
+      .attr("stroke-width", (datum) => (datum.id === selectedNodeId ? 3 : datum.id === data.root_node_id ? 2.6 : 1.8));
+  }, [data, selectedNodeId]);
 
   if (!data) {
     return (

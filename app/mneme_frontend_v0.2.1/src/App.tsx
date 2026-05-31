@@ -17,11 +17,9 @@ import {
   Upload,
   UserRound,
 } from "lucide-react";
-import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
-import ReactMarkdown from "react-markdown";
+import { Suspense, lazy, type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import AuthScreen from "./components/AuthScreen";
-import KnowledgeGraphCanvas from "./components/KnowledgeGraphCanvas";
 import { ApiError, api, API_BASE_URL } from "./lib/api";
 import { cn } from "./lib/utils";
 import type {
@@ -60,6 +58,7 @@ interface BannerState {
 const TOKEN_KEY = "mneme.access_token";
 const SELECTED_KB_KEY = "mneme.selected_kb";
 const ACTIVE_TASK_STATUSES = new Set(["queued", "running", "pending", "created", "retrying"]);
+const VIEW_CACHE_TARGETS = ["graph", "memory", "insights"] as const;
 
 const VIEW_ITEMS: Array<{ id: WorkspaceView; label: string; icon: typeof FolderGit2; hint: string }> = [
   { id: "workspace", label: "Workspace", icon: FolderGit2, hint: "知识库与文档" },
@@ -68,6 +67,9 @@ const VIEW_ITEMS: Array<{ id: WorkspaceView; label: string; icon: typeof FolderG
   { id: "memory", label: "Memory", icon: Database, hint: "记忆库与治理" },
   { id: "insights", label: "Insights", icon: Brain, hint: "画像、成长、分析" },
 ];
+
+const KnowledgeGraphCanvas = lazy(() => import("./components/KnowledgeGraphCanvas"));
+const ReactMarkdown = lazy(() => import("react-markdown"));
 
 function formatDate(value?: string | null) {
   if (!value) {
@@ -141,8 +143,13 @@ function CardSection({
   compact?: boolean;
 }) {
   return (
-    <section className="border border-slate-200 bg-white">
-      <div className={cn("flex items-start justify-between gap-4 border-b border-slate-200", compact ? "px-4 py-3" : "px-5 py-4")}>
+    <section className="overflow-hidden rounded-lg border border-slate-200/80 bg-white/[0.92] shadow-[0_20px_50px_rgba(15,23,42,0.05)] backdrop-blur">
+      <div
+        className={cn(
+          "flex items-start justify-between gap-4 border-b border-slate-200/70 bg-slate-50/70",
+          compact ? "px-4 py-3.5" : "px-5 py-4",
+        )}
+      >
         <div>
           <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
           {description ? <p className="mt-1 text-xs leading-6 text-slate-500">{description}</p> : null}
@@ -156,7 +163,7 @@ function CardSection({
 
 function MetricCard({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
   return (
-    <div className="border border-slate-200 bg-slate-50 px-4 py-4">
+    <div className="rounded-lg border border-slate-200/80 bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_100%)] px-4 py-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
       <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{label}</div>
       <div className="mt-3 text-2xl font-semibold text-slate-950">{value}</div>
       {hint ? <div className="mt-2 text-xs text-slate-500">{hint}</div> : null}
@@ -166,7 +173,12 @@ function MetricCard({ label, value, hint }: { label: string; value: string | num
 
 function StatusPill({ text }: { text: string }) {
   return (
-    <span className={cn("inline-flex items-center border px-2 py-1 text-[10px] uppercase tracking-[0.18em]", statusClass(text))}>
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em]",
+        statusClass(text),
+      )}
+    >
       {text}
     </span>
   );
@@ -174,9 +186,20 @@ function StatusPill({ text }: { text: string }) {
 
 function EmptyState({ title, text }: { title: string; text: string }) {
   return (
-    <div className="border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center">
+    <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50/80 px-6 py-10 text-center">
       <div className="text-sm font-medium text-slate-700">{title}</div>
-      <div className="mt-2 text-xs leading-6 text-slate-500">{text}</div>
+      <div className="mx-auto mt-2 max-w-xl text-xs leading-6 text-slate-500">{text}</div>
+    </div>
+  );
+}
+
+function PanelSkeleton({ text = "正在加载面板" }: { text?: string }) {
+  return (
+    <div className="flex min-h-[220px] items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50/80 text-sm text-slate-500">
+      <div className="inline-flex items-center gap-3">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        {text}
+      </div>
     </div>
   );
 }
@@ -247,6 +270,12 @@ function App() {
     () => Object.values(taskMap).filter((task) => ACTIVE_TASK_STATUSES.has(task.status.toLowerCase())).map((task) => task.id),
     [taskMap],
   );
+  const indexedDocumentCount = useMemo(
+    () => documents.filter((item) => item.status.toLowerCase() === "indexed").length,
+    [documents],
+  );
+  const currentViewItem = useMemo(() => VIEW_ITEMS.find((item) => item.id === view) ?? VIEW_ITEMS[0], [view]);
+  const CurrentViewIcon = currentViewItem.icon;
 
   const documentTaskMap = useMemo(() => {
     const entries: Record<string, TaskRecordData> = {};
@@ -255,6 +284,31 @@ function App() {
     });
     return entries;
   }, [taskMap]);
+
+  const graphLoadKey = useMemo(
+    () =>
+      [
+        token || "-",
+        graphScope,
+        selectedKnowledgeBaseId || "-",
+        selectedDocumentId || "-",
+        graphIncludeMemory ? "memory" : "no-memory",
+        graphIncludeRelationships ? "relationships" : "no-relationships",
+      ].join("|"),
+    [graphIncludeMemory, graphIncludeRelationships, graphScope, selectedDocumentId, selectedKnowledgeBaseId, token],
+  );
+  const memoryLoadKey = useMemo(
+    () => [token || "-", selectedKnowledgeBaseId || "-", selectedDocumentId || "-"].join("|"),
+    [selectedDocumentId, selectedKnowledgeBaseId, token],
+  );
+  const insightsLoadKey = useMemo(
+    () => [token || "-", selectedKnowledgeBaseId || "-", recentDays].join("|"),
+    [recentDays, selectedKnowledgeBaseId, token],
+  );
+
+  const graphLoadKeyRef = useRef("");
+  const memoryLoadKeyRef = useRef("");
+  const insightsLoadKeyRef = useRef("");
 
   const setBusy = useCallback((key: string, next: boolean) => {
     setBusyKeys((current) => ({ ...current, [key]: next }));
@@ -266,8 +320,21 @@ function App() {
     setBanner({ tone, text });
   }, []);
 
+  const invalidateViewCache = useCallback((targets: Array<(typeof VIEW_CACHE_TARGETS)[number]> = [...VIEW_CACHE_TARGETS]) => {
+    if (targets.includes("graph")) {
+      graphLoadKeyRef.current = "";
+    }
+    if (targets.includes("memory")) {
+      memoryLoadKeyRef.current = "";
+    }
+    if (targets.includes("insights")) {
+      insightsLoadKeyRef.current = "";
+    }
+  }, []);
+
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
+    invalidateViewCache();
     setToken("");
     setAuthStatus("guest");
     setUser(null);
@@ -286,7 +353,7 @@ function App() {
     setGrowth(null);
     setAnalytics(null);
     setAdvice(null);
-  }, []);
+  }, [invalidateViewCache]);
 
   const handleRequestError = useCallback(
     (error: unknown, fallback: string) => {
@@ -335,7 +402,6 @@ function App() {
 
   const loadSession = useCallback(
     async (nextToken: string) => {
-      setAuthStatus("checking");
       try {
         const currentUser = await api.me(nextToken);
         const knowledgeBaseList = await api.listKnowledgeBases(currentUser.id, nextToken);
@@ -350,31 +416,30 @@ function App() {
         setKnowledgeBases(items);
         setSelectedKnowledgeBaseId(resolvedKnowledgeBaseId);
 
-        if (resolvedKnowledgeBaseId) {
-          await refreshDocuments(nextToken, currentUser, resolvedKnowledgeBaseId);
-        } else {
+        if (!resolvedKnowledgeBaseId) {
           setDocuments([]);
           setSelectedDocumentId("");
         }
 
-        setToken(nextToken);
-        localStorage.setItem(TOKEN_KEY, nextToken);
         setAuthStatus("authed");
-        await refreshOperationalHealth();
       } catch (error) {
         logout();
         handleRequestError(error, "加载会话失败。");
       }
     },
-    [handleRequestError, logout, refreshDocuments, refreshOperationalHealth],
+    [handleRequestError, logout],
   );
 
   useEffect(() => {
+    if (authStatus !== "authed") {
+      return;
+    }
     void refreshOperationalHealth();
-  }, [refreshOperationalHealth]);
+  }, [authStatus, refreshOperationalHealth]);
 
   useEffect(() => {
     if (token) {
+      setAuthStatus("checking");
       void loadSession(token);
     }
   }, [loadSession, token]);
@@ -416,6 +481,7 @@ function App() {
         if (user && selectedKnowledgeBaseId) {
           const finished = updates.some((task) => !ACTIVE_TASK_STATUSES.has(task.status.toLowerCase()));
           if (finished) {
+            invalidateViewCache();
             await refreshDocuments(token, user, selectedKnowledgeBaseId);
           }
         }
@@ -432,7 +498,7 @@ function App() {
     return () => {
       window.clearInterval(timer);
     };
-  }, [activeTaskIds, handleRequestError, refreshDocuments, selectedKnowledgeBaseId, token, user]);
+  }, [activeTaskIds, handleRequestError, invalidateViewCache, refreshDocuments, selectedKnowledgeBaseId, token, user]);
 
   useEffect(() => {
     if (!graphData) {
@@ -448,8 +514,11 @@ function App() {
     setSelectedGraphNode(node);
   }, [graphData, selectedGraphNode?.id]);
 
-  const loadGraph = useCallback(async () => {
+  const loadGraph = useCallback(async (options?: { force?: boolean }) => {
     if (!token) {
+      return;
+    }
+    if (!options?.force && graphData && graphLoadKeyRef.current === graphLoadKey) {
       return;
     }
 
@@ -478,6 +547,7 @@ function App() {
               : null;
 
       setGraphData(nextGraph);
+      graphLoadKeyRef.current = graphLoadKey;
     } catch (error) {
       handleRequestError(error, "图谱加载失败。");
     } finally {
@@ -486,6 +556,8 @@ function App() {
   }, [
     graphIncludeMemory,
     graphIncludeRelationships,
+    graphLoadKey,
+    graphData,
     graphScope,
     handleRequestError,
     selectedDocumentId,
@@ -494,8 +566,11 @@ function App() {
     setBusy,
   ]);
 
-  const loadMemoryView = useCallback(async () => {
+  const loadMemoryView = useCallback(async (options?: { force?: boolean }) => {
     if (!token || !selectedKnowledgeBaseId) {
+      return;
+    }
+    if (!options?.force && memoryLibrary && memoryGovernance && memoryLoadKeyRef.current === memoryLoadKey) {
       return;
     }
 
@@ -509,15 +584,19 @@ function App() {
       setMemoryLibrary(libraryData);
       setMemoryGovernance(governanceData);
       setDocumentMemoryLibrary(docLibrary);
+      memoryLoadKeyRef.current = memoryLoadKey;
     } catch (error) {
       handleRequestError(error, "记忆视图加载失败。");
     } finally {
       setBusy("memory", false);
     }
-  }, [handleRequestError, selectedDocumentId, selectedKnowledgeBaseId, token, setBusy]);
+  }, [handleRequestError, memoryGovernance, memoryLibrary, memoryLoadKey, selectedDocumentId, selectedKnowledgeBaseId, token, setBusy]);
 
-  const loadInsightsView = useCallback(async () => {
+  const loadInsightsView = useCallback(async (options?: { force?: boolean }) => {
     if (!token || !selectedKnowledgeBaseId) {
+      return;
+    }
+    if (!options?.force && profile && profileEvidence && growth && analytics && insightsLoadKeyRef.current === insightsLoadKey) {
       return;
     }
 
@@ -533,12 +612,13 @@ function App() {
       setProfileEvidence(evidenceData);
       setGrowth(growthData);
       setAnalytics(analyticsData);
+      insightsLoadKeyRef.current = insightsLoadKey;
     } catch (error) {
       handleRequestError(error, "洞察视图加载失败。");
     } finally {
       setBusy("insights", false);
     }
-  }, [handleRequestError, recentDays, selectedKnowledgeBaseId, token, setBusy]);
+  }, [analytics, growth, handleRequestError, insightsLoadKey, profile, profileEvidence, recentDays, selectedKnowledgeBaseId, token, setBusy]);
 
   useEffect(() => {
     if (authStatus !== "authed") {
@@ -573,15 +653,18 @@ function App() {
           password: payload.password,
         });
 
+        invalidateViewCache();
+        setAuthStatus("checking");
+        localStorage.setItem(TOKEN_KEY, auth.access_token);
+        setToken(auth.access_token);
         showBanner("success", payload.mode === "register" ? "注册成功，已进入工作台。" : "登录成功。");
-        await loadSession(auth.access_token);
       } catch (error) {
         setAuthError(getErrorMessage(error, payload.mode === "register" ? "注册失败。" : "登录失败。"));
       } finally {
         setAuthLoading(false);
       }
     },
-    [loadSession, showBanner],
+    [invalidateViewCache, showBanner],
   );
 
   const handleCreateKnowledgeBase = async (event: FormEvent<HTMLFormElement>) => {
@@ -596,6 +679,7 @@ function App() {
         name: knowledgeBaseForm.name.trim(),
         description: knowledgeBaseForm.description.trim() || null,
       });
+      invalidateViewCache();
       const nextKnowledgeBases = [...knowledgeBases, created].sort((left, right) => left.created_at.localeCompare(right.created_at));
       setKnowledgeBases(nextKnowledgeBases);
       setSelectedKnowledgeBaseId(created.id);
@@ -619,6 +703,7 @@ function App() {
     setBusy(`delete-kb-${knowledgeBase.id}`, true);
     try {
       await api.deleteKnowledgeBase(user.id, knowledgeBase.id, token);
+      invalidateViewCache();
       const nextKnowledgeBases = knowledgeBases.filter((item) => item.id !== knowledgeBase.id);
       setKnowledgeBases(nextKnowledgeBases);
       const fallbackId = nextKnowledgeBases[0]?.id ?? "";
@@ -643,6 +728,7 @@ function App() {
         userId: user.id,
         knowledgeBaseId: selectedKnowledgeBaseId,
       });
+      invalidateViewCache();
       setUploadFile(null);
       await refreshDocuments(token, user, selectedKnowledgeBaseId);
       showBanner("success", `文档 ${uploadFile.name} 上传成功。`);
@@ -661,6 +747,7 @@ function App() {
     setBusy(`index-${documentId}`, true);
     try {
       const task = await api.indexDocument(documentId, token);
+      invalidateViewCache();
       setTaskMap((current) => ({
         ...current,
         [task.task_id]: {
@@ -698,6 +785,7 @@ function App() {
     setBusy(`delete-doc-${document.id}`, true);
     try {
       await api.deleteDocument(document.id, token);
+      invalidateViewCache();
       await refreshDocuments(token, user, selectedKnowledgeBaseId);
       showBanner("success", `文档 ${document.file_name} 已删除。`);
     } catch (error) {
@@ -716,6 +804,7 @@ function App() {
     try {
       const result = await api.cancelTask(taskId, token);
       const task = await api.getTask(taskId, token);
+      invalidateViewCache();
       setTaskMap((current) => ({ ...current, [task.id]: task }));
       showBanner("info", result.message);
     } catch (error) {
@@ -734,6 +823,7 @@ function App() {
     try {
       const result = await api.retryTask(taskId, token);
       const task = await api.getTask(taskId, token);
+      invalidateViewCache();
       setTaskMap((current) => ({ ...current, [task.id]: task }));
       showBanner("success", result.message);
     } catch (error) {
@@ -817,8 +907,9 @@ function App() {
             ? await api.rebuildKnowledgeBaseGraph(token, selectedKnowledgeBaseId)
             : null;
       setGraphRebuildResult(result);
+      invalidateViewCache(["graph"]);
       showBanner("success", "图投影回填完成。");
-      await loadGraph();
+      await loadGraph({ force: true });
     } catch (error) {
       handleRequestError(error, "图投影回填失败。");
     } finally {
@@ -835,8 +926,9 @@ function App() {
     try {
       const result = await api.rebuildMemory(token, selectedKnowledgeBaseId);
       setMemoryRebuildResult(result);
+      invalidateViewCache(["memory", "insights", "graph"]);
       showBanner("success", "记忆库重建完成。");
-      await loadMemoryView();
+      await loadMemoryView({ force: true });
     } catch (error) {
       handleRequestError(error, "记忆库重建失败。");
     } finally {
@@ -1248,7 +1340,7 @@ function App() {
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={() => void loadGraph()}
+                onClick={() => void loadGraph({ force: true })}
                 disabled={isBusy("graph")}
                 className="inline-flex items-center gap-2 border border-slate-300 px-3 py-2 text-xs text-slate-700 transition hover:border-slate-950"
               >
@@ -1351,11 +1443,13 @@ function App() {
             </div>
 
             <div className="h-[540px] min-h-[540px]">
-              <KnowledgeGraphCanvas
-                data={graphData}
-                selectedNodeId={selectedGraphNode?.id ?? null}
-                onSelectNode={setSelectedGraphNode}
-              />
+              <Suspense fallback={<PanelSkeleton text="正在加载图谱组件" />}>
+                <KnowledgeGraphCanvas
+                  data={graphData}
+                  selectedNodeId={selectedGraphNode?.id ?? null}
+                  onSelectNode={setSelectedGraphNode}
+                />
+              </Suspense>
             </div>
           </div>
         </CardSection>
@@ -1433,7 +1527,7 @@ function App() {
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => void loadMemoryView()}
+                onClick={() => void loadMemoryView({ force: true })}
                 disabled={isBusy("memory")}
                 className="inline-flex items-center gap-2 border border-slate-300 px-3 py-2 text-xs text-slate-700 transition hover:border-slate-950"
               >
@@ -1598,7 +1692,7 @@ function App() {
               </label>
               <button
                 type="button"
-                onClick={() => void loadInsightsView()}
+                onClick={() => void loadInsightsView({ force: true })}
                 disabled={isBusy("insights")}
                 className="inline-flex items-center gap-2 bg-slate-950 px-3 py-2 text-xs text-white transition hover:bg-slate-800"
               >
@@ -1799,9 +1893,11 @@ function App() {
 
               <CardSection title="Analytics Markdown" compact>
                 {analytics ? (
-                  <div className="prose prose-sm max-w-none text-slate-700 prose-headings:font-serif prose-headings:text-slate-900 prose-p:text-slate-700 prose-strong:text-slate-900 prose-li:text-slate-700">
-                    <ReactMarkdown>{analytics.markdown}</ReactMarkdown>
-                  </div>
+                  <Suspense fallback={<PanelSkeleton text="正在加载 Markdown 渲染器" />}>
+                    <div className="prose prose-sm max-w-none text-slate-700 prose-headings:font-serif prose-headings:text-slate-900 prose-p:text-slate-700 prose-strong:text-slate-900 prose-li:text-slate-700">
+                      <ReactMarkdown>{analytics.markdown}</ReactMarkdown>
+                    </div>
+                  </Suspense>
                 ) : (
                   <EmptyState title="还没有分析报表" text="这里会直接渲染后端返回的 Markdown 报告。" />
                 )}
@@ -1816,8 +1912,8 @@ function App() {
   if (authStatus !== "authed") {
     if (authStatus === "checking" && token) {
       return (
-        <div className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-100">
-          <div className="inline-flex items-center gap-3 text-sm">
+        <div className="flex min-h-screen items-center justify-center bg-[linear-gradient(180deg,#0f172a_0%,#111827_100%)] text-slate-100">
+          <div className="inline-flex items-center gap-3 rounded-lg border border-white/10 bg-white/5 px-5 py-4 text-sm shadow-[0_24px_80px_rgba(15,23,42,0.32)]">
             <Loader2 className="h-5 w-5 animate-spin" />
             正在恢复会话并加载工作台
           </div>
@@ -1825,26 +1921,35 @@ function App() {
       );
     }
 
-    return <AuthScreen loading={authLoading} error={authError} onSubmit={handleAuthSubmit} />;
+    return <AuthScreen apiBaseUrl={API_BASE_URL} loading={authLoading} error={authError} onSubmit={handleAuthSubmit} />;
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900">
-      <div className="grid min-h-screen xl:grid-cols-[280px_1fr]">
-        <aside className="flex flex-col border-r border-slate-200 bg-slate-950 text-slate-100">
-          <div className="border-b border-white/10 px-6 py-6">
-            <div className="inline-flex h-11 w-11 items-center justify-center border border-white/15 bg-white/5 text-lg font-semibold">M</div>
-            <div className="mt-4">
-              <div className="font-serif text-2xl">Mneme</div>
-              <div className="mt-1 text-xs uppercase tracking-[0.2em] text-slate-400">Agentic RAG Console</div>
+    <div className="min-h-screen bg-[linear-gradient(180deg,#fafaf7_0%,#f1f4f8_100%)] text-slate-900">
+      <div className="grid min-h-screen xl:grid-cols-[300px_minmax(0,1fr)]">
+        <aside className="relative flex flex-col overflow-hidden border-r border-slate-200/60 bg-slate-950 text-slate-100">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(96,165,250,0.14),transparent_30%),radial-gradient(circle_at_86%_18%,rgba(45,212,191,0.12),transparent_24%)]" />
+
+          <div className="relative border-b border-white/10 px-6 py-6">
+            <div className="inline-flex h-12 w-12 items-center justify-center rounded-lg border border-white/15 bg-white/5 text-lg font-semibold shadow-[0_16px_40px_rgba(15,23,42,0.3)]">
+              M
             </div>
-            <div className="mt-5 space-y-2 text-xs leading-6 text-slate-400">
-              <div>API {API_BASE_URL}</div>
-              <div>User {user?.display_name || user?.username}</div>
+            <div className="mt-4">
+              <div className="font-serif text-[2rem] leading-none">Mneme</div>
+              <div className="mt-2 text-xs uppercase tracking-[0.2em] text-slate-400">Agentic RAG Console</div>
+              <p className="mt-4 max-w-[220px] text-xs leading-6 text-slate-400">
+                用同一个工作台管理知识库、图谱、记忆和洞察视图。
+              </p>
+            </div>
+            <div className="mt-5 grid gap-2 text-xs leading-6 text-slate-400 sm:grid-cols-2 xl:grid-cols-1">
+              <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">API {API_BASE_URL}</div>
+              <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+                User {user?.display_name || user?.username}
+              </div>
             </div>
           </div>
 
-          <div className="space-y-8 overflow-y-auto px-4 py-5">
+          <div className="relative space-y-8 overflow-y-auto px-4 py-5">
             <nav className="space-y-1">
               {VIEW_ITEMS.map((item) => (
                 <button
@@ -1852,9 +1957,9 @@ function App() {
                   type="button"
                   onClick={() => setView(item.id)}
                   className={cn(
-                    "flex w-full items-center gap-3 border px-4 py-3 text-left transition",
+                    "flex w-full items-center gap-3 rounded-lg border px-4 py-3.5 text-left transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky-200/20",
                     view === item.id
-                      ? "border-white/20 bg-white/10 text-white"
+                      ? "border-white/20 bg-white/10 text-white shadow-[0_16px_36px_rgba(15,23,42,0.18)]"
                       : "border-transparent text-slate-300 hover:border-white/10 hover:bg-white/5",
                   )}
                 >
@@ -1873,23 +1978,23 @@ function App() {
                 <span className="text-xs text-slate-500">{knowledgeBases.length}</span>
               </div>
 
-              <form className="space-y-2 border border-white/10 bg-white/5 p-3" onSubmit={handleCreateKnowledgeBase}>
+              <form className="space-y-2 rounded-lg border border-white/10 bg-white/5 p-3" onSubmit={handleCreateKnowledgeBase}>
                 <input
                   value={knowledgeBaseForm.name}
                   onChange={(event) => setKnowledgeBaseForm((current) => ({ ...current, name: event.target.value }))}
-                  className="h-10 w-full border border-white/10 bg-slate-950 px-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-white/30"
+                  className="h-10 w-full rounded-md border border-white/10 bg-slate-950 px-3 text-sm text-white outline-none placeholder:text-slate-500 transition focus:border-sky-300/50"
                   placeholder="新知识库名称"
                 />
                 <input
                   value={knowledgeBaseForm.description}
                   onChange={(event) => setKnowledgeBaseForm((current) => ({ ...current, description: event.target.value }))}
-                  className="h-10 w-full border border-white/10 bg-slate-950 px-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-white/30"
+                  className="h-10 w-full rounded-md border border-white/10 bg-slate-950 px-3 text-sm text-white outline-none placeholder:text-slate-500 transition focus:border-sky-300/50"
                   placeholder="描述，可选"
                 />
                 <button
                   type="submit"
                   disabled={isBusy("create-kb")}
-                  className="inline-flex h-10 w-full items-center justify-center gap-2 border border-white/10 bg-white/10 text-sm text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-white/10 bg-white/10 text-sm text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isBusy("create-kb") ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                   创建知识库
@@ -1901,10 +2006,10 @@ function App() {
                   <div
                     key={knowledgeBase.id}
                     className={cn(
-                      "border px-3 py-3",
+                      "rounded-lg border px-3 py-3 transition",
                       selectedKnowledgeBaseId === knowledgeBase.id
-                        ? "border-white/20 bg-white/10"
-                        : "border-white/10 bg-white/5",
+                        ? "border-white/20 bg-white/10 shadow-[0_16px_36px_rgba(15,23,42,0.18)]"
+                        : "border-white/10 bg-white/5 hover:border-white/15 hover:bg-white/[0.07]",
                     )}
                   >
                     <button
@@ -1940,7 +2045,7 @@ function App() {
               </div>
             </section>
 
-            <section className="space-y-3 border border-white/10 bg-white/5 p-4 text-xs leading-6 text-slate-300">
+            <section className="space-y-3 rounded-lg border border-white/10 bg-white/5 p-4 text-xs leading-6 text-slate-300">
               <div className="flex items-center gap-2 font-medium text-white">
                 <ShieldCheck className="h-4 w-4" />
                 Runtime
@@ -1960,8 +2065,8 @@ function App() {
             </section>
           </div>
 
-          <div className="mt-auto border-t border-white/10 px-4 py-4">
-            <div className="flex items-center gap-3">
+          <div className="relative mt-auto border-t border-white/10 px-4 py-4">
+            <div className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10">
                 <UserRound className="h-5 w-5" />
               </div>
@@ -1981,47 +2086,68 @@ function App() {
         </aside>
 
         <main className="flex min-h-screen flex-col">
-          <header className="border-b border-slate-200 bg-white px-6 py-5">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-              <div>
-                <div className="text-[11px] uppercase tracking-[0.2em] text-slate-500">{VIEW_ITEMS.find((item) => item.id === view)?.label}</div>
-                <h1 className="mt-2 font-serif text-3xl text-slate-950">
-                  {selectedKnowledgeBase?.name || "Select a knowledge base"}
-                </h1>
-                <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-500">
-                  把后端已经具备的认证、文档、图谱、记忆和洞察能力集中到一个工作台里。当前页面直接使用真实接口，不再是静态原型。
-                </p>
+          <header className="border-b border-slate-200/70 bg-white/70 backdrop-blur">
+            <div className="mx-auto flex w-full max-w-[1680px] flex-col gap-6 px-4 py-5 sm:px-6 lg:px-8">
+              <div className="flex flex-col gap-5 2xl:flex-row 2xl:items-end 2xl:justify-between">
+                <div className="max-w-3xl">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-slate-500 shadow-sm">
+                    <CurrentViewIcon className="h-3.5 w-3.5" />
+                    {currentViewItem.label}
+                  </div>
+                  <h1 className="mt-4 font-serif text-3xl text-slate-950 sm:text-4xl">
+                    {selectedKnowledgeBase?.name || "选择一个知识库开始"}
+                  </h1>
+                  <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-500">
+                    围绕知识库的采集、检索、图谱和洞察，把后端已经具备的认证、任务、GraphRAG 和分析能力收束到一个可操作的工作台里。
+                  </p>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="min-w-[156px] rounded-lg border border-slate-200/80 bg-white/90 px-4 py-3 shadow-[0_16px_40px_rgba(15,23,42,0.04)]">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Knowledge Bases</div>
+                    <div className="mt-2 text-2xl font-semibold text-slate-950">{knowledgeBases.length}</div>
+                    <div className="mt-1 text-xs text-slate-500">{user?.display_name || user?.username}</div>
+                  </div>
+                  <div className="min-w-[156px] rounded-lg border border-slate-200/80 bg-white/90 px-4 py-3 shadow-[0_16px_40px_rgba(15,23,42,0.04)]">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Documents</div>
+                    <div className="mt-2 text-2xl font-semibold text-slate-950">{documents.length}</div>
+                    <div className="mt-1 text-xs text-slate-500">{indexedDocumentCount} 已完成索引</div>
+                  </div>
+                  <div className="min-w-[156px] rounded-lg border border-slate-200/80 bg-white/90 px-4 py-3 shadow-[0_16px_40px_rgba(15,23,42,0.04)]">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Active Context</div>
+                    <div className="mt-2 text-2xl font-semibold text-slate-950">{activeTaskIds.length}</div>
+                    <div className="mt-1 truncate text-xs text-slate-500">{selectedDocument?.file_name || "未选中文档"}</div>
+                  </div>
+                </div>
               </div>
-              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
-                <div className="border border-slate-200 px-3 py-2">KB {knowledgeBases.length}</div>
-                <div className="border border-slate-200 px-3 py-2">Docs {documents.length}</div>
-                <div className="border border-slate-200 px-3 py-2">Selected {selectedDocument?.file_name || "None"}</div>
-              </div>
+
+              {banner ? (
+                <div
+                  className={cn(
+                    "flex items-start gap-3 rounded-lg border px-4 py-3 text-sm shadow-sm",
+                    banner.tone === "success" && "border-emerald-200 bg-emerald-50 text-emerald-700",
+                    banner.tone === "error" && "border-rose-200 bg-rose-50 text-rose-700",
+                    banner.tone === "info" && "border-sky-200 bg-sky-50 text-sky-700",
+                  )}
+                >
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <div className="flex-1">{banner.text}</div>
+                  <button type="button" onClick={() => setBanner(null)} className="text-current/70 transition hover:text-current">
+                    关闭
+                  </button>
+                </div>
+              ) : null}
             </div>
-            {banner ? (
-              <div
-                className={cn(
-                  "mt-4 flex items-start gap-3 border px-4 py-3 text-sm",
-                  banner.tone === "success" && "border-emerald-200 bg-emerald-50 text-emerald-700",
-                  banner.tone === "error" && "border-rose-200 bg-rose-50 text-rose-700",
-                  banner.tone === "info" && "border-sky-200 bg-sky-50 text-sky-700",
-                )}
-              >
-                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                <div className="flex-1">{banner.text}</div>
-                <button type="button" onClick={() => setBanner(null)} className="text-current/70 transition hover:text-current">
-                  关闭
-                </button>
-              </div>
-            ) : null}
           </header>
 
-          <div className="flex-1 overflow-y-auto px-6 py-6">
-            {view === "workspace" && renderWorkspace()}
-            {view === "chat" && renderChat()}
-            {view === "graph" && renderGraph()}
-            {view === "memory" && renderMemory()}
-            {view === "insights" && renderInsights()}
+          <div className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
+            <div className="mx-auto w-full max-w-[1680px]">
+              {view === "workspace" && renderWorkspace()}
+              {view === "chat" && renderChat()}
+              {view === "graph" && renderGraph()}
+              {view === "memory" && renderMemory()}
+              {view === "insights" && renderInsights()}
+            </div>
           </div>
         </main>
       </div>
