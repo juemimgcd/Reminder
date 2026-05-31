@@ -157,7 +157,7 @@ jobs:
           DEPLOY_BRANCH="${DEPLOY_BRANCH:-master}"
           DEPLOY_ENABLE_NGINX_SYNC="${DEPLOY_ENABLE_NGINX_SYNC:-1}"
 
-          REMOTE_CMD="APP_DIR='${DEPLOY_APP_DIR}' BRANCH='${DEPLOY_BRANCH}' ENABLE_NGINX_SYNC='${DEPLOY_ENABLE_NGINX_SYNC}' bash '${DEPLOY_APP_DIR}/github-actions.deploy.sh'"
+          REMOTE_CMD="cd '${DEPLOY_APP_DIR}' && BRANCH='${DEPLOY_BRANCH}' ENABLE_NGINX_SYNC='${DEPLOY_ENABLE_NGINX_SYNC}' bash './upgrade.sh'"
 
           if [[ -n "${DEPLOY_SSH_KEY}" ]]; then
             ssh -i ~/.ssh/reminder_deploy_key -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" "${REMOTE_CMD}"
