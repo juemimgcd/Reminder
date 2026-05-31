@@ -6,6 +6,9 @@ on:
       - master
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: reminder-deploy-${{ github.ref }}
   cancel-in-progress: true
