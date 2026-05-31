@@ -52,6 +52,7 @@ jobs:
     needs:
       - frontend-check
       - backend-check
+    if: ${{ (secrets.DEPLOY_HOST != '' || vars.DEPLOY_HOST != '') && (secrets.DEPLOY_USER != '' || vars.DEPLOY_USER != '') && (secrets.DEPLOY_SSH_KEY != '' || secrets.DEPLOY_PASSWORD != '') }}
     steps:
       - name: Validate deploy configuration
         env:
