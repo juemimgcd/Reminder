@@ -71,12 +71,30 @@ jobs:
           DEPLOY_PORT="${DEPLOY_PORT_SECRET:-${DEPLOY_PORT_VAR:-}}"
           DEPLOY_USER="${DEPLOY_USER_SECRET:-${DEPLOY_USER_VAR:-}}"
 
+          if [[ -n "${DEPLOY_HOST_SECRET}" ]]; then
+            echo "::notice::DEPLOY_HOST loaded from repository secret."
+          elif [[ -n "${DEPLOY_HOST_VAR}" ]]; then
+            echo "::notice::DEPLOY_HOST loaded from repository variable."
+          fi
+
+          if [[ -n "${DEPLOY_USER_SECRET}" ]]; then
+            echo "::notice::DEPLOY_USER loaded from repository secret."
+          elif [[ -n "${DEPLOY_USER_VAR}" ]]; then
+            echo "::notice::DEPLOY_USER loaded from repository variable."
+          fi
+
+          if [[ -n "${DEPLOY_PORT_SECRET}" ]]; then
+            echo "::notice::DEPLOY_PORT loaded from repository secret."
+          elif [[ -n "${DEPLOY_PORT_VAR}" ]]; then
+            echo "::notice::DEPLOY_PORT loaded from repository variable."
+          fi
+
           [[ -n "${DEPLOY_HOST}" ]] || missing+=("DEPLOY_HOST")
           [[ -n "${DEPLOY_USER}" ]] || missing+=("DEPLOY_USER")
 
           if (( ${#missing[@]} > 0 )); then
-            echo "::error::Missing required GitHub Actions secrets: ${missing[*]}"
-            echo "::error::Please configure repository secrets first. See github-actions.secrets.example in the repo root."
+            echo "::error::Missing required GitHub Actions deploy configuration: ${missing[*]}"
+            echo "::error::Set them in Repository variables or Repository secrets. See github-actions.secrets.example in the repo root."
             exit 1
           fi
 
