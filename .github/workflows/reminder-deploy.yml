@@ -88,25 +88,25 @@ jobs:
             echo "::notice::DEPLOY_PORT is not set. Falling back to 22."
           fi
 
-      - name: Install sshpass for password auth
-        if: ${{ secrets.DEPLOY_SSH_KEY == '' && secrets.DEPLOY_PASSWORD != '' }}
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y sshpass
-
-      - name: Configure SSH
-        if: ${{ secrets.DEPLOY_SSH_KEY != '' }}
+      - name: Prepare SSH client
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
         run: |
           set -euo pipefail
           DEPLOY_PORT="${DEPLOY_PORT:-22}"
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "${DEPLOY_SSH_KEY}" > ~/.ssh/reminder_deploy_key
-          chmod 600 ~/.ssh/reminder_deploy_key
-          ssh-keyscan -p "${DEPLOY_PORT}" -H "${DEPLOY_HOST}" >> ~/.ssh/known_hosts
+
+          if [[ -n "${DEPLOY_SSH_KEY}" ]]; then
+            install -m 700 -d ~/.ssh
+            printf '%s\n' "${DEPLOY_SSH_KEY}" > ~/.ssh/reminder_deploy_key
+            chmod 600 ~/.ssh/reminder_deploy_key
+            ssh-keyscan -p "${DEPLOY_PORT}" -H "${DEPLOY_HOST}" >> ~/.ssh/known_hosts
+          elif [[ -n "${DEPLOY_PASSWORD}" ]]; then
+            sudo apt-get update
+            sudo apt-get install -y sshpass
+          fi
 
       - name: Run remote deploy script
         env:
