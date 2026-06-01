@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import HTTPException
 from fastapi.responses import FileResponse
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.mneme.bootstrap.lifespan import lifespan
 from app.mneme.bootstrap.root_routes import router as root_router
@@ -29,6 +30,11 @@ def configure_cors(app: FastAPI) -> None:
 
 def configure_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(BusinessException, business_exception_handler)
+
+
+def configure_trusted_hosts(app: FastAPI) -> None:
+    if settings.TRUSTED_HOSTS:
+        app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.TRUSTED_HOSTS)
 
 
 def configure_frontend(app: FastAPI) -> None:
@@ -61,6 +67,7 @@ def create_app() -> FastAPI:
         description=settings.DESCRIPTION,
     )
     configure_cors(app)
+    configure_trusted_hosts(app)
     configure_exception_handlers(app)
     app.include_router(root_router)
     register_routers(app)
