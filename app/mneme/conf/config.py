@@ -3,13 +3,13 @@ from pathlib import Path
 from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-DEFAULT_BASE_DIR = Path(__file__).resolve().parent.parent
+DEFAULT_BASE_DIR = Path(__file__).resolve().parents[3]
 
 DEFAULT_CORS_ALLOWED_ORIGINS = [
-    "http://www.mneme.com.cn",
-    "https://www.mneme.com.cn",
-    "http://mneme.com.cn",
-    "https://mneme.com.cn",
+    "http://127.0.0.1:3000",
+    "http://localhost:3000",
+    "http://127.0.0.1:8000",
+    "http://localhost:8000",
 ]
 
 
@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     CORS_ALLOW_CREDENTIALS: bool = True
     CORS_ALLOW_METHODS: list[str] = Field(default_factory=lambda: ["*"])
     CORS_ALLOW_HEADERS: list[str] = Field(default_factory=lambda: ["*"])
+    TRUSTED_HOSTS: list[str] = Field(default_factory=list)
 
     # 数据库地址默认给出本地开发值，同时允许通过 .env 完整覆盖。
     DATABASE_URL: str = "postgresql+asyncpg://postgres:123456@localhost:5432/agentic"
@@ -70,6 +71,12 @@ class Settings(BaseSettings):
     EMBEDDING_CACHE_DIR: Path = DEFAULT_BASE_DIR / "storage" / "model_cache" / "sentence_transformers"
     EMBEDDING_LOCAL_FILES_ONLY: bool = False
     EMBEDDING_PRELOAD_ON_STARTUP: bool = False
+    RERANKER_ENABLED: bool = False
+    RERANKER_MODEL_NAME: str = "BAAI/bge-reranker-v2-m3"
+    RERANKER_MODEL_PATH: str = ""
+    RERANKER_CACHE_DIR: Path = DEFAULT_BASE_DIR / "storage" / "model_cache" / "reranker"
+    RERANKER_LOCAL_FILES_ONLY: bool = False
+    RERANKER_PRELOAD_ON_STARTUP: bool = False
     HF_ENDPOINT: str = ""
     HF_HUB_ETAG_TIMEOUT: int = 10
     HF_HUB_DOWNLOAD_TIMEOUT: int = 10
@@ -78,7 +85,7 @@ class Settings(BaseSettings):
     GRAPH_BACKEND: str = "neo4j"
     # 本机直接启动应用时默认连宿主机映射端口；
     # Docker Compose 中 app 容器会被环境变量覆盖为 http://milvus:19530。
-    MILVUS_URI: str = "http://124.223.14.145:19530"
+    MILVUS_URI: str = "http://127.0.0.1:19530"
     MILVUS_TOKEN: str = ""
     MILVUS_DB_NAME: str = "default"
     MILVUS_COLLECTION_NAME: str = "document_chunks"
@@ -115,6 +122,12 @@ class Settings(BaseSettings):
     CELERY_OUTBOX_QUEUE: str = "outbox_projection"
     CELERY_TASK_MAX_RETRIES: int = 3
     CELERY_WORKER_PREFETCH_MULTIPLIER: int = 1
+
+    RETRIEVAL_VECTOR_RECALL_K: int = 12
+    RETRIEVAL_KEYWORD_RECALL_K: int = 12
+    RETRIEVAL_MEMORY_RECALL_K: int = 8
+    RETRIEVAL_RERANK_CANDIDATE_K: int = 20
+    RETRIEVAL_CONTEXT_BUDGET_CHARS: int = 4000
 
     INDEX_VECTOR_BATCH_SIZE: int = 64
     OUTBOX_EVENT_MAX_ATTEMPTS: int = 5
