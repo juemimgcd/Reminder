@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from app.mneme.clients.embedding_client import get_embeddings
 from app.mneme.clients.neo4j_client import close_neo4j_driver
+from app.mneme.clients.reranker_client import get_reranker
 from app.mneme.conf.config import settings
 from app.mneme.conf.database import engine
 from app.mneme.conf.logging import app_logger, setup_logger
@@ -15,6 +16,8 @@ async def lifespan(app: FastAPI):
     app_logger.bind(module="system").info("application start")
     if settings.EMBEDDING_PRELOAD_ON_STARTUP:
         get_embeddings()
+    if settings.RERANKER_ENABLED and settings.RERANKER_PRELOAD_ON_STARTUP:
+        get_reranker()
     try:
         yield
     finally:
