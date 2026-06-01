@@ -1937,15 +1937,10 @@ function App() {
             <div className="mt-4">
               <div className="font-serif text-[2rem] leading-none">Mneme</div>
               <div className="mt-2 text-xs uppercase tracking-[0.2em] text-slate-400">Agentic RAG Console</div>
-              <p className="mt-4 max-w-[220px] text-xs leading-6 text-slate-400">
-                用同一个工作台管理知识库、图谱、记忆和洞察视图。
-              </p>
             </div>
-            <div className="mt-5 grid gap-2 text-xs leading-6 text-slate-400 sm:grid-cols-2 xl:grid-cols-1">
-              <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">API {API_BASE_URL}</div>
-              <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">
-                User {user?.display_name || user?.username}
-              </div>
+            <div className="mt-5 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.14em] text-slate-300">
+              <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">API</div>
+              <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">{user?.display_name || user?.username}</div>
             </div>
           </div>
 
@@ -2098,7 +2093,7 @@ function App() {
                     {selectedKnowledgeBase?.name || "选择一个知识库开始"}
                   </h1>
                   <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-500">
-                    围绕知识库的采集、检索、图谱和洞察，把后端已经具备的认证、任务、GraphRAG 和分析能力收束到一个可操作的工作台里。
+                    当前视图聚焦 {currentViewItem.hint}。
                   </p>
                 </div>
 

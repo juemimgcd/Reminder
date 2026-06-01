@@ -5,6 +5,15 @@ on:
     branches:
       - master
   workflow_dispatch:
+    inputs:
+      run_deploy:
+        description: "Run remote deploy after checks"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
 
 permissions:
   contents: read
@@ -83,7 +92,7 @@ jobs:
       - frontend-check
       - backend-check
       - deploy-ready
-    if: ${{ needs.deploy-ready.outputs.enabled == 'true' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_deploy == 'true' && needs.deploy-ready.outputs.enabled == 'true' }}
     steps:
       - name: Validate deploy configuration
         env:
@@ -189,7 +198,25 @@ jobs:
           DEPLOY_BRANCH="${DEPLOY_BRANCH:-master}"
           DEPLOY_ENABLE_NGINX_SYNC="${DEPLOY_ENABLE_NGINX_SYNC:-1}"
 
-          REMOTE_CMD="cd '${DEPLOY_APP_DIR}' && BRANCH='${DEPLOY_BRANCH}' ENABLE_NGINX_SYNC='${DEPLOY_ENABLE_NGINX_SYNC}' bash './upgrade.sh'"
+          REMOTE_CMD=$(cat <<EOF
+          set -euo pipefail
+          if [[ ! -d '${DEPLOY_APP_DIR}' ]]; then
+            echo '::error::Remote deploy directory not found: ${DEPLOY_APP_DIR}'
+            echo '::error::This workflow only performs upgrades on a server that has already completed the initial deployment.'
+            echo '::error::Clone the repository to ${DEPLOY_APP_DIR}, create the production .env, and verify docker/nginx are installed first.'
+            exit 1
+          fi
+
+          if [[ ! -f '${DEPLOY_APP_DIR}/upgrade.sh' ]]; then
+            echo '::error::Remote upgrade script not found: ${DEPLOY_APP_DIR}/upgrade.sh'
+            echo '::error::The server project directory looks incomplete. Make sure the repository has been cloned successfully.'
+            exit 1
+          fi
+
+          cd '${DEPLOY_APP_DIR}'
+          BRANCH='${DEPLOY_BRANCH}' ENABLE_NGINX_SYNC='${DEPLOY_ENABLE_NGINX_SYNC}' bash './upgrade.sh'
+          EOF
+          )
 
           if [[ -n "${DEPLOY_SSH_KEY}" ]]; then
             ssh -i ~/.ssh/reminder_deploy_key -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" "${REMOTE_CMD}"

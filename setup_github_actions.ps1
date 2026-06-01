@@ -1,5 +1,5 @@
 param(
-    [string]$Repository = "juemimgcd/Reminder",
+    [string]$Repository = "juemimgcd/agenticRAG",
     [string]$DeployHost = "124.223.14.145",
     [int]$DeployPort = 22,
     [string]$DeployUser = "root",

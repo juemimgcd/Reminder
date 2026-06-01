@@ -6,7 +6,7 @@
 
 打开你的 GitHub 仓库：
 
-`https://github.com/juemimgcd/Reminder`
+`https://github.com/juemimgcd/agenticRAG`
 
 然后进入：
 
@@ -154,6 +154,11 @@ DEPLOY_SSH_KEY=你的私钥全文
 ## 五、配置完成后怎么验证
 
 配置完成后，重新推送代码或者手动触发 GitHub Actions。
+
+注意：
+
+- `push` 到 `master` 现在只会执行前端 / 后端检查，不会自动部署到服务器
+- 如果你要真正执行远程部署，需要在 GitHub Actions 页面手动触发 workflow，并把 `run_deploy` 选成 `true`
 
 仓库 Actions 页面：
 
