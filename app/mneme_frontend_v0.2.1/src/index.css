@@ -23,16 +23,16 @@
   --color-outline: #94a3b8;
   --color-outline-variant: #e2e8f0;
   
-  --color-primary: #4f46e5;
+  --color-primary: #155eef;
   --color-on-primary: #ffffff;
-  --color-primary-container: #e0e7ff;
-  --color-on-primary-container: #3730a3;
+  --color-primary-container: #dbeafe;
+  --color-on-primary-container: #1d4ed8;
   
   --color-secondary: #64748b;
   --color-on-secondary: #ffffff;
   --color-secondary-container: #f1f5f9;
   
-  --color-background: #f9fafb;
+  --color-background: #f5f6f1;
   --color-on-background: #0f172a;
   
   --color-text-primary: #0f172a;
@@ -41,7 +41,30 @@
 }
 
 @layer base {
+  :root {
+    color-scheme: light;
+  }
+
   body {
-    @apply bg-background text-on-background font-sans antialiased;
+    min-height: 100vh;
+    background:
+      radial-gradient(circle at top left, rgba(21, 94, 239, 0.08), transparent 28rem),
+      radial-gradient(circle at 88% 12%, rgba(13, 148, 136, 0.06), transparent 24rem),
+      linear-gradient(180deg, #fcfcfa 0%, #f5f6f1 42%, #eef2f7 100%);
+    @apply text-on-background font-sans antialiased;
+  }
+
+  #root {
+    min-height: 100vh;
+  }
+
+  ::selection {
+    background: rgba(21, 94, 239, 0.16);
+    color: #0f172a;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: #64748b;
   }
 }

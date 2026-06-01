@@ -258,6 +258,8 @@ Copy-Item .env-example .env
 - `RAW_FILE_DIR`
 - `APP_PORT`
 - `APP_HOST_PORT`
+- `FORWARDED_ALLOW_IPS`
+- `TRUSTED_HOSTS`
 
 ### LLM
 
@@ -273,6 +275,12 @@ Copy-Item .env-example .env
 - `EMBEDDING_CACHE_DIR`
 - `EMBEDDING_LOCAL_FILES_ONLY`
 - `EMBEDDING_PRELOAD_ON_STARTUP`
+- `RERANKER_ENABLED`
+- `RERANKER_MODEL_NAME`
+- `RERANKER_MODEL_PATH`
+- `RERANKER_CACHE_DIR`
+- `RERANKER_LOCAL_FILES_ONLY`
+- `RERANKER_PRELOAD_ON_STARTUP`
 - `HF_ENDPOINT`
 - `HF_HUB_ETAG_TIMEOUT`
 - `HF_HUB_DOWNLOAD_TIMEOUT`
@@ -283,6 +291,11 @@ Copy-Item .env-example .env
 - `MILVUS_INDEX_TYPE`
 - `MILVUS_METRIC_TYPE`
 - `MILVUS_SEARCH_PARAMS`
+- `RETRIEVAL_VECTOR_RECALL_K`
+- `RETRIEVAL_KEYWORD_RECALL_K`
+- `RETRIEVAL_MEMORY_RECALL_K`
+- `RETRIEVAL_RERANK_CANDIDATE_K`
+- `RETRIEVAL_CONTEXT_BUDGET_CHARS`
 - `NEO4J_ENABLED`
 - `NEO4J_URI`
 - `NEO4J_USER`
@@ -305,6 +318,26 @@ Embedding 模块现在会按下面的顺序选择模型来源：
 4. `EMBEDDING_MODEL_NAME` 对应的远端仓库
 
 如果本地已经有缓存 snapshot，服务会直接加载本地路径，不再每次启动都去 Hugging Face 解析仓库。
+
+如果你希望在最终候选排序上启用交叉编码器重排，可以额外配置：
+
+```env
+RERANKER_ENABLED=true
+RERANKER_MODEL_NAME=BAAI/bge-reranker-v2-m3
+RERANKER_CACHE_DIR=./storage/model_cache/reranker
+RERANKER_LOCAL_FILES_ONLY=false
+RERANKER_PRELOAD_ON_STARTUP=false
+```
+
+当前检索链路已经支持单独调节三路召回候选池和最终上下文预算：
+
+```env
+RETRIEVAL_VECTOR_RECALL_K=12
+RETRIEVAL_KEYWORD_RECALL_K=12
+RETRIEVAL_MEMORY_RECALL_K=8
+RETRIEVAL_RERANK_CANDIDATE_K=20
+RETRIEVAL_CONTEXT_BUDGET_CHARS=4000
+```
 
 Neo4j 是默认图后端。如果你已有历史数据，建议在首次启用后执行一次：
 
@@ -489,6 +522,9 @@ docker compose up -d --build
 - `NEO4J_PASSWORD`
 - `MINIO_ROOT_PASSWORD`
 - 如果你有本地 embedding 模型，建议配置 `EMBEDDING_MODEL_PATH`
+- 如果你走 Nginx 反代，建议保留 `APP_HOST_PORT=127.0.0.1:8000`
+- 如果你走 Nginx 反代，建议配置 `FORWARDED_ALLOW_IPS=127.0.0.1`
+- 如果你有正式域名，建议把 `TRUSTED_HOSTS` 改成你的域名列表
 
 ### 默认端口暴露策略
 
@@ -496,6 +532,8 @@ docker compose up -d --build
 
 - `app`：`${APP_HOST_PORT:-127.0.0.1:8000}`
 - `postgres / redis / minio / milvus / neo4j`：仅宿主机本地可访问
+
+同时，后端现在会信任来自 `FORWARDED_ALLOW_IPS` 的代理头，并可通过 `TRUSTED_HOSTS` 限制允许访问的 Host，适合放在 Nginx 后面统一处理 HTTPS 和域名入口。
 
 这样更适合直接上云服务器，避免把数据库、Redis、Milvus、Neo4j 直接暴露到公网。
 
@@ -556,6 +594,14 @@ ENABLE_NGINX_SYNC=0 bash upgrade.sh
 - `github-actions.secrets.example`
 
 其中真正的 GitHub Actions 工作流文件必须放在 `.github/workflows/`，根目录则保留了服务器执行脚本和 Secrets / Variables 示例，方便直接修改。
+
+如果你不想手动去 GitHub 页面一项项填写，也可以直接在本机运行根目录脚本：
+
+```powershell
+.\setup_github_actions.ps1
+```
+
+它会自动安装 `gh`、引导你登录 GitHub，并把部署所需的 repository variables / secrets 一次性配置好。
 
 这套 workflow 同时支持两种远程登录方式：
 

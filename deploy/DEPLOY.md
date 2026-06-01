@@ -53,17 +53,24 @@ cp deploy/env/backend.production.example .env
 至少要修改这些值：
 
 - `APP_HOST_PORT=127.0.0.1:8000`
+- `FORWARDED_ALLOW_IPS=127.0.0.1`
+- `TRUSTED_HOSTS=["your-domain.com","www.your-domain.com","127.0.0.1","localhost"]`
 - `CORS_ALLOWED_ORIGINS=["https://your-domain.com","http://your-domain.com"]`
 - `POSTGRES_PASSWORD`
 - `MINIO_ROOT_PASSWORD`
 - `NEO4J_PASSWORD`
 - `DASHSCOPE_API_KEY`
 - `JWT_SECRET`
+- 如果你要启用交叉编码器重排，建议配置 `RERANKER_ENABLED=true`
 
 说明：
 
 - `APP_HOST_PORT=127.0.0.1:8000` 表示应用只暴露给本机，公网访问统一走 Nginx。
+- `FORWARDED_ALLOW_IPS=127.0.0.1` 表示仅信任来自本机 Nginx 的 `X-Forwarded-*` 头。
+- `TRUSTED_HOSTS` 应包含你的正式域名，避免错误 Host 头直接打到应用。
 - Compose 内部会自动使用 `postgres`、`redis`、`milvus`、`neo4j` 这些容器名互连，不需要你手工改容器间地址。
+- 当前生产模板默认把 `MILVUS_MEMORY_LIMIT` 收敛到 `2g`，更适合中小规格机器。
+- 当前模板已经预留 `RERANKER_*` 和 `RETRIEVAL_*` 参数，可用来打开 `BAAI/bge-reranker-v2-m3` 和放大召回候选池。
 
 ## 5. 首次启动
 
