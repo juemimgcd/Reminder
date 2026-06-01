@@ -25,7 +25,7 @@ async def rebuild_graph_projection_for_user(
         current_user: User,
 ) -> dict[str, int | str]:
     if not is_neo4j_projection_enabled():
-        raise BusinessException(message="Neo4j 鍥炬姇褰辨湭鍚敤", code=5031, status_code=503)
+        raise BusinessException(message="Neo4j graph projection is not enabled", code=5031, status_code=503)
 
     await reset_user_projection(user_id=current_user.id)
     await sync_user_projection(user=current_user)
@@ -85,7 +85,7 @@ async def rebuild_graph_projection_for_knowledge_base(
         knowledge_base_id: str,
 ) -> dict[str, int | str]:
     if not is_neo4j_projection_enabled():
-        raise BusinessException(message="Neo4j 鍥炬姇褰辨湭鍚敤", code=5031, status_code=503)
+        raise BusinessException(message="Neo4j graph projection is not enabled", code=5031, status_code=503)
 
     knowledge_base = await get_knowledge_base_by_id(
         db,

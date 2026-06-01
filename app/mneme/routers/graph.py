@@ -148,7 +148,7 @@ async def get_document_graph(
         user_id=current_user.id,
     )
     if not document:
-        raise BusinessException(message="鏂囨。涓嶅瓨鍦ㄦ垨涓嶅睘浜庤鐢ㄦ埛", code=4044, status_code=404)
+        raise BusinessException(message="document not found or not owned by current user", code=4044, status_code=404)
 
     root_knowledge_base = await get_knowledge_base_by_id(
         db,
@@ -254,7 +254,7 @@ async def get_knowledge_base_graph(
         knowledge_base_id=knowledge_base_id,
     )
     if not knowledge_base:
-        raise BusinessException(message="鐭ヨ瘑搴撲笉瀛樺湪", code=4042, status_code=404)
+        raise BusinessException(message="knowledge base not found", code=4042, status_code=404)
     if knowledge_base.user_id != current_user.id:
         raise BusinessException(message="knowledge base does not belong to current user", code=4007, status_code=403)
 
