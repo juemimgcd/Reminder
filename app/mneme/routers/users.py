@@ -28,7 +28,7 @@ def build_knowledge_base_id() -> str:
 
 def ensure_current_user_matches(current_user: User, user_id: int) -> None:
     if current_user.id != user_id:
-        raise BusinessException(message="浣犳棤鏉冭闂鐢ㄦ埛璧勬簮", code=4007, status_code=403)
+        raise BusinessException(message="you do not have access to this user resource", code=4007, status_code=403)
 
 
 @router.post("/{user_id}/knowledge-bases")
