@@ -73,7 +73,7 @@ async def upload_document(
         knowledge_base = await get_or_create_default_knowledge_base(db, user_id=resolved_user_id)
 
     if not file.filename:
-        raise BusinessException(message="涓婁紶澶辫触锛屾枃浠跺悕涓嶈兘涓虹┖", code=4001)
+        raise BusinessException(message="uploaded file name cannot be empty", code=4001)
 
     file_name = Path(file.filename).name
     file_ext = Path(file_name).suffix.lower()
@@ -199,7 +199,7 @@ async def index_document_api(
         user_id=current_user.id,
     )
     if not document:
-        raise BusinessException(message="鏂囨。涓嶅瓨鍦ㄦ垨涓嶅睘浜庤鐢ㄦ埛", code=4044, status_code=404)
+        raise BusinessException(message="document not found or not owned by current user", code=4044, status_code=404)
 
     result = await submit_document_index_task(
         db,
@@ -232,7 +232,7 @@ async def delete_document_api(
         user_id=current_user.id,
     )
     if not document:
-        raise BusinessException(message="鏂囨。涓嶅瓨鍦ㄦ垨涓嶅睘浜庤鐢ㄦ埛", code=4044, status_code=404)
+        raise BusinessException(message="document not found or not owned by current user", code=4044, status_code=404)
 
     if document.status in {"queued", "indexing", "parsing", "chunking", "embedding", "vector_upserting"}:
         raise BusinessException(message="cancel or wait for index tasks before deleting the document", code=4021, status_code=400)

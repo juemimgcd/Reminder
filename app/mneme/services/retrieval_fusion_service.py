@@ -1,3 +1,5 @@
+from app.mneme.clients.reranker_client import rerank_pairs
+from app.mneme.conf.config import settings
 from app.mneme.schemas.chat import ContextItem
 
 
@@ -174,8 +176,53 @@ def rerank_context_items(
     )
 
 
-def fuse_and_rerank_context_items(
+def build_reranker_text(item: ContextItem) -> str:
+    sections = [
+        item.section_title or "",
+        item.section_path or "",
+        item.section_summary or "",
+        item.entry_name or "",
+        item.text or "",
+    ]
+    return "\n".join(part for part in sections if part).strip()
+
+
+async def apply_model_rerank(
+    items: list[ContextItem],
     *,
+    query: str,
+) -> list[ContextItem]:
+    if not settings.RERANKER_ENABLED or not items:
+        return items
+
+    rerank_candidate_k = max(1, settings.RETRIEVAL_RERANK_CANDIDATE_K)
+    head = [item.model_copy(deep=True) for item in items[:rerank_candidate_k]]
+    tail = [item.model_copy(deep=True) for item in items[rerank_candidate_k:]]
+    pairs = [(query, build_reranker_text(item)) for item in head]
+    scores = await rerank_pairs(pairs=pairs)
+    if not scores:
+        return items
+
+    for item, score in zip(head, scores, strict=False):
+        item.rerank_score = score
+        item.score = score
+        item.rerank_reasons = dedupe_preserve_order(item.rerank_reasons + ["bge_reranker"])
+
+    head = sorted(
+        head,
+        key=lambda item: (
+            item.rerank_score or 0.0,
+            item.fusion_score or 0.0,
+            len(item.recall_type.split("+")),
+        ),
+        reverse=True,
+    )
+    return head + tail
+
+
+async def fuse_and_rerank_context_items(
+    *,
+    query: str,
     vector_items: list[ContextItem],
     lexical_items: list[ContextItem],
     memory_items: list[ContextItem],
@@ -188,4 +235,5 @@ def fuse_and_rerank_context_items(
             "memory": memory_items,
         }
     )
-    return rerank_context_items(fused_items, query_terms=query_terms)
+    heuristically_reranked = rerank_context_items(fused_items, query_terms=query_terms)
+    return await apply_model_rerank(heuristically_reranked, query=query)

@@ -66,6 +66,7 @@ def build_profile_answer(profile: dict[str, Any]) -> str:
         lines.append("Expression style: " + profile["expression_style"])
     if profile.get("growth_focus"):
         lines.append("Growth focus: " + ", ".join(profile["growth_focus"]))
+    return "\n".join(lines)
 
 
 def build_growth_answer(report: dict[str, Any]) -> str:
@@ -370,11 +371,38 @@ async def invoke_evidence_answer(
     llm = get_llm()
     chain = prompt | llm | parser
 
-    result = await chain.ainvoke(
-        {
-            "context": context_text,
-            "question": question,
-        }
+    async def do_invoke() -> EvidenceAnswerDraft:
+        before_call(
+            name="llm",
+            recovery_timeout_seconds=settings.CIRCUIT_BREAKER_RECOVERY_TIMEOUT_SECONDS,
+        )
+        try:
+            result = await chain.ainvoke(
+                {
+                    "context": context_text,
+                    "question": question,
+                }
+            )
+            record_success(name="llm")
+            return result
+        except Exception as exc:
+            record_failure(
+                name="llm",
+                failure_threshold=settings.CIRCUIT_BREAKER_FAILURE_THRESHOLD,
+                recovery_timeout_seconds=settings.CIRCUIT_BREAKER_RECOVERY_TIMEOUT_SECONDS,
+            )
+            app_logger.bind(module="query_service").exception(
+                f"evidence llm invoke failed knowledge_base_id={knowledge_base_id} user_id={user_id} "
+                f"error_type={type(exc).__name__} error={exc}"
+            )
+            raise
+
+    result = await retry_async(
+        do_invoke,
+        is_retryable=is_retryable_external_error,
+        max_attempts=settings.EXTERNAL_RETRY_MAX_ATTEMPTS,
+        base_delay_seconds=settings.EXTERNAL_RETRY_BASE_DELAY_SECONDS,
+        max_delay_seconds=settings.EXTERNAL_RETRY_MAX_DELAY_SECONDS,
     )
     citation_validation = resolve_citations(result.citations, sources)
     confidence, uncertainty = apply_citation_confidence_policy(
