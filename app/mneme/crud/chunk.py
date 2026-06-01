@@ -1,5 +1,5 @@
 from langchain_core.documents import Document as LCDocument
-from sqlalchemy import delete, insert, or_, select
+from sqlalchemy import case, delete, insert, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mneme.models import Document
@@ -71,23 +71,36 @@ async def search_chunks_by_keywords(
     user_id: int | None = None,
     query_terms: list[str],
     limit: int = 6,
-) -> list[Chunk]:
+) -> list[tuple[Chunk, float]]:
     terms = [term.strip() for term in query_terms if term and term.strip()]
     if not terms:
         return []
 
     document_table = Document.__table__
-    conditions = [Chunk.content.ilike(f"%{term}%") for term in terms]
-    sql = select(Chunk).join(document_table, Chunk.document_pk == document_table.c.pk).where(
+    score_expr = literal(0.0)
+    conditions = []
+    for term in terms:
+        content_match = Chunk.content.ilike(f"%{term}%")
+        title_match = Chunk.section_title.ilike(f"%{term}%")
+        path_match = Chunk.section_path.ilike(f"%{term}%")
+        summary_match = Chunk.section_summary.ilike(f"%{term}%")
+        conditions.extend([content_match, title_match, path_match, summary_match])
+        score_expr += case((content_match, 1.0), else_=0.0)
+        score_expr += case((title_match, 0.9), else_=0.0)
+        score_expr += case((path_match, 0.7), else_=0.0)
+        score_expr += case((summary_match, 0.6), else_=0.0)
+
+    score_label = score_expr.label("keyword_score")
+    sql = select(Chunk, score_label).join(document_table, Chunk.document_pk == document_table.c.pk).where(
         document_table.c.knowledge_base_id == knowledge_base_id,
         or_(*conditions),
     )
     if user_id is not None:
         sql = sql.where(document_table.c.user_id == user_id)
 
-    sql = sql.order_by(Chunk.document_pk.asc(), Chunk.chunk_index.asc()).limit(limit)
+    sql = sql.order_by(score_label.desc(), Chunk.document_pk.asc(), Chunk.chunk_index.asc()).limit(limit)
     res = await db.execute(sql)
-    return list(res.scalars().all())
+    return [(row[0], float(row[1] or 0.0)) for row in res.all()]
 
 
 def build_chunk_row_from_doc(
