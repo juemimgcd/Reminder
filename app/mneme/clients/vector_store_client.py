@@ -9,6 +9,7 @@ from app.mneme.conf.config import settings
 from app.mneme.conf.logging import log_event, app_logger
 from app.mneme.clients.embedding_client import get_embeddings
 from app.mneme.infra.circuit_breaker import before_call, record_success, record_failure
+from app.mneme.infra.object_cache import get_cached_object, set_cached_object
 from app.mneme.infra.retry import retry_async
 
 
@@ -68,6 +69,10 @@ def _build_index_params() -> dict[str, Any]:
 
 # 鍒涘缓褰撳墠椤圭洰浣跨敤鐨?Milvus vector store 瀹㈡埛绔€?
 def get_vector_store() -> Milvus:
+    cached = get_cached_object("vector_store_client")
+    if isinstance(cached, Milvus):
+        return cached
+
     log_event(
         "vector_store",
         "debug",
@@ -75,7 +80,7 @@ def get_vector_store() -> Milvus:
         backend=settings.VECTOR_BACKEND,
         collection=settings.MILVUS_COLLECTION_NAME,
     )
-    return Milvus(
+    vector_store = Milvus(
         embedding_function=get_embeddings(),
         connection_args=_build_connection_args(),
         collection_name=settings.MILVUS_COLLECTION_NAME,
@@ -88,6 +93,7 @@ def get_vector_store() -> Milvus:
         vector_field="vector",
         drop_old=settings.MILVUS_DROP_OLD,
     )
+    return set_cached_object("vector_store_client", vector_store)
 
 
 # 灏嗕竴鎵?chunk 鐩存帴鍐欏叆鍚戦噺搴撱€?
