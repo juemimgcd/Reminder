@@ -1,4 +1,4 @@
-from sqlalchemy import delete, select, or_
+from sqlalchemy import case, delete, literal, select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mneme.crud.document import get_document_by_id
@@ -109,33 +109,41 @@ async def search_memory_entries_by_keywords(
     user_id: int | None = None,
     query_terms: list[str],
     limit: int = 6,
-) -> list[MemoryEntry]:
+) -> list[tuple[MemoryEntry, float]]:
     terms = [term.strip() for term in query_terms if term and term.strip()]
     if not terms:
         return []
 
     memory_entry_table = MemoryEntry.__table__
     field_conditions = []
+    score_expr = literal(0.0)
     for term in terms:
+        entry_name_match = MemoryEntry.entry_name.ilike(f"%{term}%")
+        summary_match = MemoryEntry.summary.ilike(f"%{term}%")
+        evidence_match = MemoryEntry.evidence_text.ilike(f"%{term}%")
         field_conditions.extend(
             [
-                MemoryEntry.entry_name.ilike(f"%{term}%"),
-                MemoryEntry.summary.ilike(f"%{term}%"),
-                MemoryEntry.evidence_text.ilike(f"%{term}%"),
+                entry_name_match,
+                summary_match,
+                evidence_match,
             ]
         )
+        score_expr += case((entry_name_match, 1.0), else_=0.0)
+        score_expr += case((summary_match, 0.8), else_=0.0)
+        score_expr += case((evidence_match, 0.9), else_=0.0)
 
+    score_label = score_expr.label("keyword_score")
     sql = (
-        select(MemoryEntry)
+        select(MemoryEntry, score_label)
         .where(memory_entry_table.c.knowledge_base_id == knowledge_base_id)
         .where(or_(*field_conditions))
     )
     if user_id is not None:
         sql = sql.where(memory_entry_table.c.user_id == user_id)
 
-    sql = sql.order_by(MemoryEntry.importance_score.desc(), MemoryEntry.document_pk.asc()).limit(limit)
+    sql = sql.order_by(score_label.desc(), MemoryEntry.importance_score.desc(), MemoryEntry.document_pk.asc()).limit(limit)
     res = await db.execute(sql)
-    return list(res.scalars().all())
+    return [(row[0], float(row[1] or 0.0)) for row in res.all()]
 
 
 

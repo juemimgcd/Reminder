@@ -141,7 +141,7 @@ async def get_document_memory_library(
         user_id=current_user.id,
     )
     if not document:
-        raise BusinessException(message="鏂囨。涓嶅瓨鍦ㄦ垨涓嶅睘浜庤鐢ㄦ埛", code=4044, status_code=404)
+        raise BusinessException(message="document not found or not owned by current user", code=4044, status_code=404)
 
     rows = await list_memory_entries_by_document_id(
         db,
