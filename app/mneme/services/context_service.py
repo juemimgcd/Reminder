@@ -1,3 +1,4 @@
+import asyncio
 import re
 from copy import deepcopy
 from typing import Any
@@ -7,6 +8,8 @@ from langchain_core.documents import Document as LCDocument
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mneme.clients.vector_store_client import similarity_search_with_score_resilient
+from app.mneme.conf.config import settings
+from app.mneme.conf.database import open_read_session
 from app.mneme.conf.logging import log_event
 from app.mneme.crud.chunk import search_chunks_by_keywords
 from app.mneme.crud.memory_entry import search_memory_entries_by_keywords
@@ -306,7 +309,7 @@ def format_context_docs(docs: list[LCDocument]) -> str:
         sections.append(
             "\n".join(
                 [
-                    f"[鏉ユ簮 {source_id}]",
+                    f"[Source {source_id}]",
                     f"source_id={source_id}",
                     f"knowledge_base_id={doc.metadata.get('knowledge_base_id')}",
                     f"document_id={doc.metadata.get('document_id')}",
@@ -330,17 +333,47 @@ async def build_query_context(
     top_k: int = 4,
     user_id: int | None = None,
     knowledge_base_id: str | None = None,
-    context_budget: int = 4000,
+    context_budget: int | None = None,
 ) -> dict[str, Any]:
     if not knowledge_base_id:
         raise HTTPException(status_code=400, detail="Knowledge base id not provided")
 
-    raw_vector_items = await retrieve_documents_with_scores(
-        query=query,
-        top_k=top_k,
-        user_id=user_id,
-        knowledge_base_id=knowledge_base_id,
+    context_budget = context_budget or settings.RETRIEVAL_CONTEXT_BUDGET_CHARS
+    vector_recall_k = max(top_k, settings.RETRIEVAL_VECTOR_RECALL_K)
+    keyword_recall_k = max(top_k, settings.RETRIEVAL_KEYWORD_RECALL_K)
+    memory_recall_k = max(top_k, settings.RETRIEVAL_MEMORY_RECALL_K)
+
+    vector_task = asyncio.create_task(
+        retrieve_documents_with_scores(
+            query=query,
+            top_k=vector_recall_k,
+            user_id=user_id,
+            knowledge_base_id=knowledge_base_id,
+        )
     )
+    query_terms = extract_query_terms(query)
+
+    async with open_read_session() as keyword_db, open_read_session() as memory_db:
+        keyword_task = asyncio.create_task(
+            search_chunks_by_keywords(
+                keyword_db,
+                knowledge_base_id=knowledge_base_id,
+                user_id=user_id,
+                query_terms=query_terms,
+                limit=keyword_recall_k,
+            )
+        )
+        memory_task = asyncio.create_task(
+            search_memory_entries_by_keywords(
+                memory_db,
+                knowledge_base_id=knowledge_base_id,
+                user_id=user_id,
+                query_terms=query_terms,
+                limit=memory_recall_k,
+            )
+        )
+        raw_vector_items, chunk_rows, memory_rows = await asyncio.gather(vector_task, keyword_task, memory_task)
+
     deduped_vector_items = deduplicate_retrieved_documents(raw_vector_items)
     merged_vector_docs = merge_adjacent_scored_documents(deduped_vector_items)
     vector_items = [
@@ -348,47 +381,45 @@ async def build_query_context(
         for doc, score in merged_vector_docs
     ]
 
-    query_terms = extract_query_terms(query)
-
-    chunk_rows = await search_chunks_by_keywords(
-        db,
-        knowledge_base_id=knowledge_base_id,
-        user_id=user_id,
-        query_terms=query_terms,
-        limit=top_k,
-    )
     keyword_items = [
         build_context_item_from_chunk(
             chunk,
+            score=score,
             knowledge_base_id=knowledge_base_id,
-            matched_terms=[term for term in query_terms if term in chunk.content],
-        )
-        for chunk in chunk_rows
-    ]
-    lexical_backend = "postgres_keyword"
-
-    memory_rows = await search_memory_entries_by_keywords(
-        db,
-        knowledge_base_id=knowledge_base_id,
-        user_id=user_id,
-        query_terms=query_terms,
-        limit=top_k,
-    )
-    memory_items = [
-        build_context_item_from_memory(
-            row,
             matched_terms=[
                 term
                 for term in query_terms
-                if term in (row.entry_name or "")
-                or term in (row.summary or "")
-                or term in (row.evidence_text or "")
+                if term.lower() in " ".join(
+                    [
+                        chunk.content or "",
+                        chunk.section_title or "",
+                        chunk.section_path or "",
+                        chunk.section_summary or "",
+                    ]
+                ).lower()
             ],
         )
-        for row in memory_rows
+        for chunk, score in chunk_rows
+    ]
+    lexical_backend = "postgres_keyword_ranked"
+
+    memory_items = [
+        build_context_item_from_memory(
+            row,
+            score=score,
+            matched_terms=[
+                term
+                for term in query_terms
+                if term.lower() in (row.entry_name or "").lower()
+                or term.lower() in (row.summary or "").lower()
+                or term.lower() in (row.evidence_text or "").lower()
+            ],
+        )
+        for row, score in memory_rows
     ]
 
-    reranked_items = fuse_and_rerank_context_items(
+    reranked_items = await fuse_and_rerank_context_items(
+        query=query,
         vector_items=vector_items,
         lexical_items=keyword_items,
         memory_items=memory_items,
@@ -399,6 +430,8 @@ async def build_query_context(
     total_chars = 0
     for item in reranked_items:
         item_len = len(item.text)
+        if len(final_items) >= top_k:
+            break
         if final_items and total_chars + item_len > context_budget:
             break
         final_items.append(item)
@@ -436,6 +469,7 @@ async def build_query_context(
     counts = {
         "raw_count": len(raw_vector_items),
         "dedup_count": len(deduped_vector_items),
+        "merged_count": len(merged_vector_docs),
         "vector_count": len(vector_items),
         "lexical_count": len(keyword_items),
         "memory_count": len(memory_items),
@@ -458,7 +492,7 @@ async def build_query_context(
         "lexical_backend": lexical_backend,
         "memory_count": counts["memory_count"],
         "candidate_count": counts["candidate_count"],
-        "merged_count": counts["fusion_count"],
+        "merged_count": counts["merged_count"],
         "fusion_count": counts["fusion_count"],
         "rerank_count": counts["rerank_count"],
         "final_count": counts["final_count"],
@@ -522,12 +556,13 @@ def build_context_item_from_vector(doc: LCDocument, score: float) -> ContextItem
 def build_context_item_from_chunk(
     chunk: Chunk,
     *,
+    score: float,
     knowledge_base_id: str,
     matched_terms: list[str],
 ) -> ContextItem:
     return ContextItem(
         recall_type="keyword",
-        score=1.0,
+        score=float(score),
         knowledge_base_id=knowledge_base_id,
         document_id=chunk.document_id,
         chunk_id=chunk.id,
@@ -549,11 +584,13 @@ def build_context_item_from_chunk(
 def build_context_item_from_memory(
     memory_entry: MemoryEntry,
     *,
+    score: float,
     matched_terms: list[str],
 ) -> ContextItem:
+    importance_bonus = max(0.0, min(float(memory_entry.importance_score or 0.0), 1.0)) * 0.15
     return ContextItem(
         recall_type="memory",
-        score=float(memory_entry.importance_score or 0.5),
+        score=float(score) + importance_bonus,
         knowledge_base_id=memory_entry.knowledge_base_id,
         document_id=memory_entry.document_id,
         chunk_id=memory_entry.chunk_id,

@@ -44,7 +44,7 @@ def before_call(*, name: str, recovery_timeout_seconds: int) -> None:
                 reopen_at=reopen_at,
             )
             raise BusinessException(
-                message=f"澶栭儴渚濊禆鏆傛椂涓嶅彲鐢? {name}",
+                message=f"external dependency is temporarily unavailable: {name}",
                 code=5031,
                 status_code=503,
             )
