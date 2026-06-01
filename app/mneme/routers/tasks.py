@@ -32,7 +32,7 @@ async def get_task_status(
             user_id=current_user.id,
         )
         if not document:
-            raise BusinessException(message="浣犳棤鏉冩煡鐪嬭浠诲姟", code=4007, status_code=403)
+            raise BusinessException(message="you do not have access to this task", code=4007, status_code=403)
 
     data = TaskRecordData.model_validate(task)
     return success_response(data=data)

@@ -30,7 +30,7 @@ async def ensure_document_index_task_belongs_to_user(
         user_id=current_user.id,
     )
     if not document:
-        raise BusinessException(message="浣犳棤鏉冭闂浠诲姟", code=4007, status_code=403)
+        raise BusinessException(message="you do not have access to this task", code=4007, status_code=403)
 
     return task, document
 
@@ -48,7 +48,7 @@ async def cancel_document_index_task(
     )
 
     if task.status not in {PENDING, "queued"}:
-        raise BusinessException(message="鍙湁鎺掗槦涓殑浠诲姟鍙互鍙栨秷", code=4019, status_code=400)
+        raise BusinessException(message="only queued tasks can be canceled", code=4019, status_code=400)
 
     cancel_index_document_task(task_id=task_id)
     await transition_task_status(
