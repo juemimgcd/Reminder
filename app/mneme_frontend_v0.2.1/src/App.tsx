@@ -108,15 +108,15 @@ function formatBytes(bytes?: number | null) {
 function statusClass(status: string) {
   const normalized = status.toLowerCase();
   if (["indexed", "completed", "success", "healthy", "running", "pass", "ok"].includes(normalized)) {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    return "border-emerald-400/30 bg-emerald-500/10 text-emerald-300";
   }
   if (["failed", "error", "dead", "fail"].includes(normalized)) {
-    return "border-rose-200 bg-rose-50 text-rose-700";
+    return "border-red-400/30 bg-red-500/10 text-red-300";
   }
   if (["queued", "pending", "running", "indexing", "parsing", "chunking", "embedding", "vector_upserting", "warn"].includes(normalized)) {
-    return "border-amber-200 bg-amber-50 text-amber-700";
+    return "border-secondary/30 bg-secondary/10 text-secondary";
   }
-  return "border-slate-200 bg-slate-100 text-slate-600";
+  return "border-outline-variant bg-surface-container text-text-muted";
 }
 
 function getErrorMessage(error: unknown, fallback = "请求失败，请稍后再试。") {
@@ -143,16 +143,16 @@ function CardSection({
   compact?: boolean;
 }) {
   return (
-    <section className="overflow-hidden rounded-lg border border-slate-200/80 bg-white/[0.92] shadow-[0_20px_50px_rgba(15,23,42,0.05)] backdrop-blur">
+    <section className="overflow-hidden rounded-md border border-outline-variant bg-surface shadow-[0_22px_70px_rgba(0,0,0,0.2)]">
       <div
         className={cn(
-          "flex items-start justify-between gap-4 border-b border-slate-200/70 bg-slate-50/70",
+          "flex items-start justify-between gap-4 border-b border-outline-variant bg-surface-container-low",
           compact ? "px-4 py-3.5" : "px-5 py-4",
         )}
       >
         <div>
-          <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
-          {description ? <p className="mt-1 text-xs leading-6 text-slate-500">{description}</p> : null}
+          <h2 className="text-sm font-semibold text-on-surface">{title}</h2>
+          {description ? <p className="mt-1 text-xs leading-6 text-text-muted">{description}</p> : null}
         </div>
         {actions}
       </div>
@@ -163,10 +163,10 @@ function CardSection({
 
 function MetricCard({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
   return (
-    <div className="rounded-lg border border-slate-200/80 bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_100%)] px-4 py-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-      <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{label}</div>
-      <div className="mt-3 text-2xl font-semibold text-slate-950">{value}</div>
-      {hint ? <div className="mt-2 text-xs text-slate-500">{hint}</div> : null}
+    <div className="rounded-md border border-outline-variant bg-surface-container-low px-4 py-4">
+      <div className="font-mono text-[10px] uppercase tracking-widest text-text-muted">{label}</div>
+      <div className="mt-3 text-2xl font-semibold text-on-surface">{value}</div>
+      {hint ? <div className="mt-2 text-xs text-text-muted">{hint}</div> : null}
     </div>
   );
 }
@@ -175,7 +175,7 @@ function StatusPill({ text }: { text: string }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em]",
+        "inline-flex items-center rounded border px-2 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wider",
         statusClass(text),
       )}
     >
@@ -186,16 +186,16 @@ function StatusPill({ text }: { text: string }) {
 
 function EmptyState({ title, text }: { title: string; text: string }) {
   return (
-    <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50/80 px-6 py-10 text-center">
-      <div className="text-sm font-medium text-slate-700">{title}</div>
-      <div className="mx-auto mt-2 max-w-xl text-xs leading-6 text-slate-500">{text}</div>
+    <div className="rounded-md border border-dashed border-outline-variant bg-surface-container-low px-6 py-10 text-center">
+      <div className="text-sm font-medium text-on-surface">{title}</div>
+      <div className="mx-auto mt-2 max-w-xl text-xs leading-6 text-text-muted">{text}</div>
     </div>
   );
 }
 
 function PanelSkeleton({ text = "正在加载面板" }: { text?: string }) {
   return (
-    <div className="flex min-h-[220px] items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50/80 text-sm text-slate-500">
+    <div className="flex min-h-[220px] items-center justify-center rounded-md border border-dashed border-outline-variant bg-surface-container-low text-sm text-text-muted">
       <div className="inline-flex items-center gap-3">
         <Loader2 className="h-4 w-4 animate-spin" />
         {text}
@@ -1925,26 +1925,26 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#fafaf7_0%,#f1f4f8_100%)] text-slate-900">
-      <div className="grid min-h-screen xl:grid-cols-[300px_minmax(0,1fr)]">
-        <aside className="relative flex flex-col overflow-hidden border-r border-slate-200/60 bg-slate-950 text-slate-100">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(96,165,250,0.14),transparent_30%),radial-gradient(circle_at_86%_18%,rgba(45,212,191,0.12),transparent_24%)]" />
+    <div className="mneme-workbench min-h-screen bg-surface-dim text-on-surface">
+      <div className="grid min-h-screen xl:grid-cols-[292px_minmax(0,1fr)]">
+        <aside className="relative flex flex-col overflow-hidden border-r border-outline-variant bg-surface-container-lowest text-on-surface">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(#2a2721_1px,transparent_1px)] [background-size:18px_18px] opacity-60" />
 
-          <div className="relative border-b border-white/10 px-6 py-6">
-            <div className="inline-flex h-12 w-12 items-center justify-center rounded-lg border border-white/15 bg-white/5 text-lg font-semibold shadow-[0_16px_40px_rgba(15,23,42,0.3)]">
+          <div className="relative border-b border-outline-variant px-5 py-5">
+            <div className="inline-flex size-10 items-center justify-center rounded-md bg-primary text-base font-bold text-on-primary">
               M
             </div>
             <div className="mt-4">
-              <div className="font-serif text-[2rem] leading-none">Mneme</div>
-              <div className="mt-2 text-xs uppercase tracking-[0.2em] text-slate-400">Agentic RAG Console</div>
+              <div className="text-2xl font-semibold leading-none tracking-normal">Mneme</div>
+              <div className="mt-2 font-mono text-[10px] uppercase tracking-widest text-text-muted">Memory vault</div>
             </div>
-            <div className="mt-5 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.14em] text-slate-300">
-              <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">API</div>
-              <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">{user?.display_name || user?.username}</div>
+            <div className="mt-5 flex flex-wrap gap-2 font-mono text-[10px] uppercase tracking-wider text-text-muted">
+              <div className="rounded border border-outline-variant bg-surface px-2 py-1">API</div>
+              <div className="max-w-full truncate rounded border border-outline-variant bg-surface px-2 py-1">{user?.display_name || user?.username}</div>
             </div>
           </div>
 
-          <div className="relative space-y-8 overflow-y-auto px-4 py-5">
+          <div className="relative space-y-7 overflow-y-auto px-3 py-4">
             <nav className="space-y-1">
               {VIEW_ITEMS.map((item) => (
                 <button
@@ -1952,16 +1952,16 @@ function App() {
                   type="button"
                   onClick={() => setView(item.id)}
                   className={cn(
-                    "flex w-full items-center gap-3 rounded-lg border px-4 py-3.5 text-left transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky-200/20",
+                    "flex w-full items-center gap-3 rounded-md border px-3 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
                     view === item.id
-                      ? "border-white/20 bg-white/10 text-white shadow-[0_16px_36px_rgba(15,23,42,0.18)]"
-                      : "border-transparent text-slate-300 hover:border-white/10 hover:bg-white/5",
+                      ? "border-primary/40 bg-primary-container/60 text-on-primary-container"
+                      : "border-transparent text-on-surface-variant hover:border-outline-variant hover:bg-surface-container-low",
                   )}
                 >
                   <item.icon className="h-4 w-4" />
                   <div>
                     <div className="text-sm font-medium">{item.label}</div>
-                    <div className="text-[11px] text-slate-400">{item.hint}</div>
+                    <div className="text-[11px] text-text-muted">{item.hint}</div>
                   </div>
                 </button>
               ))}
@@ -1969,27 +1969,27 @@ function App() {
 
             <section className="space-y-3">
               <div className="flex items-center justify-between">
-                <div className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Knowledge Bases</div>
-                <span className="text-xs text-slate-500">{knowledgeBases.length}</span>
+                <div className="font-mono text-[10px] uppercase tracking-widest text-text-muted">Vaults</div>
+                <span className="text-xs text-text-muted">{knowledgeBases.length}</span>
               </div>
 
-              <form className="space-y-2 rounded-lg border border-white/10 bg-white/5 p-3" onSubmit={handleCreateKnowledgeBase}>
+              <form className="space-y-2 rounded-md border border-outline-variant bg-surface p-3" onSubmit={handleCreateKnowledgeBase}>
                 <input
                   value={knowledgeBaseForm.name}
                   onChange={(event) => setKnowledgeBaseForm((current) => ({ ...current, name: event.target.value }))}
-                  className="h-10 w-full rounded-md border border-white/10 bg-slate-950 px-3 text-sm text-white outline-none placeholder:text-slate-500 transition focus:border-sky-300/50"
+                  className="h-9 w-full rounded-md border border-outline-variant bg-surface-container-low px-3 text-sm text-on-surface outline-none placeholder:text-text-muted transition focus:border-primary"
                   placeholder="新知识库名称"
                 />
                 <input
                   value={knowledgeBaseForm.description}
                   onChange={(event) => setKnowledgeBaseForm((current) => ({ ...current, description: event.target.value }))}
-                  className="h-10 w-full rounded-md border border-white/10 bg-slate-950 px-3 text-sm text-white outline-none placeholder:text-slate-500 transition focus:border-sky-300/50"
+                  className="h-9 w-full rounded-md border border-outline-variant bg-surface-container-low px-3 text-sm text-on-surface outline-none placeholder:text-text-muted transition focus:border-primary"
                   placeholder="描述，可选"
                 />
                 <button
                   type="submit"
                   disabled={isBusy("create-kb")}
-                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-white/10 bg-white/10 text-sm text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md bg-primary text-sm font-medium text-on-primary transition hover:bg-on-primary-container disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isBusy("create-kb") ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                   创建知识库
@@ -2001,10 +2001,10 @@ function App() {
                   <div
                     key={knowledgeBase.id}
                     className={cn(
-                      "rounded-lg border px-3 py-3 transition",
+                      "rounded-md border px-3 py-3 transition",
                       selectedKnowledgeBaseId === knowledgeBase.id
-                        ? "border-white/20 bg-white/10 shadow-[0_16px_36px_rgba(15,23,42,0.18)]"
-                        : "border-white/10 bg-white/5 hover:border-white/15 hover:bg-white/[0.07]",
+                        ? "border-primary/40 bg-primary-container/40"
+                        : "border-outline-variant bg-surface hover:border-outline hover:bg-surface-container-low",
                     )}
                   >
                     <button
@@ -2014,22 +2014,22 @@ function App() {
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <div className="truncate text-sm font-medium text-white">{knowledgeBase.name}</div>
-                          <div className="mt-1 line-clamp-2 text-xs leading-5 text-slate-400">
+                          <div className="truncate text-sm font-medium text-on-surface">{knowledgeBase.name}</div>
+                          <div className="mt-1 line-clamp-2 text-xs leading-5 text-text-muted">
                             {knowledgeBase.description || "没有描述"}
                           </div>
                         </div>
                         {knowledgeBase.is_default ? <StatusPill text="default" /> : null}
                       </div>
                     </button>
-                    <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-400">
+                    <div className="mt-3 flex items-center justify-between gap-3 text-xs text-text-muted">
                       <span>{formatDate(knowledgeBase.created_at)}</span>
                       {!knowledgeBase.is_default ? (
                         <button
                           type="button"
                           onClick={() => void handleDeleteKnowledgeBase(knowledgeBase)}
                           disabled={isBusy(`delete-kb-${knowledgeBase.id}`)}
-                          className="text-rose-300 transition hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="text-red-300 transition hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           删除
                         </button>
@@ -2040,8 +2040,8 @@ function App() {
               </div>
             </section>
 
-            <section className="space-y-3 rounded-lg border border-white/10 bg-white/5 p-4 text-xs leading-6 text-slate-300">
-              <div className="flex items-center gap-2 font-medium text-white">
+            <section className="space-y-3 rounded-md border border-outline-variant bg-surface p-4 text-xs leading-6 text-on-surface-variant">
+              <div className="flex items-center gap-2 font-medium text-on-surface">
                 <ShieldCheck className="h-4 w-4" />
                 Runtime
               </div>
@@ -2060,19 +2060,19 @@ function App() {
             </section>
           </div>
 
-          <div className="relative mt-auto border-t border-white/10 px-4 py-4">
-            <div className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10">
+          <div className="relative mt-auto border-t border-outline-variant px-3 py-3">
+            <div className="flex items-center gap-3 rounded-md border border-outline-variant bg-surface px-3 py-3">
+              <div className="flex size-9 items-center justify-center rounded-md bg-surface-container-high text-primary">
                 <UserRound className="h-5 w-5" />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium text-white">{user?.display_name || user?.username}</div>
-                <div className="truncate text-xs text-slate-400">{user?.username}</div>
+                <div className="truncate text-sm font-medium text-on-surface">{user?.display_name || user?.username}</div>
+                <div className="truncate text-xs text-text-muted">{user?.username}</div>
               </div>
               <button
                 type="button"
                 onClick={logout}
-                className="inline-flex h-9 w-9 items-center justify-center border border-white/10 text-slate-300 transition hover:bg-white/10"
+                className="inline-flex size-8 items-center justify-center rounded-md border border-outline-variant text-text-muted transition hover:bg-surface-container-high hover:text-on-surface"
               >
                 <LogOut className="h-4 w-4" />
               </button>
@@ -2081,36 +2081,36 @@ function App() {
         </aside>
 
         <main className="flex min-h-screen flex-col">
-          <header className="border-b border-slate-200/70 bg-white/70 backdrop-blur">
+          <header className="border-b border-outline-variant bg-surface-container-low/95 backdrop-blur">
             <div className="mx-auto flex w-full max-w-[1680px] flex-col gap-6 px-4 py-5 sm:px-6 lg:px-8">
               <div className="flex flex-col gap-5 2xl:flex-row 2xl:items-end 2xl:justify-between">
                 <div className="max-w-3xl">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-slate-500 shadow-sm">
+                  <div className="inline-flex items-center gap-2 rounded-md border border-outline-variant bg-surface px-3 py-1 font-mono text-[10px] uppercase tracking-widest text-text-muted">
                     <CurrentViewIcon className="h-3.5 w-3.5" />
                     {currentViewItem.label}
                   </div>
-                  <h1 className="mt-4 font-serif text-3xl text-slate-950 sm:text-4xl">
+                  <h1 className="mt-4 text-3xl font-semibold tracking-normal text-on-surface sm:text-4xl">
                     {selectedKnowledgeBase?.name || "选择一个知识库开始"}
                   </h1>
-                  <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-500">
+                  <p className="mt-3 max-w-3xl text-sm leading-7 text-text-muted">
                     当前视图聚焦 {currentViewItem.hint}。
                   </p>
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="min-w-[156px] rounded-lg border border-slate-200/80 bg-white/90 px-4 py-3 shadow-[0_16px_40px_rgba(15,23,42,0.04)]">
-                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Knowledge Bases</div>
-                    <div className="mt-2 text-2xl font-semibold text-slate-950">{knowledgeBases.length}</div>
-                    <div className="mt-1 text-xs text-slate-500">{user?.display_name || user?.username}</div>
+                  <div className="min-w-[156px] rounded-md border border-outline-variant bg-surface px-4 py-3">
+                    <div className="font-mono text-[10px] uppercase tracking-widest text-text-muted">Knowledge Bases</div>
+                    <div className="mt-2 text-2xl font-semibold text-on-surface">{knowledgeBases.length}</div>
+                    <div className="mt-1 text-xs text-text-muted">{user?.display_name || user?.username}</div>
                   </div>
-                  <div className="min-w-[156px] rounded-lg border border-slate-200/80 bg-white/90 px-4 py-3 shadow-[0_16px_40px_rgba(15,23,42,0.04)]">
-                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Documents</div>
-                    <div className="mt-2 text-2xl font-semibold text-slate-950">{documents.length}</div>
+                  <div className="min-w-[156px] rounded-md border border-outline-variant bg-surface px-4 py-3">
+                    <div className="font-mono text-[10px] uppercase tracking-widest text-text-muted">Documents</div>
+                    <div className="mt-2 text-2xl font-semibold text-on-surface">{documents.length}</div>
                     <div className="mt-1 text-xs text-slate-500">{indexedDocumentCount} 已完成索引</div>
                   </div>
-                  <div className="min-w-[156px] rounded-lg border border-slate-200/80 bg-white/90 px-4 py-3 shadow-[0_16px_40px_rgba(15,23,42,0.04)]">
-                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Active Context</div>
-                    <div className="mt-2 text-2xl font-semibold text-slate-950">{activeTaskIds.length}</div>
+                  <div className="min-w-[156px] rounded-md border border-outline-variant bg-surface px-4 py-3">
+                    <div className="font-mono text-[10px] uppercase tracking-widest text-text-muted">Active Context</div>
+                    <div className="mt-2 text-2xl font-semibold text-on-surface">{activeTaskIds.length}</div>
                     <div className="mt-1 truncate text-xs text-slate-500">{selectedDocument?.file_name || "未选中文档"}</div>
                   </div>
                 </div>
@@ -2119,10 +2119,10 @@ function App() {
               {banner ? (
                 <div
                   className={cn(
-                    "flex items-start gap-3 rounded-lg border px-4 py-3 text-sm shadow-sm",
-                    banner.tone === "success" && "border-emerald-200 bg-emerald-50 text-emerald-700",
-                    banner.tone === "error" && "border-rose-200 bg-rose-50 text-rose-700",
-                    banner.tone === "info" && "border-sky-200 bg-sky-50 text-sky-700",
+                    "flex items-start gap-3 rounded-md border px-4 py-3 text-sm",
+                    banner.tone === "success" && "border-emerald-400/30 bg-emerald-500/10 text-emerald-300",
+                    banner.tone === "error" && "border-red-400/30 bg-red-500/10 text-red-300",
+                    banner.tone === "info" && "border-primary/30 bg-primary/10 text-on-primary-container",
                   )}
                 >
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
