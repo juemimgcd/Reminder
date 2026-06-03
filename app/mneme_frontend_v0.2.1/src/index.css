@@ -1,56 +1,65 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=JetBrains+Mono:wght@400&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-  --font-serif: "Playfair Display", serif;
+  --font-serif: "Inter", ui-sans-serif, system-ui, sans-serif;
 
-  --color-surface: #ffffff;
-  --color-surface-dim: #f1f5f9;
-  --color-surface-bright: #ffffff;
-  --color-surface-container-lowest: #ffffff;
-  --color-surface-container-low: #f8fafc;
-  --color-surface-container: #f1f5f9;
-  --color-surface-container-high: #e2e8f0;
-  --color-surface-container-highest: #cbd5e1;
-  
-  --color-on-surface: #0f172a;
-  --color-on-surface-variant: #475569;
-  --color-inverse-surface: #1e293b;
-  --color-inverse-on-surface: #f8fafc;
-  
-  --color-outline: #94a3b8;
-  --color-outline-variant: #e2e8f0;
-  
-  --color-primary: #155eef;
-  --color-on-primary: #ffffff;
-  --color-primary-container: #dbeafe;
-  --color-on-primary-container: #1d4ed8;
-  
-  --color-secondary: #64748b;
-  --color-on-secondary: #ffffff;
-  --color-secondary-container: #f1f5f9;
-  
-  --color-background: #f5f6f1;
-  --color-on-background: #0f172a;
-  
-  --color-text-primary: #0f172a;
-  --color-text-muted: #64748b;
-  --color-accent-soft: #4f46e50d;
+  --color-surface: #1d1b18;
+  --color-surface-dim: #141310;
+  --color-surface-bright: #28251f;
+  --color-surface-container-lowest: #11100e;
+  --color-surface-container-low: #191814;
+  --color-surface-container: #211f1a;
+  --color-surface-container-high: #2a2721;
+  --color-surface-container-highest: #373229;
+
+  --color-on-surface: #f2eee6;
+  --color-on-surface-variant: #c3baaa;
+  --color-inverse-surface: #eee8dc;
+  --color-inverse-on-surface: #1b1915;
+
+  --color-outline: #655d4f;
+  --color-outline-variant: #39352d;
+
+  --color-primary: #9b8cff;
+  --color-on-primary: #17151f;
+  --color-primary-container: #2e2948;
+  --color-on-primary-container: #ded7ff;
+
+  --color-secondary: #c29b61;
+  --color-on-secondary: #17120b;
+  --color-secondary-container: #352819;
+
+  --color-background: #141310;
+  --color-on-background: #f2eee6;
+
+  --color-text-primary: #f2eee6;
+  --color-text-muted: #9f9688;
+  --color-accent-soft: #9b8cff1f;
 }
 
 @layer base {
   :root {
-    color-scheme: light;
+    color-scheme: dark;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    background: #141310;
   }
 
   body {
     min-height: 100vh;
+    margin: 0;
     background:
-      radial-gradient(circle at top left, rgba(21, 94, 239, 0.08), transparent 28rem),
-      radial-gradient(circle at 88% 12%, rgba(13, 148, 136, 0.06), transparent 24rem),
-      linear-gradient(180deg, #fcfcfa 0%, #f5f6f1 42%, #eef2f7 100%);
+      radial-gradient(circle at 12% 8%, rgba(155, 140, 255, 0.12), transparent 24rem),
+      radial-gradient(circle at 88% 10%, rgba(194, 155, 97, 0.08), transparent 22rem),
+      #141310;
     @apply text-on-background font-sans antialiased;
   }
 
@@ -58,13 +67,57 @@
     min-height: 100vh;
   }
 
+  button,
+  input,
+  textarea {
+    font: inherit;
+  }
+
   ::selection {
-    background: rgba(21, 94, 239, 0.16);
-    color: #0f172a;
+    background: rgba(155, 140, 255, 0.32);
+    color: #f7f2ea;
   }
 
   input::placeholder,
   textarea::placeholder {
-    color: #64748b;
+    color: #8f8678;
+  }
+}
+
+@layer utilities {
+  .mneme-workbench [class*="bg-white"],
+  .mneme-workbench [class*="bg-slate-50"],
+  .mneme-workbench [class*="bg-slate-100"] {
+    background-color: rgba(29, 27, 24, 0.92);
+  }
+
+  .mneme-workbench [class*="border-slate"],
+  .mneme-workbench [class*="border-white"] {
+    border-color: rgba(101, 93, 79, 0.56);
+  }
+
+  .mneme-workbench [class*="text-slate-950"],
+  .mneme-workbench [class*="text-slate-900"],
+  .mneme-workbench [class*="text-slate-800"],
+  .mneme-workbench [class*="text-slate-700"] {
+    color: #f2eee6;
+  }
+
+  .mneme-workbench [class*="text-slate-600"],
+  .mneme-workbench [class*="text-slate-500"],
+  .mneme-workbench [class*="text-slate-400"] {
+    color: #9f9688;
+  }
+
+  .mneme-workbench input,
+  .mneme-workbench textarea,
+  .mneme-workbench select {
+    background-color: #191814;
+    border-color: rgba(101, 93, 79, 0.72);
+    color: #f2eee6;
+  }
+
+  .mneme-workbench code {
+    color: #ded7ff;
   }
 }
