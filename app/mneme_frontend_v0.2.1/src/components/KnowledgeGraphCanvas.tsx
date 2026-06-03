@@ -13,10 +13,10 @@ type SimulationGraphNode = GraphNodeData & d3.SimulationNodeDatum;
 type SimulationGraphLink = GraphEdgeData & d3.SimulationLinkDatum<SimulationGraphNode>;
 
 const NODE_COLORS: Record<string, string> = {
-  user: "#0f172a",
-  knowledge_base: "#1d4ed8",
-  document: "#7c3aed",
-  memory_entry: "#059669",
+  user: "#f2eee6",
+  knowledge_base: "#9b8cff",
+  document: "#c29b61",
+  memory_entry: "#7dd3a8",
 };
 
 export default function KnowledgeGraphCanvas({
@@ -81,7 +81,7 @@ export default function KnowledgeGraphCanvas({
 
     const link = root
       .append("g")
-      .attr("stroke", "#cbd5e1")
+      .attr("stroke", "#4a443a")
       .attr("stroke-opacity", 0.85)
       .selectAll("line")
       .data(edges)
@@ -129,8 +129,8 @@ export default function KnowledgeGraphCanvas({
         }
         return datum.node_type === "document" ? 12 : datum.node_type === "memory_entry" ? 8 : 10;
       })
-      .attr("fill", "#ffffff")
-      .attr("stroke", (datum) => (datum.id === selectedNodeId ? "#ef4444" : NODE_COLORS[datum.node_type] ?? "#64748b"))
+      .attr("fill", "#1d1b18")
+      .attr("stroke", (datum) => (datum.id === selectedNodeId ? "#ded7ff" : NODE_COLORS[datum.node_type] ?? "#655d4f"))
       .attr("stroke-width", (datum) => (datum.id === selectedNodeId ? 3 : datum.id === data.root_node_id ? 2.6 : 1.8));
 
     node
@@ -141,7 +141,7 @@ export default function KnowledgeGraphCanvas({
         }
         return datum.node_type === "document" ? 4.5 : 3.5;
       })
-      .attr("fill", (datum) => NODE_COLORS[datum.node_type] ?? "#64748b");
+      .attr("fill", (datum) => NODE_COLORS[datum.node_type] ?? "#9f9688");
 
     const labels = root
       .append("g")
@@ -150,8 +150,8 @@ export default function KnowledgeGraphCanvas({
       .join("text")
       .text((datum) => datum.label)
       .attr("font-size", 11)
-      .attr("font-family", "IBM Plex Sans, ui-sans-serif, system-ui, sans-serif")
-      .attr("fill", "#334155")
+      .attr("font-family", "Inter, ui-sans-serif, system-ui, sans-serif")
+      .attr("fill", "#c3baaa")
       .attr("dx", 16)
       .attr("dy", 4);
 
@@ -185,21 +185,21 @@ export default function KnowledgeGraphCanvas({
     }
 
     outerRingRef.current
-      .attr("stroke", (datum) => (datum.id === selectedNodeId ? "#ef4444" : NODE_COLORS[datum.node_type] ?? "#64748b"))
+      .attr("stroke", (datum) => (datum.id === selectedNodeId ? "#ded7ff" : NODE_COLORS[datum.node_type] ?? "#655d4f"))
       .attr("stroke-width", (datum) => (datum.id === selectedNodeId ? 3 : datum.id === data.root_node_id ? 2.6 : 1.8));
   }, [data, selectedNodeId]);
 
   if (!data) {
     return (
-      <div className="flex h-full items-center justify-center border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
+      <div className="flex h-full items-center justify-center rounded-md border border-dashed border-outline-variant bg-surface-container-low text-sm text-text-muted">
         当前没有图数据，请先选择范围并加载。
       </div>
     );
   }
 
   return (
-    <div className="flex h-full flex-col border border-slate-200 bg-white">
-      <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 text-xs text-slate-500">
+    <div className="flex h-full flex-col rounded-md border border-outline-variant bg-surface">
+      <div className="flex items-center justify-between border-b border-outline-variant bg-surface-container-low px-4 py-3 text-xs text-text-muted">
         <div className="flex flex-wrap gap-4">
           <span>Nodes {data.node_count}</span>
           <span>Edges {data.edge_count}</span>
@@ -208,13 +208,13 @@ export default function KnowledgeGraphCanvas({
         <div className="flex flex-wrap gap-3">
           {counts.map(([type, count]) => (
             <span key={type} className="inline-flex items-center gap-2">
-              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: NODE_COLORS[type] ?? "#64748b" }} />
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: NODE_COLORS[type] ?? "#9f9688" }} />
               {type} {count}
             </span>
           ))}
         </div>
       </div>
-      <div className="relative flex-1 bg-[radial-gradient(circle_at_center,#f8fafc_0%,#eef2ff_100%)]">
+      <div className="relative flex-1 bg-[radial-gradient(#2a2721_1px,transparent_1px)] [background-size:18px_18px]">
         <svg ref={svgRef} className="h-full w-full" />
       </div>
     </div>
