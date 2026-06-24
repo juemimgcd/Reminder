@@ -1,3 +1,4 @@
+import previewApi, { isPreviewMode, PREVIEW_API_BASE_URL, PREVIEW_TOKEN } from "./previewApi";
 import type {
   ApiResponse,
   AuthTokenData,
@@ -57,7 +58,9 @@ function resolveApiBaseUrl() {
   return "http://127.0.0.1:8000";
 }
 
-export const API_BASE_URL = resolveApiBaseUrl();
+export const IS_PREVIEW_MODE = isPreviewMode();
+export { PREVIEW_TOKEN };
+export const API_BASE_URL = IS_PREVIEW_MODE ? PREVIEW_API_BASE_URL : resolveApiBaseUrl();
 
 type Primitive = string | number | boolean;
 type QueryValue = Primitive | null | undefined;
@@ -168,7 +171,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 }
 
-export const api = {
+const realApi = {
   health() {
     return request<ServiceHealthData>("/health");
   },
@@ -453,3 +456,5 @@ export const api = {
     });
   },
 };
+
+export const api: typeof realApi = IS_PREVIEW_MODE ? previewApi : realApi;

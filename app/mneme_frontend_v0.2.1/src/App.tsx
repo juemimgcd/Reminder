@@ -20,7 +20,7 @@ import {
 import { Suspense, lazy, type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import AuthScreen from "./components/AuthScreen";
-import { ApiError, api, API_BASE_URL } from "./lib/api";
+import { ApiError, api, API_BASE_URL, IS_PREVIEW_MODE, PREVIEW_TOKEN } from "./lib/api";
 import { cn } from "./lib/utils";
 import type {
   CompanionAnswerResult,
@@ -205,8 +205,8 @@ function PanelSkeleton({ text = "正在加载面板" }: { text?: string }) {
 }
 
 function App() {
-  const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) ?? "");
-  const [authStatus, setAuthStatus] = useState<AuthStatus>(() => (localStorage.getItem(TOKEN_KEY) ? "checking" : "guest"));
+  const [token, setToken] = useState(() => (IS_PREVIEW_MODE ? PREVIEW_TOKEN : localStorage.getItem(TOKEN_KEY) ?? ""));
+  const [authStatus, setAuthStatus] = useState<AuthStatus>(() => (IS_PREVIEW_MODE || localStorage.getItem(TOKEN_KEY) ?"checking" : "guest"));
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [banner, setBanner] = useState<BannerState | null>(null);
@@ -1939,7 +1939,7 @@ function App() {
               <div className="mt-2 font-mono text-[10px] uppercase tracking-widest text-text-muted">Memory vault</div>
             </div>
             <div className="mt-5 flex flex-wrap gap-2 font-mono text-[10px] uppercase tracking-wider text-text-muted">
-              <div className="rounded border border-outline-variant bg-surface px-2 py-1">API</div>
+              <div className="rounded border border-outline-variant bg-surface px-2 py-1">{IS_PREVIEW_MODE ?"Preview" : "API"}</div>
               <div className="max-w-full truncate rounded border border-outline-variant bg-surface px-2 py-1">{user?.display_name || user?.username}</div>
             </div>
           </div>
