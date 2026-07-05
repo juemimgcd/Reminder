@@ -1,16 +1,21 @@
 import {
   AlertCircle,
+  BookOpen,
   Bot,
   Brain,
   Database,
+  FileText,
   FolderGit2,
   GitBranch,
   Loader2,
   LogOut,
   MessageSquareText,
+  PanelRight,
   Plus,
   RefreshCw,
   ScanSearch,
+  Search,
+  Settings,
   ShieldCheck,
   Sparkles,
   Trash2,
@@ -67,6 +72,18 @@ const VIEW_ITEMS: Array<{ id: WorkspaceView; label: string; icon: typeof FolderG
   { id: "memory", label: "Memory", icon: Database, hint: "记忆库与治理" },
   { id: "insights", label: "Insights", icon: Brain, hint: "画像、成长、分析" },
 ];
+
+const iconButtonClass =
+  "inline-flex size-9 items-center justify-center rounded-md text-text-muted transition hover:bg-surface-container-high hover:text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 disabled:cursor-not-allowed disabled:opacity-50";
+
+const secondaryButtonClass =
+  "inline-flex h-9 items-center justify-center gap-2 rounded-md border border-outline-variant bg-surface-container px-3 text-xs font-medium text-on-surface-variant transition hover:border-outline hover:bg-surface-container-high hover:text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 disabled:cursor-not-allowed disabled:opacity-50";
+
+const primaryButtonClass =
+  "inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-3 text-xs font-semibold text-on-primary transition hover:bg-on-primary-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 disabled:cursor-not-allowed disabled:opacity-50";
+
+const inputClass =
+  "h-9 w-full rounded-md border border-outline-variant bg-surface-container-low px-3 text-sm text-on-surface outline-none placeholder:text-text-muted transition focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60";
 
 const KnowledgeGraphCanvas = lazy(() => import("./components/KnowledgeGraphCanvas"));
 const ReactMarkdown = lazy(() => import("react-markdown"));
@@ -143,10 +160,10 @@ function CardSection({
   compact?: boolean;
 }) {
   return (
-    <section className="overflow-hidden rounded-md border border-outline-variant bg-surface shadow-[0_22px_70px_rgba(0,0,0,0.2)]">
+    <section className="overflow-hidden rounded-md border border-outline-variant bg-surface/95 shadow-[0_18px_58px_rgba(0,0,0,0.18)]">
       <div
         className={cn(
-          "flex items-start justify-between gap-4 border-b border-outline-variant bg-surface-container-low",
+          "flex items-start justify-between gap-4 border-b border-outline-variant bg-surface-container-low/92",
           compact ? "px-4 py-3.5" : "px-5 py-4",
         )}
       >
@@ -163,9 +180,9 @@ function CardSection({
 
 function MetricCard({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
   return (
-    <div className="rounded-md border border-outline-variant bg-surface-container-low px-4 py-4">
+    <div className="rounded-md border border-outline-variant bg-surface-container-low/82 px-4 py-4">
       <div className="font-mono text-[10px] uppercase tracking-widest text-text-muted">{label}</div>
-      <div className="mt-3 text-2xl font-semibold text-on-surface">{value}</div>
+      <div className="mt-3 truncate text-2xl font-semibold text-on-surface">{value}</div>
       {hint ? <div className="mt-2 text-xs text-text-muted">{hint}</div> : null}
     </div>
   );
@@ -186,7 +203,7 @@ function StatusPill({ text }: { text: string }) {
 
 function EmptyState({ title, text }: { title: string; text: string }) {
   return (
-    <div className="rounded-md border border-dashed border-outline-variant bg-surface-container-low px-6 py-10 text-center">
+    <div className="rounded-md border border-dashed border-outline-variant bg-surface-container-low/72 px-6 py-10 text-center">
       <div className="text-sm font-medium text-on-surface">{title}</div>
       <div className="mx-auto mt-2 max-w-xl text-xs leading-6 text-text-muted">{text}</div>
     </div>
@@ -195,7 +212,7 @@ function EmptyState({ title, text }: { title: string; text: string }) {
 
 function PanelSkeleton({ text = "正在加载面板" }: { text?: string }) {
   return (
-    <div className="flex min-h-[220px] items-center justify-center rounded-md border border-dashed border-outline-variant bg-surface-container-low text-sm text-text-muted">
+    <div className="flex min-h-[220px] items-center justify-center rounded-md border border-dashed border-outline-variant bg-surface-container-low/72 text-sm text-text-muted">
       <div className="inline-flex items-center gap-3">
         <Loader2 className="h-4 w-4 animate-spin" />
         {text}
@@ -1925,218 +1942,292 @@ function App() {
   }
 
   return (
-    <div className="mneme-workbench min-h-screen bg-surface-dim text-on-surface">
-      <div className="grid min-h-screen xl:grid-cols-[292px_minmax(0,1fr)]">
-        <aside className="relative flex flex-col overflow-hidden border-r border-outline-variant bg-surface-container-lowest text-on-surface">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(#2a2721_1px,transparent_1px)] [background-size:18px_18px] opacity-60" />
+    <div className="mneme-workbench min-h-screen bg-background text-on-surface">
+      <div className="min-h-screen lg:grid lg:grid-cols-[52px_286px_minmax(0,1fr)] 2xl:grid-cols-[52px_286px_minmax(0,1fr)_320px]">
+        <aside className="hidden min-h-screen flex-col border-r border-outline-variant bg-surface-container-lowest lg:flex">
+          <div className="flex h-12 items-center justify-center border-b border-outline-variant">
+            <div className="flex size-8 items-center justify-center rounded-md bg-primary text-sm font-bold text-on-primary">M</div>
+          </div>
 
-          <div className="relative border-b border-outline-variant px-5 py-5">
-            <div className="inline-flex size-10 items-center justify-center rounded-md bg-primary text-base font-bold text-on-primary">
-              M
-            </div>
-            <div className="mt-4">
-              <div className="text-2xl font-semibold leading-none tracking-normal">Mneme</div>
-              <div className="mt-2 font-mono text-[10px] uppercase tracking-widest text-text-muted">Memory vault</div>
-            </div>
-            <div className="mt-5 flex flex-wrap gap-2 font-mono text-[10px] uppercase tracking-wider text-text-muted">
-              <div className="rounded border border-outline-variant bg-surface px-2 py-1">{IS_PREVIEW_MODE ?"Preview" : "API"}</div>
-              <div className="max-w-full truncate rounded border border-outline-variant bg-surface px-2 py-1">{user?.display_name || user?.username}</div>
+          <nav className="flex flex-1 flex-col items-center gap-1 px-1.5 py-3">
+            {VIEW_ITEMS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setView(item.id)}
+                title={item.label}
+                aria-label={item.label}
+                aria-pressed={view === item.id}
+                className={cn(
+                  iconButtonClass,
+                  view === item.id && "bg-primary-container text-on-primary-container shadow-[inset_3px_0_0_var(--color-primary)]",
+                )}
+              >
+                <item.icon className="h-4 w-4" />
+              </button>
+            ))}
+          </nav>
+
+          <div className="flex flex-col items-center gap-1 border-t border-outline-variant px-1.5 py-3">
+            <button type="button" className={iconButtonClass} title="Search" aria-label="Search">
+              <Search className="h-4 w-4" />
+            </button>
+            <button type="button" className={iconButtonClass} title="Settings" aria-label="Settings">
+              <Settings className="h-4 w-4" />
+            </button>
+            <button type="button" onClick={logout} className={iconButtonClass} title="Log out" aria-label="Log out">
+              <LogOut className="h-4 w-4" />
+            </button>
+          </div>
+        </aside>
+
+        <aside className="hidden min-h-screen flex-col overflow-hidden border-r border-outline-variant bg-surface-container-low lg:flex">
+          <div className="border-b border-outline-variant px-4 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-semibold text-on-surface">Mneme Vault</div>
+                <div className="mt-1 truncate font-mono text-[10px] uppercase tracking-widest text-text-muted">
+                  {IS_PREVIEW_MODE ? "Preview workspace" : "Live API workspace"}
+                </div>
+              </div>
+              <StatusPill text={serviceHealth?.status ?? "unknown"} />
             </div>
           </div>
 
-          <div className="relative space-y-7 overflow-y-auto px-3 py-4">
-            <nav className="space-y-1">
+          <div className="flex-1 overflow-y-auto px-3 py-3">
+            <section className="flex flex-col gap-2">
+              <div className="flex items-center justify-between px-1 font-mono text-[10px] uppercase tracking-widest text-text-muted">
+                <span>Vaults</span>
+                <span>{knowledgeBases.length}</span>
+              </div>
+
+              <form className="flex flex-col gap-2 rounded-md border border-outline-variant bg-surface/76 p-2.5" onSubmit={handleCreateKnowledgeBase}>
+                <input
+                  value={knowledgeBaseForm.name}
+                  onChange={(event) => setKnowledgeBaseForm((current) => ({ ...current, name: event.target.value }))}
+                  className={inputClass}
+                  placeholder="新知识库名称"
+                />
+                <input
+                  value={knowledgeBaseForm.description}
+                  onChange={(event) => setKnowledgeBaseForm((current) => ({ ...current, description: event.target.value }))}
+                  className={inputClass}
+                  placeholder="描述，可选"
+                />
+                <button type="submit" disabled={isBusy("create-kb")} className={primaryButtonClass}>
+                  {isBusy("create-kb") ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                  创建知识库
+                </button>
+              </form>
+
+              <div className="flex flex-col gap-1">
+                {knowledgeBases.length ? (
+                  knowledgeBases.map((knowledgeBase) => (
+                    <div
+                      key={knowledgeBase.id}
+                      className={cn(
+                        "rounded-md border transition",
+                        selectedKnowledgeBaseId === knowledgeBase.id
+                          ? "border-primary/40 bg-primary-container/34"
+                          : "border-transparent hover:border-outline-variant hover:bg-surface-container",
+                      )}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setSelectedKnowledgeBaseId(knowledgeBase.id)}
+                        className="flex w-full items-start gap-2 px-2.5 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
+                      >
+                        <BookOpen className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium text-on-surface">{knowledgeBase.name}</span>
+                          <span className="mt-0.5 line-clamp-2 text-xs leading-5 text-text-muted">
+                            {knowledgeBase.description || "没有描述"}
+                          </span>
+                        </span>
+                      </button>
+                      <div className="flex items-center justify-between gap-2 px-2.5 pb-2 text-[11px] text-text-muted">
+                        <span>{knowledgeBase.is_default ? "default" : formatDate(knowledgeBase.created_at)}</span>
+                        {!knowledgeBase.is_default ? (
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteKnowledgeBase(knowledgeBase)}
+                            disabled={isBusy(`delete-kb-${knowledgeBase.id}`)}
+                            className="rounded px-1.5 py-1 text-red-300 transition hover:bg-red-500/10 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            删除
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-md border border-dashed border-outline-variant px-3 py-6 text-center text-xs leading-6 text-text-muted">
+                    还没有知识库
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="mt-5 flex flex-col gap-2">
+              <div className="flex items-center justify-between px-1 font-mono text-[10px] uppercase tracking-widest text-text-muted">
+                <span>Files</span>
+                <span>{indexedDocumentCount}/{documents.length}</span>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                {documents.length ? (
+                  documents.map((document) => {
+                    const task = documentTaskMap[document.id];
+                    return (
+                      <button
+                        key={document.id}
+                        type="button"
+                        onClick={() => setSelectedDocumentId(document.id)}
+                        className={cn(
+                          "flex w-full items-start gap-2 rounded-md px-2.5 py-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35",
+                          selectedDocumentId === document.id
+                            ? "bg-primary-container/42 text-on-primary-container"
+                            : "text-on-surface-variant hover:bg-surface-container",
+                        )}
+                      >
+                        <FileText className="mt-0.5 h-4 w-4 shrink-0 text-secondary" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm">{document.file_name}</span>
+                          <span className="mt-1 flex items-center gap-2 text-[11px] text-text-muted">
+                            <span className="truncate">{document.file_type}</span>
+                            <span>{task?.status ?? document.status}</span>
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })
+                ) : (
+                  <div className="rounded-md border border-dashed border-outline-variant px-3 py-6 text-center text-xs leading-6 text-text-muted">
+                    当前知识库还没有文件
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-2 rounded-md border border-outline-variant bg-surface/74 p-2.5">
+                <div className="truncate text-xs text-text-muted">
+                  {uploadFile ? `${uploadFile.name} · ${formatBytes(uploadFile.size)}` : "选择文件加入当前 vault"}
+                </div>
+                <div className="mt-2 flex gap-2">
+                  <label className={cn(secondaryButtonClass, "flex-1 cursor-pointer")}>
+                    <Upload className="h-4 w-4" />
+                    选择
+                    <input type="file" className="hidden" onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)} />
+                  </label>
+                  <button
+                    type="button"
+                    disabled={!uploadFile || isBusy("upload")}
+                    onClick={() => void handleUploadDocument()}
+                    className={primaryButtonClass}
+                  >
+                    {isBusy("upload") ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                    上传
+                  </button>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div className="border-t border-outline-variant px-3 py-3">
+            <div className="flex items-center gap-3 rounded-md bg-surface/72 px-2.5 py-2.5">
+              <div className="flex size-8 items-center justify-center rounded-md bg-surface-container-high text-primary">
+                <UserRound className="h-4 w-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium">{user?.display_name || user?.username}</div>
+                <div className="truncate text-xs text-text-muted">{user?.username}</div>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <main className="flex min-h-screen flex-col overflow-hidden bg-surface-dim">
+          <header className="border-b border-outline-variant bg-surface-container-low/95 backdrop-blur">
+            <div className="flex min-h-12 items-center justify-between gap-3 px-3 sm:px-4">
+              <div className="flex min-w-0 items-center gap-2">
+                <div className="flex size-8 items-center justify-center rounded-md bg-primary text-sm font-bold text-on-primary lg:hidden">M</div>
+                <div className="flex min-w-0 items-center rounded-t-md border-x border-t border-outline-variant bg-surface px-3 py-2">
+                  <CurrentViewIcon className="h-4 w-4 shrink-0 text-primary" />
+                  <span className="ml-2 truncate text-sm font-medium">{currentViewItem.label}</span>
+                  <span className="ml-2 hidden max-w-[260px] truncate text-xs text-text-muted sm:inline">
+                    {selectedKnowledgeBase?.name || "未选择知识库"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => token && user && selectedKnowledgeBaseId && void refreshDocuments(token, user, selectedKnowledgeBaseId)}
+                  className={iconButtonClass}
+                  title="Refresh files"
+                  aria-label="Refresh files"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </button>
+                <button type="button" className={iconButtonClass} title="Right context" aria-label="Right context">
+                  <PanelRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            <nav className="grid grid-cols-5 gap-1 border-t border-outline-variant px-2 py-2 lg:hidden">
               {VIEW_ITEMS.map((item) => (
                 <button
                   key={item.id}
                   type="button"
                   onClick={() => setView(item.id)}
                   className={cn(
-                    "flex w-full items-center gap-3 rounded-md border px-3 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
-                    view === item.id
-                      ? "border-primary/40 bg-primary-container/60 text-on-primary-container"
-                      : "border-transparent text-on-surface-variant hover:border-outline-variant hover:bg-surface-container-low",
+                    "flex min-h-11 flex-col items-center justify-center gap-1 rounded-md px-1 text-[11px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35",
+                    view === item.id ? "bg-primary-container text-on-primary-container" : "text-text-muted hover:bg-surface-container",
                   )}
                 >
                   <item.icon className="h-4 w-4" />
-                  <div>
-                    <div className="text-sm font-medium">{item.label}</div>
-                    <div className="text-[11px] text-text-muted">{item.hint}</div>
-                  </div>
+                  <span className="truncate">{item.label}</span>
                 </button>
               ))}
             </nav>
 
-            <section className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="font-mono text-[10px] uppercase tracking-widest text-text-muted">Vaults</div>
-                <span className="text-xs text-text-muted">{knowledgeBases.length}</span>
-              </div>
-
-              <form className="space-y-2 rounded-md border border-outline-variant bg-surface p-3" onSubmit={handleCreateKnowledgeBase}>
-                <input
-                  value={knowledgeBaseForm.name}
-                  onChange={(event) => setKnowledgeBaseForm((current) => ({ ...current, name: event.target.value }))}
-                  className="h-9 w-full rounded-md border border-outline-variant bg-surface-container-low px-3 text-sm text-on-surface outline-none placeholder:text-text-muted transition focus:border-primary"
-                  placeholder="新知识库名称"
-                />
-                <input
-                  value={knowledgeBaseForm.description}
-                  onChange={(event) => setKnowledgeBaseForm((current) => ({ ...current, description: event.target.value }))}
-                  className="h-9 w-full rounded-md border border-outline-variant bg-surface-container-low px-3 text-sm text-on-surface outline-none placeholder:text-text-muted transition focus:border-primary"
-                  placeholder="描述，可选"
-                />
-                <button
-                  type="submit"
-                  disabled={isBusy("create-kb")}
-                  className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md bg-primary text-sm font-medium text-on-primary transition hover:bg-on-primary-container disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {isBusy("create-kb") ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                  创建知识库
-                </button>
-              </form>
-
-              <div className="space-y-2">
-                {knowledgeBases.map((knowledgeBase) => (
-                  <div
-                    key={knowledgeBase.id}
-                    className={cn(
-                      "rounded-md border px-3 py-3 transition",
-                      selectedKnowledgeBaseId === knowledgeBase.id
-                        ? "border-primary/40 bg-primary-container/40"
-                        : "border-outline-variant bg-surface hover:border-outline hover:bg-surface-container-low",
-                    )}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setSelectedKnowledgeBaseId(knowledgeBase.id)}
-                      className="w-full text-left"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-medium text-on-surface">{knowledgeBase.name}</div>
-                          <div className="mt-1 line-clamp-2 text-xs leading-5 text-text-muted">
-                            {knowledgeBase.description || "没有描述"}
-                          </div>
-                        </div>
-                        {knowledgeBase.is_default ? <StatusPill text="default" /> : null}
-                      </div>
-                    </button>
-                    <div className="mt-3 flex items-center justify-between gap-3 text-xs text-text-muted">
-                      <span>{formatDate(knowledgeBase.created_at)}</span>
-                      {!knowledgeBase.is_default ? (
-                        <button
-                          type="button"
-                          onClick={() => void handleDeleteKnowledgeBase(knowledgeBase)}
-                          disabled={isBusy(`delete-kb-${knowledgeBase.id}`)}
-                          className="text-red-300 transition hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          删除
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="space-y-3 rounded-md border border-outline-variant bg-surface p-4 text-xs leading-6 text-on-surface-variant">
-              <div className="flex items-center gap-2 font-medium text-on-surface">
-                <ShieldCheck className="h-4 w-4" />
-                Runtime
-              </div>
-              <div className="flex items-center justify-between">
-                <span>API</span>
-                <StatusPill text={serviceHealth?.status ?? "unknown"} />
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Neo4j</span>
-                <StatusPill text={neo4jHealth?.ok ? "ok" : "warn"} />
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Readiness</span>
-                <StatusPill text={readiness?.overall_status ?? "unknown"} />
-              </div>
-            </section>
-          </div>
-
-          <div className="relative mt-auto border-t border-outline-variant px-3 py-3">
-            <div className="flex items-center gap-3 rounded-md border border-outline-variant bg-surface px-3 py-3">
-              <div className="flex size-9 items-center justify-center rounded-md bg-surface-container-high text-primary">
-                <UserRound className="h-5 w-5" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium text-on-surface">{user?.display_name || user?.username}</div>
-                <div className="truncate text-xs text-text-muted">{user?.username}</div>
-              </div>
-              <button
-                type="button"
-                onClick={logout}
-                className="inline-flex size-8 items-center justify-center rounded-md border border-outline-variant text-text-muted transition hover:bg-surface-container-high hover:text-on-surface"
+            {banner ? (
+              <div
+                className={cn(
+                  "mx-3 mb-3 flex items-start gap-3 rounded-md border px-4 py-3 text-sm sm:mx-4",
+                  banner.tone === "success" && "border-emerald-400/30 bg-emerald-500/10 text-emerald-300",
+                  banner.tone === "error" && "border-red-400/30 bg-red-500/10 text-red-300",
+                  banner.tone === "info" && "border-primary/30 bg-primary/10 text-on-primary-container",
+                )}
               >
-                <LogOut className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        </aside>
-
-        <main className="flex min-h-screen flex-col">
-          <header className="border-b border-outline-variant bg-surface-container-low/95 backdrop-blur">
-            <div className="mx-auto flex w-full max-w-[1680px] flex-col gap-6 px-4 py-5 sm:px-6 lg:px-8">
-              <div className="flex flex-col gap-5 2xl:flex-row 2xl:items-end 2xl:justify-between">
-                <div className="max-w-3xl">
-                  <div className="inline-flex items-center gap-2 rounded-md border border-outline-variant bg-surface px-3 py-1 font-mono text-[10px] uppercase tracking-widest text-text-muted">
-                    <CurrentViewIcon className="h-3.5 w-3.5" />
-                    {currentViewItem.label}
-                  </div>
-                  <h1 className="mt-4 text-3xl font-semibold tracking-normal text-on-surface sm:text-4xl">
-                    {selectedKnowledgeBase?.name || "选择一个知识库开始"}
-                  </h1>
-                  <p className="mt-3 max-w-3xl text-sm leading-7 text-text-muted">
-                    当前视图聚焦 {currentViewItem.hint}。
-                  </p>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="min-w-[156px] rounded-md border border-outline-variant bg-surface px-4 py-3">
-                    <div className="font-mono text-[10px] uppercase tracking-widest text-text-muted">Knowledge Bases</div>
-                    <div className="mt-2 text-2xl font-semibold text-on-surface">{knowledgeBases.length}</div>
-                    <div className="mt-1 text-xs text-text-muted">{user?.display_name || user?.username}</div>
-                  </div>
-                  <div className="min-w-[156px] rounded-md border border-outline-variant bg-surface px-4 py-3">
-                    <div className="font-mono text-[10px] uppercase tracking-widest text-text-muted">Documents</div>
-                    <div className="mt-2 text-2xl font-semibold text-on-surface">{documents.length}</div>
-                    <div className="mt-1 text-xs text-slate-500">{indexedDocumentCount} 已完成索引</div>
-                  </div>
-                  <div className="min-w-[156px] rounded-md border border-outline-variant bg-surface px-4 py-3">
-                    <div className="font-mono text-[10px] uppercase tracking-widest text-text-muted">Active Context</div>
-                    <div className="mt-2 text-2xl font-semibold text-on-surface">{activeTaskIds.length}</div>
-                    <div className="mt-1 truncate text-xs text-slate-500">{selectedDocument?.file_name || "未选中文档"}</div>
-                  </div>
-                </div>
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <div className="flex-1">{banner.text}</div>
+                <button type="button" onClick={() => setBanner(null)} className="text-current/70 transition hover:text-current">
+                  关闭
+                </button>
               </div>
-
-              {banner ? (
-                <div
-                  className={cn(
-                    "flex items-start gap-3 rounded-md border px-4 py-3 text-sm",
-                    banner.tone === "success" && "border-emerald-400/30 bg-emerald-500/10 text-emerald-300",
-                    banner.tone === "error" && "border-red-400/30 bg-red-500/10 text-red-300",
-                    banner.tone === "info" && "border-primary/30 bg-primary/10 text-on-primary-container",
-                  )}
-                >
-                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <div className="flex-1">{banner.text}</div>
-                  <button type="button" onClick={() => setBanner(null)} className="text-current/70 transition hover:text-current">
-                    关闭
-                  </button>
-                </div>
-              ) : null}
-            </div>
+            ) : null}
           </header>
 
-          <div className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
-            <div className="mx-auto w-full max-w-[1680px]">
+          <div className="flex-1 overflow-y-auto px-3 py-4 sm:px-4 lg:px-6 lg:py-6">
+            <div className="mx-auto w-full max-w-[1500px]">
+              <div className="mb-4 border-b border-outline-variant pb-4">
+                <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+                  <div className="min-w-0">
+                    <div className="font-mono text-[10px] uppercase tracking-widest text-text-muted">{currentViewItem.hint}</div>
+                    <h1 className="mt-2 truncate text-2xl font-semibold tracking-normal text-on-surface sm:text-3xl">
+                      {selectedDocument?.file_name || selectedKnowledgeBase?.name || "选择一个知识库开始"}
+                    </h1>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-3 xl:min-w-[520px]">
+                    <MetricCard label="Vaults" value={knowledgeBases.length} hint={user?.display_name || user?.username || "-"} />
+                    <MetricCard label="Files" value={documents.length} hint={`${indexedDocumentCount} 已索引`} />
+                    <MetricCard label="Tasks" value={activeTaskIds.length} hint={selectedDocument?.status || "空闲"} />
+                  </div>
+                </div>
+              </div>
+
               {view === "workspace" && renderWorkspace()}
               {view === "chat" && renderChat()}
               {view === "graph" && renderGraph()}
@@ -2144,7 +2235,102 @@ function App() {
               {view === "insights" && renderInsights()}
             </div>
           </div>
+
+          <footer className="flex min-h-8 items-center justify-between gap-3 border-t border-outline-variant bg-surface-container-low px-3 font-mono text-[11px] text-text-muted sm:px-4">
+            <span className="truncate">{selectedKnowledgeBase?.name || "No vault selected"}</span>
+            <span className="hidden truncate sm:inline">{selectedDocument?.file_name || "No active file"}</span>
+            <span>{API_BASE_URL.replace(/^https?:\/\//, "")}</span>
+          </footer>
         </main>
+
+        <aside className="hidden min-h-screen flex-col overflow-hidden border-l border-outline-variant bg-surface-container-low 2xl:flex">
+          <div className="flex h-12 items-center justify-between border-b border-outline-variant px-4">
+            <div className="text-sm font-semibold">Context</div>
+            <PanelRight className="h-4 w-4 text-text-muted" />
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-4 py-4">
+            <section className="border-b border-outline-variant pb-5">
+              <div className="font-mono text-[10px] uppercase tracking-widest text-text-muted">Active note</div>
+              <div className="mt-3 rounded-md border border-outline-variant bg-surface/80 p-3">
+                <div className="flex items-start gap-3">
+                  <FileText className="mt-0.5 h-4 w-4 shrink-0 text-secondary" />
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium">{selectedDocument?.file_name || "未选中文档"}</div>
+                    <div className="mt-1 text-xs leading-5 text-text-muted">
+                      {selectedDocument ? `${selectedDocument.file_type} · ${formatDate(selectedDocument.created_at)}` : "从左侧文件树选择文档。"}
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <StatusPill text={selectedDocument?.status ?? "none"} />
+                </div>
+              </div>
+            </section>
+
+            <section className="border-b border-outline-variant py-5">
+              <div className="font-mono text-[10px] uppercase tracking-widest text-text-muted">Workspace outline</div>
+              <div className="mt-3 flex flex-col gap-1">
+                {VIEW_ITEMS.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setView(item.id)}
+                    className={cn(
+                      "flex items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35",
+                      view === item.id ? "bg-primary-container/42 text-on-primary-container" : "text-on-surface-variant hover:bg-surface-container",
+                    )}
+                  >
+                    <item.icon className="h-4 w-4" />
+                    <span className="flex-1">{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <section className="border-b border-outline-variant py-5">
+              <div className="font-mono text-[10px] uppercase tracking-widest text-text-muted">Backlinks</div>
+              <div className="mt-3 flex flex-col gap-2">
+                {documents
+                  .filter((document) => document.id !== selectedDocumentId)
+                  .slice(0, 6)
+                  .map((document) => (
+                    <button
+                      key={document.id}
+                      type="button"
+                      onClick={() => setSelectedDocumentId(document.id)}
+                      className="rounded-md border border-outline-variant bg-surface/70 px-3 py-2 text-left transition hover:border-outline hover:bg-surface-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
+                    >
+                      <div className="truncate text-sm text-on-surface">{document.file_name}</div>
+                      <div className="mt-1 text-xs text-text-muted">{document.status}</div>
+                    </button>
+                  ))}
+                {documents.length <= 1 ? <div className="text-xs leading-6 text-text-muted">暂无可显示的关联文档。</div> : null}
+              </div>
+            </section>
+
+            <section className="py-5">
+              <div className="font-mono text-[10px] uppercase tracking-widest text-text-muted">Runtime</div>
+              <div className="mt-3 flex flex-col gap-3 text-xs leading-6 text-on-surface-variant">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="inline-flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-primary" />
+                    API
+                  </span>
+                  <StatusPill text={serviceHealth?.status ?? "unknown"} />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span>Neo4j</span>
+                  <StatusPill text={neo4jHealth?.ok ? "ok" : "warn"} />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span>Readiness</span>
+                  <StatusPill text={readiness?.overall_status ?? "unknown"} />
+                </div>
+              </div>
+            </section>
+          </div>
+        </aside>
       </div>
     </div>
   );

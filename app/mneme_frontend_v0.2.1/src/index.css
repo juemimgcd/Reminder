@@ -1,43 +1,43 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Noto+Serif+SC:wght@500;600;700&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-  --font-serif: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "IBM Plex Sans", "Microsoft YaHei UI", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-serif: "Noto Serif SC", "IBM Plex Sans", ui-serif, serif;
 
-  --color-surface: #1d1b18;
-  --color-surface-dim: #141310;
-  --color-surface-bright: #28251f;
-  --color-surface-container-lowest: #11100e;
-  --color-surface-container-low: #191814;
-  --color-surface-container: #211f1a;
-  --color-surface-container-high: #2a2721;
-  --color-surface-container-highest: #373229;
+  --color-surface: #202229;
+  --color-surface-dim: #15171d;
+  --color-surface-bright: #2d3039;
+  --color-surface-container-lowest: #11131a;
+  --color-surface-container-low: #191b22;
+  --color-surface-container: #242730;
+  --color-surface-container-high: #303441;
+  --color-surface-container-highest: #3c4250;
 
-  --color-on-surface: #f2eee6;
-  --color-on-surface-variant: #c3baaa;
-  --color-inverse-surface: #eee8dc;
-  --color-inverse-on-surface: #1b1915;
+  --color-on-surface: #eef1f7;
+  --color-on-surface-variant: #c4cad6;
+  --color-inverse-surface: #f1f3f8;
+  --color-inverse-on-surface: #161922;
 
-  --color-outline: #655d4f;
-  --color-outline-variant: #39352d;
+  --color-outline: #687184;
+  --color-outline-variant: #353b49;
 
-  --color-primary: #9b8cff;
-  --color-on-primary: #17151f;
-  --color-primary-container: #2e2948;
-  --color-on-primary-container: #ded7ff;
+  --color-primary: #b49cff;
+  --color-on-primary: #191527;
+  --color-primary-container: #332a53;
+  --color-on-primary-container: #ebe4ff;
 
-  --color-secondary: #c29b61;
-  --color-on-secondary: #17120b;
-  --color-secondary-container: #352819;
+  --color-secondary: #75d6c7;
+  --color-on-secondary: #0e1e1c;
+  --color-secondary-container: #163934;
 
-  --color-background: #141310;
-  --color-on-background: #f2eee6;
+  --color-background: #15171d;
+  --color-on-background: #eef1f7;
 
-  --color-text-primary: #f2eee6;
-  --color-text-muted: #9f9688;
-  --color-accent-soft: #9b8cff1f;
+  --color-text-primary: #eef1f7;
+  --color-text-muted: #939baa;
+  --color-accent-soft: #b49cff1f;
 }
 
 @layer base {
@@ -50,16 +50,16 @@
   }
 
   html {
-    background: #141310;
+    background: #15171d;
   }
 
   body {
     min-height: 100vh;
     margin: 0;
     background:
-      radial-gradient(circle at 12% 8%, rgba(155, 140, 255, 0.12), transparent 24rem),
-      radial-gradient(circle at 88% 10%, rgba(194, 155, 97, 0.08), transparent 22rem),
-      #141310;
+      linear-gradient(180deg, rgba(180, 156, 255, 0.07), transparent 18rem),
+      linear-gradient(90deg, rgba(117, 214, 199, 0.05), transparent 28rem),
+      #15171d;
     @apply text-on-background font-sans antialiased;
   }
 
@@ -74,50 +74,88 @@
   }
 
   ::selection {
-    background: rgba(155, 140, 255, 0.32);
-    color: #f7f2ea;
+    background: rgba(180, 156, 255, 0.34);
+    color: #f8f6ff;
   }
 
   input::placeholder,
   textarea::placeholder {
-    color: #8f8678;
+    color: #858d9b;
   }
 }
 
 @layer utilities {
+  .mneme-workbench {
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent 13rem),
+      var(--color-background);
+  }
+
   .mneme-workbench [class*="bg-white"],
   .mneme-workbench [class*="bg-slate-50"],
   .mneme-workbench [class*="bg-slate-100"] {
-    background-color: rgba(29, 27, 24, 0.92);
+    background-color: rgba(36, 39, 48, 0.88);
   }
 
   .mneme-workbench [class*="border-slate"],
   .mneme-workbench [class*="border-white"] {
-    border-color: rgba(101, 93, 79, 0.56);
+    border-color: rgba(104, 113, 132, 0.48);
   }
 
   .mneme-workbench [class*="text-slate-950"],
   .mneme-workbench [class*="text-slate-900"],
   .mneme-workbench [class*="text-slate-800"],
   .mneme-workbench [class*="text-slate-700"] {
-    color: #f2eee6;
+    color: #eef1f7;
   }
 
   .mneme-workbench [class*="text-slate-600"],
   .mneme-workbench [class*="text-slate-500"],
   .mneme-workbench [class*="text-slate-400"] {
-    color: #9f9688;
+    color: #939baa;
   }
 
   .mneme-workbench input,
   .mneme-workbench textarea,
   .mneme-workbench select {
-    background-color: #191814;
-    border-color: rgba(101, 93, 79, 0.72);
-    color: #f2eee6;
+    background-color: #191b22;
+    border-color: rgba(104, 113, 132, 0.58);
+    color: #eef1f7;
+    border-radius: 0.375rem;
   }
 
   .mneme-workbench code {
-    color: #ded7ff;
+    color: #d8ccff;
+  }
+
+  .mneme-workbench table {
+    border-color: rgba(104, 113, 132, 0.42);
+  }
+
+  .mneme-workbench thead {
+    background-color: rgba(25, 27, 34, 0.92);
+  }
+
+  .mneme-workbench tbody tr:hover {
+    background-color: rgba(48, 52, 65, 0.52);
+  }
+
+  .mneme-workbench ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  .mneme-workbench ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .mneme-workbench ::-webkit-scrollbar-thumb {
+    background: #3c4250;
+    border: 2px solid #191b22;
+    border-radius: 999px;
+  }
+
+  .mneme-workbench ::-webkit-scrollbar-thumb:hover {
+    background: #687184;
   }
 }
