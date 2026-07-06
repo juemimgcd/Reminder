@@ -4,14 +4,14 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --port=3000 --host=0.0.0.0",
-    "dev:embed": "vite build --watch",
-    "build": "vite build",
-    "preview": "vite preview",
+    "dev": "vite --port=3000 --host=0.0.0.0 --config vite.config.mjs --configLoader native",
+    "dev:embed": "node scripts/prebuild-check.mjs && vite build --watch --config vite.config.mjs --configLoader native",
+    "build": "node scripts/prebuild-check.mjs && node scripts/build.mjs",
+    "preview": "vite preview --config vite.config.mjs --configLoader native",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "test:e2e": "playwright test",
-    "dev:preview": "vite --mode preview --port=3000 --host=0.0.0.0"
+    "dev:preview": "vite --mode preview --port=3000 --host=0.0.0.0 --config vite.config.mjs --configLoader native"
   },
   "dependencies": {
     "clsx": "^2.1.1",
@@ -37,7 +37,6 @@
   },
   "allowScripts": {
     "esbuild@0.25.12": true,
-    "esbuild@0.27.7": false,
     "@google/genai": false,
     "@google/genai@1.52.0": false,
     "protobufjs": false

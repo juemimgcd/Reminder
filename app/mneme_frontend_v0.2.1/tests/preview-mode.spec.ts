@@ -17,25 +17,28 @@ test('preview mode opens the populated workbench without a backend login', async
   await expect(page.getByText('Backend endpoint')).not.toBeVisible();
 });
 
-test('preview workbench uses an Obsidian-inspired shell instead of a card dashboard', async ({ page }) => {
+test('preview workbench uses the Sanctuary wide layout instead of a rail dashboard', async ({ page }) => {
   await page.goto('/?preview=1');
 
   const shell = page.getByTestId('obsidian-shell');
-  const rail = page.getByTestId('obsidian-rail');
-  const explorer = page.getByTestId('obsidian-explorer');
+  const sidebar = page.getByTestId('sanctuary-sidebar');
+  const topbar = page.getByTestId('sanctuary-topbar');
   const editorPane = page.getByTestId('obsidian-editor-pane');
-  const tab = page.getByTestId('obsidian-active-tab');
+  const activeView = page.getByTestId('sanctuary-active-view');
 
   await expect(shell).toBeVisible();
-  await expect(rail).toBeVisible();
-  await expect(explorer).toBeVisible();
+  await expect(sidebar).toBeVisible();
+  await expect(topbar).toBeVisible();
   await expect(editorPane).toBeVisible();
-  await expect(tab).toContainText('Workspace');
+  await expect(activeView).toContainText('Dashboard');
 
   await expect(editorPane.getByText('Vaults', { exact: true })).not.toBeVisible();
   await expect(editorPane.getByText('Files', { exact: true })).not.toBeVisible();
   await expect(editorPane.getByText('Tasks', { exact: true })).not.toBeVisible();
 
-  await expect(shell).toHaveCSS('background-color', 'rgb(25, 25, 25)');
-  await expect(rail).toHaveCSS('width', '44px');
+  await expect(shell).toHaveCSS('background-color', 'rgb(9, 9, 11)');
+  await expect(sidebar).toHaveCSS('width', '256px');
+  await expect(topbar).toHaveCSS('height', '64px');
+  await expect(sidebar.getByRole('button', { name: /Graph/ })).toBeVisible();
+  await expect(sidebar.getByRole('button', { name: /AI Chat/ })).toBeVisible();
 });

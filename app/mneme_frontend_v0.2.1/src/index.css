@@ -1,43 +1,48 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Noto+Serif+SC:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "IBM Plex Sans", "Microsoft YaHei UI", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
-  --font-serif: "Noto Serif SC", "IBM Plex Sans", ui-serif, serif;
+  --font-sans: "Inter", "Microsoft YaHei UI", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-serif: "Geist", "Inter", ui-serif, serif;
 
-  --color-surface: #1f1f1f;
-  --color-surface-dim: #191919;
-  --color-surface-bright: #2a2a2a;
-  --color-surface-container-lowest: #151515;
-  --color-surface-container-low: #202020;
-  --color-surface-container: #262626;
-  --color-surface-container-high: #303030;
-  --color-surface-container-highest: #3a3a3a;
+  --color-surface: #131315;
+  --color-surface-dim: #131315;
+  --color-surface-bright: #39393b;
+  --color-surface-container-lowest: #0e0e10;
+  --color-surface-container-low: #1c1b1d;
+  --color-surface-container: #201f22;
+  --color-surface-container-high: #2a2a2c;
+  --color-surface-container-highest: #353437;
 
-  --color-on-surface: #e7e7e7;
-  --color-on-surface-variant: #c7c7c7;
-  --color-inverse-surface: #f1f3f8;
-  --color-inverse-on-surface: #161922;
+  --color-on-surface: #e5e1e4;
+  --color-on-surface-variant: #ccc3d8;
+  --color-inverse-surface: #e5e1e4;
+  --color-inverse-on-surface: #313032;
 
-  --color-outline: #686868;
-  --color-outline-variant: #343434;
+  --color-outline: #958da1;
+  --color-outline-variant: #4a4455;
 
-  --color-primary: #a88bfa;
-  --color-on-primary: #191525;
-  --color-primary-container: #32294a;
-  --color-on-primary-container: #ece5ff;
+  --color-primary: #d2bbff;
+  --color-on-primary: #3f008e;
+  --color-primary-container: #7c3aed;
+  --color-on-primary-container: #ede0ff;
 
-  --color-secondary: #8fc7bd;
-  --color-on-secondary: #0e1e1c;
-  --color-secondary-container: #1c3734;
+  --color-secondary: #c6c6c7;
+  --color-on-secondary: #2f3131;
+  --color-secondary-container: #454747;
 
-  --color-background: #191919;
-  --color-on-background: #e7e7e7;
+  --color-background: #131315;
+  --color-on-background: #e5e1e4;
 
-  --color-text-primary: #e7e7e7;
-  --color-text-muted: #9a9a9a;
-  --color-accent-soft: #a88bfa1f;
+  --color-surface-base: #09090b;
+  --color-surface-muted: #18181b;
+  --color-surface-raised: #27272a;
+  --color-border-subtle: #3f3f46;
+  --color-text-primary: #fafafa;
+  --color-text-muted: #a1a1aa;
+  --color-text-dim: #a1a1aa;
+  --color-accent-soft: #7c3aed1f;
 }
 
 @layer base {
@@ -50,13 +55,13 @@
   }
 
   html {
-    background: #191919;
+    background: #09090b;
   }
 
   body {
     min-height: 100vh;
     margin: 0;
-    background: #191919;
+    background: #09090b;
     @apply text-on-background font-sans antialiased;
   }
 
@@ -84,6 +89,127 @@
 @layer utilities {
   .mneme-workbench {
     background: var(--color-background);
+  }
+
+  .glass-panel {
+    background: rgba(20, 20, 22, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
+  }
+
+  .premium-card {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(145deg, rgba(28, 27, 29, 0.72) 0%, rgba(20, 20, 22, 0.46) 100%);
+    border: 1px solid rgba(63, 63, 70, 0.34);
+    box-shadow: 0 4px 24px -4px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    transition: border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
+  }
+
+  .premium-card::before {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    content: "";
+    background: radial-gradient(circle at 50% 0%, rgba(124, 58, 237, 0.08), transparent 60%);
+    opacity: 0;
+    transition: opacity 200ms ease;
+  }
+
+  .premium-card:hover {
+    border-color: rgba(124, 58, 237, 0.4);
+    box-shadow:
+      0 16px 40px -8px rgba(0, 0, 0, 0.6),
+      0 0 20px -5px rgba(124, 58, 237, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    transform: translateY(-2px);
+  }
+
+  .premium-card:hover::before {
+    opacity: 1;
+  }
+
+  .premium-card-content {
+    position: relative;
+    z-index: 1;
+  }
+
+  .premium-input {
+    background: rgba(0, 0, 0, 0.22);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+  }
+
+  .premium-input:focus,
+  .premium-input:focus-visible {
+    border-color: rgba(210, 187, 255, 0.58);
+    box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.22);
+    outline: none;
+  }
+
+  .premium-tag {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+  }
+
+  .premium-tag:hover,
+  .premium-tag[data-active="true"] {
+    color: var(--color-primary);
+    background: rgba(124, 58, 237, 0.15);
+    border-color: rgba(210, 187, 255, 0.4);
+    box-shadow: 0 0 10px rgba(124, 58, 237, 0.18);
+  }
+
+  .premium-action-btn {
+    background: rgba(20, 20, 22, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+  }
+
+  .premium-action-btn:hover {
+    color: var(--color-primary);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(210, 187, 255, 0.3);
+    box-shadow: 0 0 15px rgba(124, 58, 237, 0.15);
+    transform: scale(1.05);
+  }
+
+  .premium-range::-webkit-slider-runnable-track {
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 9999px;
+  }
+
+  .premium-range::-webkit-slider-thumb {
+    width: 16px;
+    height: 16px;
+    margin-top: -5px;
+    appearance: none;
+    cursor: pointer;
+    background: var(--color-primary);
+    border: 2px solid var(--color-primary-container);
+    border-radius: 9999px;
+    box-shadow: 0 0 10px rgba(124, 58, 237, 0.5);
+  }
+
+  .code-scroll::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  .code-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .code-scroll::-webkit-scrollbar-thumb {
+    background: var(--color-border-subtle);
+    border-radius: 4px;
   }
 
   .mneme-workbench [class*="bg-white"],

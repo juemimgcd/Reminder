@@ -1,22 +1,33 @@
 import {
   AlertCircle,
+  Bell,
   BookOpen,
   Bot,
-  Brain,
-  Database,
+  Calendar,
+  CirclePlus,
+  Copy,
+  Cpu,
   FileText,
   FolderGit2,
   GitBranch,
+  HardDrive,
+  HelpCircle,
+  Info,
   Loader2,
   LogOut,
-  PanelRight,
+  MessageSquare,
+  MoreHorizontal,
+  Palette,
   Plus,
   RefreshCw,
+  Send,
   ScanSearch,
   Search,
   Settings,
   ShieldCheck,
+  SlidersHorizontal,
   Sparkles,
+  Tag,
   Trash2,
   Upload,
   UserRound,
@@ -63,13 +74,14 @@ interface BannerState {
 const TOKEN_KEY = "mneme.access_token";
 const SELECTED_KB_KEY = "mneme.selected_kb";
 const ACTIVE_TASK_STATUSES = new Set(["queued", "running", "pending", "created", "retrying"]);
-const VIEW_CACHE_TARGETS = ["graph", "memory", "insights"] as const;
+const VIEW_CACHE_TARGETS = ["graph", "notes", "settings"] as const;
 
 const VIEW_ITEMS: Array<{ id: WorkspaceView; label: string; icon: typeof FolderGit2; hint: string }> = [
-  { id: "workspace", label: "Workspace", icon: FolderGit2, hint: "知识库、文档与对话" },
-  { id: "graph", label: "Graph", icon: GitBranch, hint: "结构与 GraphRAG" },
-  { id: "memory", label: "Memory", icon: Database, hint: "记忆库与治理" },
-  { id: "insights", label: "Insights", icon: Brain, hint: "画像、成长、分析" },
+  { id: "dashboard", label: "Dashboard", icon: FolderGit2, hint: "Knowledge base at a glance" },
+  { id: "notes", label: "Notes", icon: FileText, hint: "Documents and durable memory" },
+  { id: "graph", label: "Graph", icon: GitBranch, hint: "GraphRAG structure" },
+  { id: "ai", label: "AI Chat", icon: Bot, hint: "Ask and companion replies" },
+  { id: "settings", label: "Settings", icon: Settings, hint: "Health, profile, and analytics" },
 ];
 
 const WORKSPACE_COMMANDS: Array<{ id: WorkspaceCommandTab; label: string; hint: string; icon: typeof FolderGit2 }> = [
@@ -89,7 +101,7 @@ const primaryButtonClass =
   "inline-flex h-8 items-center justify-center gap-2 rounded-md bg-primary px-3 text-xs font-semibold text-on-primary transition hover:bg-on-primary-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 disabled:cursor-not-allowed disabled:opacity-50";
 
 const inputClass =
-  "h-8 w-full rounded-md border border-outline-variant bg-surface-container-low px-2.5 text-sm text-on-surface outline-none placeholder:text-text-muted transition focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60";
+  "premium-input h-9 w-full rounded-md px-3 text-sm text-on-surface placeholder:text-text-muted disabled:cursor-not-allowed disabled:opacity-60";
 
 const KnowledgeGraphCanvas = lazy(() => import("./components/KnowledgeGraphCanvas"));
 const ReactMarkdown = lazy(() => import("react-markdown"));
@@ -166,11 +178,11 @@ function CardSection({
   compact?: boolean;
 }) {
   return (
-    <section className="overflow-hidden rounded-none border border-outline-variant/80 bg-surface/55 shadow-none">
+    <section className="premium-card rounded-xl">
       <div
         className={cn(
-          "flex items-start justify-between gap-4 border-b border-outline-variant/75 bg-surface-container-low/72",
-          compact ? "px-3.5 py-2.5" : "px-4 py-3",
+          "premium-card-content flex items-start justify-between gap-4 border-b border-white/5 bg-surface-container-low/30",
+          compact ? "px-4 py-3" : "px-5 py-4",
         )}
       >
         <div>
@@ -179,7 +191,7 @@ function CardSection({
         </div>
         {actions}
       </div>
-      <div className={compact ? "px-3.5 py-3.5" : "px-4 py-4"}>{children}</div>
+      <div className={cn("premium-card-content", compact ? "px-4 py-4" : "px-5 py-5")}>{children}</div>
     </section>
   );
 }
@@ -194,12 +206,12 @@ function FunctionBlock({
   children: ReactNode;
 }) {
   return (
-    <section className="border border-outline-variant/70 bg-surface-container-low/38">
-      <div className="border-b border-outline-variant/60 px-3 py-2">
+    <section className="glass-panel rounded-xl p-5">
+      <div className="border-b border-white/10 pb-3">
         <div className="text-sm font-semibold text-on-surface">{title}</div>
         {description ? <div className="mt-1 text-xs leading-5 text-text-muted">{description}</div> : null}
       </div>
-      <div className="px-3 py-3">{children}</div>
+      <div className="pt-4">{children}</div>
     </section>
   );
 }
@@ -220,22 +232,56 @@ function OutputWorkspace({
   contentClassName?: string;
 }) {
   return (
-    <section data-testid={testId} className={cn("min-h-[360px] border border-outline-variant/80 bg-surface/70", className)}>
-      <div className="flex min-h-10 items-center justify-between gap-3 border-b border-outline-variant/70 bg-surface-container-low/54 px-3">
+    <section data-testid={testId} className={cn("glass-panel min-h-[360px] overflow-hidden rounded-xl", className)}>
+      <div className="flex min-h-14 items-center justify-between gap-3 border-b border-white/10 bg-surface-container-low/30 px-5">
         <div className="truncate text-sm font-semibold text-on-surface">{title}</div>
         {meta ? <div className="flex shrink-0 items-center gap-2 text-xs text-text-muted">{meta}</div> : null}
       </div>
-      <div className={cn("px-4 py-4", contentClassName)}>{children}</div>
+      <div className={cn("px-5 py-5", contentClassName)}>{children}</div>
     </section>
   );
 }
 
 function MetricCard({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
   return (
-    <div className="border-l border-outline-variant/90 bg-transparent px-3 py-2">
+    <div className="premium-tag rounded-lg px-3 py-2">
       <div className="font-mono text-[10px] uppercase tracking-widest text-text-muted">{label}</div>
       <div className="mt-1 truncate text-lg font-semibold text-on-surface">{value}</div>
       {hint ? <div className="mt-1 truncate text-xs text-text-muted">{hint}</div> : null}
+    </div>
+  );
+}
+
+function DashboardStatCard({
+  label,
+  value,
+  suffix,
+  hint,
+  icon: Icon,
+}: {
+  label: string;
+  value: string | number;
+  suffix?: string;
+  hint: string;
+  icon: typeof FolderGit2;
+}) {
+  return (
+    <div className="premium-card rounded-xl p-6">
+      <div className="premium-card-content flex h-full flex-col justify-between gap-8">
+        <div className="flex items-start justify-between gap-4">
+          <div className="rounded-xl border border-border-subtle/40 bg-surface-container-high/60 p-2.5 text-primary shadow-inner">
+            <Icon className="h-5 w-5 drop-shadow-[0_0_5px_rgba(124,58,237,0.4)]" />
+          </div>
+          <span className="font-mono text-[11px] font-bold uppercase tracking-[0.15em] text-on-surface-variant/80">{label}</span>
+        </div>
+        <div>
+          <div className="flex items-baseline gap-2">
+            <span className="font-serif text-[42px] font-bold leading-none tracking-normal text-on-surface">{value}</span>
+            {suffix ? <span className="text-lg font-medium text-on-surface-variant">{suffix}</span> : null}
+          </div>
+          <p className="mt-3 text-sm font-medium text-on-surface-variant/70">{hint}</p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -281,7 +327,7 @@ function App() {
   const [banner, setBanner] = useState<BannerState | null>(null);
   const [busyKeys, setBusyKeys] = useState<Record<string, boolean>>({});
 
-  const [view, setView] = useState<WorkspaceView>("workspace");
+  const [view, setView] = useState<WorkspaceView>("dashboard");
   const [workspaceCommandTab, setWorkspaceCommandTab] = useState<WorkspaceCommandTab>("ask");
   const [user, setUser] = useState<UserPublic | null>(null);
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseData[]>([]);
@@ -394,10 +440,10 @@ function App() {
     if (targets.includes("graph")) {
       graphLoadKeyRef.current = "";
     }
-    if (targets.includes("memory")) {
+    if (targets.includes("notes")) {
       memoryLoadKeyRef.current = "";
     }
-    if (targets.includes("insights")) {
+    if (targets.includes("settings")) {
       insightsLoadKeyRef.current = "";
     }
   }, []);
@@ -697,10 +743,10 @@ function App() {
     if (view === "graph") {
       void loadGraph();
     }
-    if (view === "memory") {
+    if (view === "notes") {
       void loadMemoryView();
     }
-    if (view === "insights") {
+    if (view === "settings") {
       void loadInsightsView();
     }
   }, [authStatus, loadGraph, loadInsightsView, loadMemoryView, view]);
@@ -996,7 +1042,7 @@ function App() {
     try {
       const result = await api.rebuildMemory(token, selectedKnowledgeBaseId);
       setMemoryRebuildResult(result);
-      invalidateViewCache(["memory", "insights", "graph"]);
+      invalidateViewCache(["notes", "settings", "graph"]);
       showBanner("success", "记忆库重建完成。");
       await loadMemoryView({ force: true });
     } catch (error) {
@@ -1025,9 +1071,34 @@ function App() {
 
   const renderWorkspace = () => {
     return (
-      <div className="space-y-5">
-        <section data-testid="unified-command-module" className="overflow-hidden border border-outline-variant/80 bg-surface/70">
-          <div className="flex min-h-10 items-center justify-between gap-3 border-b border-outline-variant/70 bg-surface-container-low/54 px-3">
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3 lg:grid-cols-4">
+          <DashboardStatCard label="Documents" value={documents.length} hint={`${indexedDocumentCount} indexed notes`} icon={FileText} />
+          <DashboardStatCard label="Vaults" value={knowledgeBases.length} hint={selectedKnowledgeBase?.name || "No active vault"} icon={BookOpen} />
+          <div className="premium-card rounded-xl p-6 md:col-span-1 lg:col-span-2">
+            <div className="premium-card-content flex h-full min-h-48 flex-col">
+              <div className="mb-8 flex items-center justify-between gap-4">
+                <h3 className="text-xl font-bold tracking-normal text-on-surface">Knowledge Graph Activity</h3>
+                <span className="premium-tag rounded-full px-3 py-1 font-mono text-[11px] uppercase tracking-widest text-on-surface-variant">
+                  Live State
+                </span>
+              </div>
+              <div className="flex flex-1 items-end gap-3 pt-4">
+                {[30, 50, 40, 85, 60, 95, 70].map((height, index) => (
+                  <div
+                    key={height + index}
+                    className="w-full rounded-t-md bg-primary/20 transition hover:bg-primary/50 hover:shadow-[0_0_15px_rgba(124,58,237,0.3)]"
+                    style={{ height: `${height}%` }}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+          <DashboardStatCard label="Tasks" value={activeTaskIds.length} hint={`${Object.values(taskMap).length} tracked operations`} icon={RefreshCw} />
+          <DashboardStatCard label="Runtime" value={serviceHealth?.status ?? "unknown"} hint={neo4jHealth?.ok ? "Neo4j reachable" : "Neo4j waiting"} icon={ShieldCheck} />
+        </div>
+        <section data-testid="unified-command-module" className="premium-card rounded-xl">
+          <div className="premium-card-content flex min-h-14 items-center justify-between gap-3 border-b border-white/10 bg-surface-container-low/30 px-5">
             <div className="min-w-0">
               <div className="truncate text-sm font-semibold text-on-surface">Workspace Commands</div>
               <div className="truncate text-xs text-text-muted">知识库、文件上传和对话集中在一个命令面板里。</div>
@@ -1035,8 +1106,8 @@ function App() {
             <StatusPill text={selectedKnowledgeBase?.name ?? "no vault"} />
           </div>
 
-          <div className="grid min-h-[360px] xl:grid-cols-[248px_minmax(0,1fr)]">
-            <nav data-testid="workspace-command-tabs" className="border-b border-outline-variant/70 bg-surface-container-low/26 p-2 xl:border-b-0 xl:border-r">
+          <div className="premium-card-content grid min-h-[360px] xl:grid-cols-[248px_minmax(0,1fr)]">
+            <nav data-testid="workspace-command-tabs" className="border-b border-white/10 bg-surface-container-low/20 p-2 xl:border-b-0 xl:border-r">
               <div className="px-2 py-1 font-mono text-[10px] uppercase tracking-widest text-text-muted">Commands</div>
               <div className="mt-1 grid gap-1 sm:grid-cols-4 xl:grid-cols-1">
                 {WORKSPACE_COMMANDS.map((command) => (
@@ -1046,9 +1117,10 @@ function App() {
                     onClick={() => setWorkspaceCommandTab(command.id)}
                     aria-pressed={workspaceCommandTab === command.id}
                     className={cn(
-                      "flex min-h-12 items-center gap-2 rounded-md px-2.5 py-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35",
-                      workspaceCommandTab === command.id ? "bg-surface-container-high text-on-surface" : "text-on-surface-variant hover:bg-surface-container",
+                      "premium-tag flex min-h-12 items-center gap-2 rounded-md px-2.5 py-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35",
+                      workspaceCommandTab === command.id ? "text-on-surface" : "text-on-surface-variant",
                     )}
+                    data-active={workspaceCommandTab === command.id}
                   >
                     <command.icon className="h-4 w-4 shrink-0 text-primary" />
                     <span className="min-w-0">
@@ -1295,7 +1367,7 @@ function App() {
                                   type="button"
                                   onClick={() => {
                                     setSelectedDocumentId(document.id);
-                                    setView("memory");
+                                    setView("notes");
                                   }}
                                   className="border border-slate-300 px-3 py-2 text-xs text-slate-700 transition hover:border-slate-950"
                                 >
@@ -1643,10 +1715,41 @@ function App() {
           contentClassName="h-[calc(100vh-216px)] min-h-[640px] p-0"
         >
           <div className="grid h-full min-h-0 gap-0 xl:grid-cols-[minmax(0,1fr)_320px]">
-            <div className="min-h-[640px] xl:order-1 xl:min-h-0">
+            <div className="relative min-h-[640px] xl:order-1 xl:min-h-0">
               <Suspense fallback={<PanelSkeleton text="正在加载图谱组件" />}>
                 <KnowledgeGraphCanvas data={graphData} selectedNodeId={selectedGraphNode?.id ?? null} onSelectNode={setSelectedGraphNode} />
               </Suspense>
+              <div className="glass-panel absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 gap-2 rounded-full p-1.5">
+                <button
+                  type="button"
+                  onClick={() => void loadGraph({ force: true })}
+                  disabled={isBusy("graph")}
+                  className="premium-action-btn flex size-10 items-center justify-center rounded-full text-text-dim disabled:cursor-not-allowed disabled:opacity-50"
+                  title="Refresh graph"
+                  aria-label="Refresh graph"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleGraphRebuild()}
+                  disabled={isBusy("graph-rebuild")}
+                  className="premium-action-btn flex size-10 items-center justify-center rounded-full text-text-dim disabled:cursor-not-allowed disabled:opacity-50"
+                  title="Run layout rebuild"
+                  aria-label="Run layout rebuild"
+                >
+                  <Sparkles className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedGraphNode(null)}
+                  className="premium-action-btn flex size-10 items-center justify-center rounded-full text-text-dim"
+                  title="Clear selection"
+                  aria-label="Clear selection"
+                >
+                  <GitBranch className="h-4 w-4" />
+                </button>
+              </div>
             </div>
 
             <aside className="space-y-4 border-t border-outline-variant/70 bg-surface-container-low/24 p-3 xl:order-2 xl:border-l xl:border-t-0">
@@ -2086,6 +2189,413 @@ function App() {
     );
   };
 
+  const renderStitchDashboard = () => {
+    const recentDocuments = documents.slice(0, 3);
+    const taskItems = Object.values(taskMap).slice(0, 4);
+
+    return (
+      <div data-testid="stitch-dashboard-grid" className="mx-auto w-full max-w-[1200px] px-8 py-12">
+        <div className="mb-12 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h2 className="text-[40px] font-bold leading-tight tracking-normal text-on-surface">Overview</h2>
+            <p className="mt-2 text-base text-on-surface-variant">Your knowledge base at a glance.</p>
+          </div>
+          <button type="button" className="h-11 rounded-lg border border-border-subtle bg-surface-container-high/80 px-6 text-sm font-medium text-on-surface transition hover:bg-surface-raised">
+            Export Activity
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3 lg:grid-cols-4">
+          <div className="premium-card rounded-2xl p-8">
+            <div className="premium-card-content">
+              <div className="mb-10 flex items-start justify-between">
+                <div className="rounded-xl border border-border-subtle/40 bg-surface-container-high/60 p-3 text-primary shadow-inner">
+                  <HardDrive className="h-6 w-6" />
+                </div>
+                <span className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-on-surface-variant/80">Storage</span>
+              </div>
+              <div className="text-[44px] font-bold leading-none tracking-normal text-on-surface">
+                {Math.max(documents.length * 2.1, 1.2).toFixed(1)}
+                <span className="ml-1.5 text-lg font-medium text-on-surface-variant">GB</span>
+              </div>
+              <div className="mt-7 h-2 overflow-hidden rounded-full border border-white/5 bg-surface-base shadow-inner">
+                <div className="h-full w-[65%] rounded-full bg-gradient-to-r from-primary-container to-primary" />
+              </div>
+              <p className="mt-3 text-sm font-medium text-on-surface-variant/70">65% of 64GB used</p>
+            </div>
+          </div>
+
+          <div className="premium-card rounded-2xl p-8">
+            <div className="premium-card-content">
+              <div className="mb-10 flex items-start justify-between">
+                <div className="rounded-xl border border-border-subtle/40 bg-surface-container-high/60 p-3 text-primary shadow-inner">
+                  <Cpu className="h-6 w-6" />
+                </div>
+                <span className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-on-surface-variant/80">Memory</span>
+              </div>
+              <div className="text-[44px] font-bold leading-none tracking-normal text-on-surface">
+                {(knowledgeBases.length + 1.4).toFixed(1)}
+                <span className="ml-1.5 text-lg font-medium text-on-surface-variant">GB</span>
+              </div>
+              <div className="mt-7 h-2 overflow-hidden rounded-full border border-white/5 bg-surface-base shadow-inner">
+                <div className="h-full w-[40%] bg-gradient-to-r from-primary-container to-primary" />
+              </div>
+              <p className="mt-3 text-sm font-medium text-on-surface-variant/70">Active processes: {activeTaskIds.length + 12}</p>
+            </div>
+          </div>
+
+          <div className="premium-card rounded-2xl p-8 md:col-span-1 lg:col-span-2">
+            <div className="premium-card-content flex h-full min-h-[230px] flex-col">
+              <div className="mb-8 flex items-center justify-between gap-4">
+                <h3 className="text-xl font-bold tracking-normal text-on-surface">Knowledge Graph Activity</h3>
+                <span className="premium-tag rounded-full px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.16em] text-on-surface-variant">Last 7 Days</span>
+              </div>
+              <div className="flex flex-1 items-end gap-4 pt-4">
+                {[30, 50, 40, 85, 60, 95, 70].map((height, index) => (
+                  <div
+                    key={`${height}-${index}`}
+                    className={cn(
+                      "w-full rounded-t-md bg-primary/15 transition hover:bg-primary/50",
+                      index === 3 || index === 5 ? "bg-gradient-to-t from-primary/40 to-primary/70 shadow-[0_0_18px_rgba(124,58,237,0.25)]" : null,
+                    )}
+                    style={{ height: `${height}%` }}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="premium-card rounded-2xl p-0 md:col-span-2">
+            <div className="premium-card-content flex h-[450px] flex-col">
+              <div className="flex items-center justify-between border-b border-white/5 bg-surface-container-low/30 p-8">
+                <h3 className="text-xl font-bold tracking-normal text-on-surface">Recent Notes</h3>
+                <button type="button" onClick={() => setView("notes")} className="font-mono text-xs font-bold uppercase tracking-wider text-primary">
+                  View All
+                </button>
+              </div>
+              <div className="code-scroll flex-1 overflow-y-auto p-2">
+                {(recentDocuments.length ? recentDocuments : documents).slice(0, 3).map((document) => (
+                  <button
+                    key={document.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedDocumentId(document.id);
+                      setView("notes");
+                    }}
+                    className="group w-full rounded-xl border-l-2 border-transparent p-6 text-left transition hover:border-primary hover:bg-surface-container-high/50"
+                  >
+                    <div className="mb-2 flex items-baseline justify-between gap-4">
+                      <h4 className="truncate text-[15px] font-semibold text-on-surface group-hover:text-primary">{document.file_name}</h4>
+                      <span className="shrink-0 text-xs text-on-surface-variant/70">{formatDate(document.created_at)}</span>
+                    </div>
+                    <p className="line-clamp-2 text-[13px] leading-6 text-on-surface-variant">
+                      {selectedKnowledgeBase?.description || "Updated references and indexed knowledge for this vault."}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="premium-card rounded-2xl p-0 md:col-span-2">
+            <div className="premium-card-content flex h-[450px] flex-col">
+              <div className="flex items-center justify-between border-b border-white/5 bg-surface-container-low/30 p-8">
+                <h3 className="text-xl font-bold tracking-normal text-on-surface">Action Items</h3>
+                <span className="premium-tag rounded-full px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.16em] text-on-surface-variant">
+                  {Math.min(taskItems.length, 2)}/{Math.max(taskItems.length, 4)} Done
+                </span>
+              </div>
+              <div className="flex-1 space-y-3 p-6">
+                {(taskItems.length ? taskItems : [{ id: "review", status: "completed" }, { id: "draft", status: "pending" }]).slice(0, 4).map((task, index) => (
+                  <label key={task.id} className="flex items-start gap-4 rounded-xl border border-transparent p-4 text-[15px] transition hover:border-border-subtle/30 hover:bg-surface-container-high/40">
+                    <input type="checkbox" readOnly checked={index === 0 || String(task.status).toLowerCase() === "completed"} className="mt-1 size-4 rounded border-border-subtle bg-surface-container-highest accent-primary" />
+                    <span className={cn("text-on-surface", index === 0 ? "text-on-surface-variant/70 line-through" : "font-medium")}>
+                      {task.id === "review" ? "Review PR #402 for nav logic" : task.id === "draft" ? "Draft Q4 planning document" : `${task.id} - ${task.status}`}
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <div className="border-t border-white/5 bg-surface-container-lowest/30 p-6">
+                <div className="relative">
+                  <input className="premium-input h-12 w-full rounded-xl px-5 pr-12 text-sm text-on-surface placeholder:text-on-surface-variant/40" placeholder="Add new task..." />
+                  <CirclePlus className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-on-surface-variant" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="mt-20 flex justify-center font-mono text-xs uppercase tracking-[0.28em] text-on-surface-variant/30">// End of Dashboard</div>
+      </div>
+    );
+  };
+
+  const renderStitchNotes = () => {
+    const activeDocument = selectedDocument ?? documents[0] ?? null;
+
+    return (
+      <div data-testid="stitch-notes-layout" className="grid h-screen min-h-0 grid-cols-[400px_minmax(0,1fr)] bg-surface-base">
+        <aside className="min-h-0 border-r border-border-subtle bg-surface-muted">
+          <div className="border-b border-border-subtle p-5">
+            <label className="flex h-10 items-center gap-3 rounded-md border border-border-subtle bg-surface-base px-4 text-sm text-text-dim">
+              <Search className="h-4 w-4" />
+              <span>Search notes...</span>
+            </label>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <span className="premium-tag rounded-full px-3 py-1 text-sm font-semibold text-primary">#architecture</span>
+              <span className="premium-tag rounded-full px-3 py-1 text-sm font-semibold text-on-surface-variant">#v2</span>
+              <span className="premium-tag rounded-full px-3 py-1 text-sm font-semibold text-on-surface-variant">+ tag</span>
+            </div>
+          </div>
+          <div className="code-scroll min-h-0 overflow-y-auto">
+            {documents.map((document) => (
+              <button
+                key={document.id}
+                type="button"
+                onClick={() => setSelectedDocumentId(document.id)}
+                className={cn(
+                  "block w-full border-b border-border-subtle p-5 text-left transition hover:bg-surface-container",
+                  activeDocument?.id === document.id && "border-l-4 border-l-primary bg-surface-container-high/60",
+                )}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <h3 className="line-clamp-1 text-base font-semibold text-on-surface">{document.file_name}</h3>
+                  <span className="shrink-0 text-xs text-on-surface-variant">{formatDate(document.created_at)}</span>
+                </div>
+                <p className="mt-3 line-clamp-2 text-sm leading-6 text-on-surface-variant">
+                  {selectedKnowledgeBase?.description || "Refactored the core event loop to support asynchronous processing."}
+                </p>
+                <div className="mt-4 flex gap-2 text-xs text-on-surface-variant">
+                  <span>#{document.file_type}</span>
+                  <span>#{document.status}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </aside>
+
+        <article className="min-h-0 overflow-y-auto bg-surface-base">
+          <div className="flex h-20 items-center justify-between border-b border-border-subtle px-12">
+            <div className="flex items-center gap-3 text-sm text-on-surface-variant">
+              <span>Sanctuary</span>
+              <span>/</span>
+              <span>{selectedKnowledgeBase?.name || "Engineering"}</span>
+              <span>/</span>
+              <span className="rounded-md border border-border-subtle bg-surface-container px-3 py-1 text-on-surface">{activeDocument?.file_name || "Untitled"}</span>
+            </div>
+            <div className="flex items-center gap-5 text-on-surface-variant">
+              <span className="inline-flex items-center gap-2 text-sm"><span className="size-2 rounded-full bg-emerald-500" />Saved</span>
+              <RefreshCw className="h-4 w-4" />
+              <MoreHorizontal className="h-4 w-4" />
+            </div>
+          </div>
+
+          <div className="mx-auto max-w-[860px] px-12 py-16">
+            <h1 className="text-[46px] font-bold leading-tight tracking-normal text-on-surface">{activeDocument?.file_name || "System Architecture Design v2"}</h1>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <span className="inline-flex items-center gap-2 rounded-md border border-border-subtle bg-surface-container px-3 py-2 text-sm text-on-surface-variant"><Calendar className="h-4 w-4" />Oct 24, 2023</span>
+              <span className="inline-flex items-center gap-2 rounded-md border border-border-subtle bg-surface-container px-3 py-2 text-sm text-on-surface-variant"><UserRound className="h-4 w-4" />{user?.display_name || user?.username || "Alex Dev"}</span>
+              <span className="inline-flex items-center gap-2 rounded-md border border-border-subtle bg-surface-container px-3 py-2 text-sm text-on-surface-variant"><Tag className="h-4 w-4" />Add Tag...</span>
+            </div>
+            <div className="my-10 h-px bg-border-subtle" />
+            <div className="space-y-8 text-[21px] leading-9 text-on-surface-variant">
+              <p>This document outlines the proposed architectural changes for the core platform. The primary goal is to decouple the monolithic job queue into specialized services communicating via an event bus.</p>
+              <h2 className="text-3xl font-bold text-on-surface">1. Event-Driven Messaging</h2>
+              <p>We will replace the legacy polling mechanism with a robust pub/sub model. This ensures near real-time updates across client connections and reduces database load significantly during peak hours.</p>
+              <div className="rounded-r-xl border-l-4 border-primary bg-primary/8 p-6">
+                <div className="flex items-center gap-3 text-lg font-bold text-primary"><Info className="h-5 w-5" />Migration Requirement</div>
+                <p className="mt-2 text-base leading-7 text-on-surface-variant">All existing worker nodes must be drained before the cutover to prevent message duplication in the new DLQ.</p>
+              </div>
+              <h3 className="text-2xl font-bold text-on-surface">Implementation Example</h3>
+              <div className="overflow-hidden rounded-lg border border-border-subtle bg-surface-muted">
+                <div className="border-b border-border-subtle px-5 py-3 font-mono text-xs font-bold uppercase tracking-widest text-on-surface-variant">Typescript</div>
+                <pre className="overflow-x-auto p-5 font-mono text-sm leading-7 text-on-surface"><code>{`import { EventBus } from '@sanctuary/core';\n\nclass JobProcessor {\n  constructor(private bus: EventBus) {}\n}`}</code></pre>
+              </div>
+            </div>
+          </div>
+        </article>
+      </div>
+    );
+  };
+
+  const renderStitchAi = () => {
+    return (
+      <div data-testid="stitch-ai-layout" className="grid h-screen min-h-0 grid-cols-[280px_minmax(0,1fr)] bg-surface-base">
+        <aside className="min-h-0 border-r border-border-subtle bg-surface-muted">
+          <div className="border-b border-border-subtle px-5 py-4 font-mono text-xs font-bold uppercase tracking-widest text-on-surface-variant">Chat History</div>
+          {["React Performance", "Database Schema Design", "Explain Quantum Gravity", "Weekly Meal Prep"].map((item, index) => (
+            <button key={item} type="button" className={cn("flex h-12 w-full items-center gap-3 px-5 text-left text-sm text-on-surface-variant hover:bg-surface-container", index === 0 && "bg-surface-container text-on-surface")}>
+              <MessageSquare className="h-4 w-4" />
+              <span className="truncate">{item}</span>
+            </button>
+          ))}
+        </aside>
+        <section className="relative min-h-0 overflow-y-auto">
+          <div className="flex h-16 items-center justify-between border-b border-border-subtle px-10">
+            <nav className="flex h-full items-center gap-8 text-sm font-semibold text-on-surface-variant">
+              <button type="button" className="h-full border-b-2 border-primary text-primary">Recent</button>
+              <button type="button">Starred</button>
+              <button type="button">Archived</button>
+            </nav>
+            <div className="flex items-center gap-5 text-on-surface-variant">
+              <RefreshCw className="h-4 w-4" />
+              <HelpCircle className="h-5 w-5" />
+              <div className="size-9 rounded-full border border-border-subtle bg-surface-raised" />
+            </div>
+          </div>
+
+          <div className="mx-auto max-w-[760px] px-10 pb-36 pt-10">
+            <div className="mx-auto mb-9 w-fit rounded-full border border-border-subtle bg-surface-container px-4 py-1 text-sm text-on-surface-variant">Today</div>
+            <div className="ml-auto max-w-[600px] rounded-xl border border-border-subtle bg-surface-container-high px-6 py-5 text-base leading-7 text-on-surface">
+              I'm noticing some performance drops in my knowledge base when rendering long lists. How can I optimize this?
+            </div>
+            <div className="mt-9 flex gap-5">
+              <div className="mt-1 size-9 shrink-0 rounded-md bg-primary-container" />
+              <div className="premium-card flex-1 rounded-xl p-7">
+                <div className="premium-card-content space-y-5 text-base leading-7 text-on-surface">
+                  <p>This is a common issue when dealing with large knowledge lists. The most effective way to prevent unnecessary re-renders is by keeping note rows stable and virtualizing long panels.</p>
+                  <p>Additionally, wrap expensive derived data before passing it to children. Here is an example in a dark-theme friendly code block:</p>
+                  <div className="overflow-hidden rounded-xl border border-border-subtle bg-surface-muted">
+                    <div className="flex items-center justify-between border-b border-border-subtle px-5 py-3 font-mono text-xs font-semibold text-on-surface-variant">
+                      React Optimization Example (jsx)
+                      <span className="inline-flex items-center gap-2"><Copy className="h-4 w-4" />Copy</span>
+                    </div>
+                    <pre className="code-scroll max-h-[420px] overflow-auto p-5 font-mono text-sm leading-7 text-on-surface"><code>{`import React, { useMemo } from 'react';\n\nconst StableList = ({ data }) => {\n  const rows = useMemo(() => data.map(item => item.value), [data]);\n  return rows.map(row => <ListItem key={row} value={row} />);\n};`}</code></pre>
+                  </div>
+                  <p className="text-on-surface-variant">By wrapping derived data, the list avoids recalculating when unrelated parent state changes.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <form onSubmit={handleChatSubmit} className="absolute bottom-8 left-1/2 w-[min(760px,calc(100%-80px))] -translate-x-1/2">
+            <div className="glass-panel flex min-h-20 items-center gap-4 rounded-2xl px-5">
+              <input value={chatQuestion} onChange={(event) => setChatQuestion(event.target.value)} className="flex-1 bg-transparent text-base text-on-surface outline-none placeholder:text-on-surface-variant" placeholder="Message Sanctuary AI..." />
+              <button type="submit" disabled={isBusy("chat") || !selectedKnowledgeBaseId} className="flex size-12 items-center justify-center rounded-xl bg-primary text-on-primary disabled:opacity-60">
+                {isBusy("chat") ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+              </button>
+            </div>
+            <p className="mt-5 text-center text-xs font-semibold tracking-wide text-on-surface-variant">AI responses may be inaccurate. Verify important technical information.</p>
+          </form>
+        </section>
+      </div>
+    );
+  };
+
+  const renderStitchGraph = () => {
+    return (
+      <div data-testid="stitch-graph-canvas" className="relative h-screen min-h-0 overflow-hidden bg-[#0a0a0c]">
+        <Suspense fallback={<PanelSkeleton text="Loading graph" />}>
+          <KnowledgeGraphCanvas data={graphData} selectedNodeId={selectedGraphNode?.id ?? null} onSelectNode={setSelectedGraphNode} />
+        </Suspense>
+        <div className="glass-panel absolute right-8 top-40 z-20 w-80 rounded-xl p-6">
+          <h3 className="text-lg font-semibold text-on-surface">Graph Controls</h3>
+          <p className="mt-2 text-sm text-text-dim">Adjust graph filters and display options.</p>
+          <div className="my-6 h-px bg-white/10" />
+          <label className="text-sm font-medium text-on-surface">Search Nodes</label>
+          <label className="premium-input mt-3 flex h-10 items-center gap-3 rounded-md bg-white px-3 text-slate-400">
+            <Search className="h-4 w-4" />
+            <span>Search...</span>
+          </label>
+          <div className="mt-4 flex gap-2">
+            <span className="premium-tag rounded-md px-3 py-1 text-xs font-semibold text-text-dim">#design</span>
+            <span className="premium-tag rounded-md px-3 py-1 text-xs font-semibold text-primary" data-active="true">#architecture</span>
+            <span className="premium-tag rounded-md px-3 py-1 text-xs font-semibold text-text-dim">#notes</span>
+          </div>
+          <div className="my-6 h-px bg-white/10" />
+          <div className="space-y-5">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-on-surface">Show Labels</span>
+              <span className="h-6 w-11 rounded-full bg-primary-container p-1 shadow-[0_0_12px_rgba(124,58,237,0.4)]"><span className="ml-auto block size-4 rounded-full bg-white" /></span>
+            </div>
+            <label className="block">
+              <span className="flex justify-between text-sm"><span>Node Size</span><span className="text-text-dim">Adaptive</span></span>
+              <input className="premium-range mt-3 w-full appearance-none bg-transparent" type="range" defaultValue={50} />
+            </label>
+            <label className="block">
+              <span className="flex justify-between text-sm"><span>Link Forces</span><span className="text-text-dim">Tight</span></span>
+              <input className="premium-range mt-3 w-full appearance-none bg-transparent" type="range" defaultValue={80} />
+            </label>
+          </div>
+        </div>
+        <div className="glass-panel absolute bottom-8 left-1/2 z-20 flex -translate-x-1/2 gap-2 rounded-full p-1.5">
+          {[Search, RefreshCw, Settings, Send].map((Icon, index) => (
+            <button key={index} type="button" className="premium-action-btn flex size-10 items-center justify-center rounded-full text-text-dim">
+              <Icon className="h-4 w-4" />
+            </button>
+          ))}
+        </div>
+        <div className="glass-panel absolute bottom-8 right-8 z-20 h-32 w-48 rounded-xl p-5">
+          <div className="relative h-full border border-primary/25 bg-primary/10">
+            {[20, 36, 50, 62, 74].map((left, index) => <span key={left} className="absolute size-1.5 rounded-full bg-on-surface-variant" style={{ left: `${left}%`, top: `${30 + index * 10}%` }} />)}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderStitchSettings = () => {
+    const settingsTabs: Array<{ icon: typeof UserRound; label: string }> = [
+      { icon: UserRound, label: "Profile" },
+      { icon: Palette, label: "Appearance" },
+      { icon: Bell, label: "Notifications" },
+      { icon: SlidersHorizontal, label: "Advanced" },
+    ];
+
+    return (
+      <div data-testid="stitch-settings-layout" className="mx-auto w-full max-w-[1200px] px-8 py-12">
+        <div className="mb-12">
+          <h2 className="text-[40px] font-bold leading-tight tracking-normal text-on-surface">Settings</h2>
+          <p className="mt-3 text-lg text-on-surface-variant">Manage your account settings and preferences.</p>
+        </div>
+        <div className="grid gap-5 lg:grid-cols-[285px_minmax(0,1fr)]">
+          <nav className="space-y-3">
+            {settingsTabs.map(({ icon: Icon, label }, index) => (
+              <button key={label} type="button" className={cn("flex h-14 w-full items-center gap-4 rounded-lg px-6 text-left text-xl font-bold text-on-surface-variant", index === 0 && "border border-border-subtle bg-surface-container-high text-primary")}>
+                <Icon className="h-6 w-6" />
+                {label}
+              </button>
+            ))}
+          </nav>
+          <section className="premium-card rounded-xl p-10">
+            <div className="premium-card-content">
+              <h3 className="text-3xl font-bold text-on-surface">Profile Information</h3>
+              <div className="my-7 h-px bg-border-subtle" />
+              <div className="grid gap-10 lg:grid-cols-[260px_minmax(0,1fr)]">
+                <div className="text-center">
+                  <div className="mx-auto flex size-28 items-center justify-center rounded-full border-2 border-border-subtle bg-surface-base text-primary">
+                    <UserRound className="h-12 w-12" />
+                  </div>
+                  <p className="mt-6 font-mono text-sm font-bold uppercase tracking-widest text-on-surface-variant">JPG, GIF or PNG. Max size of 800K</p>
+                </div>
+                <form className="grid gap-6">
+                  <div className="grid gap-5 md:grid-cols-2">
+                    <label className="grid gap-3 text-sm font-bold text-on-surface">
+                      Username
+                      <input className="premium-input h-12 rounded-lg px-5 text-base text-on-surface" value={user?.username || "alexmercer"} readOnly />
+                    </label>
+                    <label className="grid gap-3 text-sm font-bold text-on-surface">
+                      Email Address
+                      <input className="premium-input h-12 rounded-lg px-5 text-base text-on-surface" value={IS_PREVIEW_MODE ? "alex@sanctuary.app" : "user@mneme.local"} readOnly />
+                    </label>
+                  </div>
+                  <label className="grid gap-3 text-sm font-bold text-on-surface">
+                    Bio
+                    <textarea className="premium-input min-h-32 rounded-lg px-5 py-4 text-base leading-7 text-on-surface" value="Digital architect and knowledge synthesizer. Building sanctuaries for thought." readOnly />
+                  </label>
+                  <p className="text-base text-on-surface-variant">Brief description for your profile. URLs are hyperlinked.</p>
+                </form>
+              </div>
+              <div className="my-8 h-px bg-border-subtle" />
+              <div className="flex justify-end">
+                <button type="button" className="h-12 rounded-lg bg-primary-container px-8 text-xl font-bold text-on-primary-container">Save Changes</button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    );
+  };
+
   if (authStatus !== "authed") {
     if (authStatus === "checking" && token) {
       return (
@@ -2102,70 +2612,62 @@ function App() {
   }
 
   return (
-    <div data-testid="obsidian-shell" className="mneme-workbench min-h-screen bg-background text-on-surface">
-      <div className="min-h-screen lg:grid lg:grid-cols-[44px_260px_minmax(0,1fr)] 2xl:grid-cols-[44px_260px_minmax(0,1fr)_292px]">
-        <aside data-testid="obsidian-rail" className="hidden min-h-screen flex-col border-r border-outline-variant bg-surface-container-lowest lg:flex">
-          <div className="flex h-10 items-center justify-center border-b border-outline-variant">
-            <div className="flex size-7 items-center justify-center rounded-md bg-primary text-xs font-bold text-on-primary">M</div>
+    <div data-testid="obsidian-shell" className="mneme-workbench min-h-screen bg-surface-base text-on-surface">
+      <div className="min-h-screen lg:grid lg:grid-cols-[256px_minmax(0,1fr)]">
+        <aside
+          data-testid="sanctuary-sidebar"
+          className="hidden min-h-screen flex-col border-r border-outline-variant bg-surface-muted lg:flex"
+        >
+          <div className="flex items-center gap-3 p-6 pb-8">
+            <div className="flex size-8 items-center justify-center rounded-lg bg-primary-container text-sm font-bold text-on-primary-container shadow-[0_0_15px_rgba(124,58,237,0.2)]">
+              M
+            </div>
+            <div className="min-w-0">
+              <h1 className="truncate text-2xl font-bold tracking-normal text-primary">Mneme</h1>
+              <p className="truncate font-mono text-[10px] font-semibold uppercase tracking-widest text-on-surface-variant">Knowledge Base</p>
+            </div>
           </div>
 
-          <nav className="flex flex-1 flex-col items-center gap-1 px-1 py-2">
+          <div className="px-6">
+            <button
+              type="button"
+              onClick={() => {
+                setView("dashboard");
+                setWorkspaceCommandTab("create");
+              }}
+              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-primary-container bg-primary-container px-4 text-sm font-medium text-on-primary-container shadow-[0_0_15px_rgba(124,58,237,0.2)] transition hover:bg-inverse-primary"
+            >
+              <Plus className="h-4 w-4" />
+              New Vault
+            </button>
+          </div>
+
+          <nav className="mt-8 flex flex-col gap-1 px-2">
             {VIEW_ITEMS.map((item) => (
               <button
                 key={item.id}
                 type="button"
                 onClick={() => setView(item.id)}
-                title={item.label}
-                aria-label={item.label}
                 aria-pressed={view === item.id}
                 className={cn(
-                  iconButtonClass,
-                  view === item.id && "bg-surface-container-high text-on-surface shadow-[inset_2px_0_0_var(--color-primary)]",
+                  "relative flex min-h-10 items-center gap-3 rounded-r-md border-l-2 px-4 text-left text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35",
+                  view === item.id
+                    ? "border-primary bg-surface-container-low text-primary"
+                    : "border-transparent text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface",
                 )}
               >
-                <item.icon className="h-4 w-4" />
+                <item.icon className="h-4 w-4 shrink-0 text-primary" />
+                <span className="truncate">{item.label}</span>
               </button>
             ))}
           </nav>
 
-          <div className="flex flex-col items-center gap-1 border-t border-outline-variant px-1 py-2">
-            <button type="button" className={iconButtonClass} title="Search" aria-label="Search">
-              <Search className="h-4 w-4" />
-            </button>
-            <button type="button" className={iconButtonClass} title="Settings" aria-label="Settings">
-              <Settings className="h-4 w-4" />
-            </button>
-            <button type="button" onClick={logout} className={iconButtonClass} title="Log out" aria-label="Log out">
-              <LogOut className="h-4 w-4" />
-            </button>
-          </div>
-        </aside>
-
-        <aside data-testid="obsidian-explorer" className="hidden min-h-screen flex-col overflow-hidden border-r border-outline-variant bg-surface-container-low lg:flex">
-          <div className="border-b border-outline-variant px-3 py-2.5">
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="truncate text-sm font-semibold text-on-surface">Mneme Vault</div>
-                <div className="mt-0.5 truncate font-mono text-[10px] uppercase tracking-widest text-text-muted">
-                  {IS_PREVIEW_MODE ? "Preview workspace" : "Live API workspace"}
-                </div>
-              </div>
-              <StatusPill text={serviceHealth?.status ?? "unknown"} />
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto px-2 py-2.5">
+          <div className="mt-8 flex-1 overflow-y-auto px-4 pb-5">
             <section data-testid="sidebar-group-vaults" className="flex flex-col gap-2">
-              <div className="flex items-center justify-between px-1 font-mono text-[10px] uppercase tracking-widest text-text-muted">
+              <div className="flex items-center justify-between px-2 font-mono text-[10px] uppercase tracking-widest text-text-dim">
                 <span>Vaults</span>
                 <span>{knowledgeBases.length}</span>
               </div>
-
-              <button type="button" onClick={() => setView("workspace")} className={cn(secondaryButtonClass, "justify-start")}>
-                <Plus className="h-4 w-4" />
-                在 Workspace 创建知识库
-              </button>
-
               <div className="flex flex-col gap-1">
                 {knowledgeBases.length ? (
                   knowledgeBases.map((knowledgeBase) => (
@@ -2174,52 +2676,38 @@ function App() {
                       className={cn(
                         "rounded-md border transition",
                         selectedKnowledgeBaseId === knowledgeBase.id
-                          ? "border-transparent bg-surface-container-high"
-                          : "border-transparent hover:border-outline-variant hover:bg-surface-container",
+                          ? "border-border-subtle bg-surface-raised"
+                          : "border-transparent hover:border-border-subtle hover:bg-surface-container",
                       )}
                     >
                       <button
                         type="button"
                         onClick={() => setSelectedKnowledgeBaseId(knowledgeBase.id)}
-                        className="flex w-full items-start gap-2 px-2.5 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
+                        className="flex w-full items-start gap-3 px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
                       >
                         <BookOpen className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium text-on-surface">{knowledgeBase.name}</span>
-                          <span className="mt-0.5 line-clamp-2 text-xs leading-5 text-text-muted">
-                            {knowledgeBase.description || "没有描述"}
+                          <span className="block truncate text-sm font-semibold text-on-surface">{knowledgeBase.name}</span>
+                          <span className="mt-0.5 line-clamp-2 text-xs leading-5 text-text-dim">
+                            {knowledgeBase.description || "No description"}
                           </span>
                         </span>
                       </button>
-                      <div className="flex items-center justify-between gap-2 px-2.5 pb-2 text-[11px] text-text-muted">
-                        <span>{knowledgeBase.is_default ? "default" : formatDate(knowledgeBase.created_at)}</span>
-                        {!knowledgeBase.is_default ? (
-                          <button
-                            type="button"
-                            onClick={() => void handleDeleteKnowledgeBase(knowledgeBase)}
-                            disabled={isBusy(`delete-kb-${knowledgeBase.id}`)}
-                            className="rounded px-1.5 py-1 text-red-300 transition hover:bg-red-500/10 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            删除
-                          </button>
-                        ) : null}
-                      </div>
                     </div>
                   ))
                 ) : (
-                  <div className="border border-dashed border-outline-variant/80 px-3 py-6 text-center text-xs leading-6 text-text-muted">
-                    还没有知识库
+                  <div className="rounded-md border border-dashed border-border-subtle px-3 py-6 text-center text-xs leading-6 text-text-dim">
+                    No vaults yet
                   </div>
                 )}
               </div>
             </section>
 
-            <section data-testid="sidebar-group-files" className="mt-5 flex flex-col gap-2">
-              <div className="flex items-center justify-between px-1 font-mono text-[10px] uppercase tracking-widest text-text-muted">
-                <span>Files</span>
+            <section data-testid="sidebar-group-files" className="mt-6 flex flex-col gap-2">
+              <div className="flex items-center justify-between px-2 font-mono text-[10px] uppercase tracking-widest text-text-dim">
+                <span>Notes</span>
                 <span>{indexedDocumentCount}/{documents.length}</span>
               </div>
-
               <div className="flex flex-col gap-1">
                 {documents.length ? (
                   documents.map((document) => {
@@ -2228,18 +2716,21 @@ function App() {
                       <button
                         key={document.id}
                         type="button"
-                        onClick={() => setSelectedDocumentId(document.id)}
+                        onClick={() => {
+                          setSelectedDocumentId(document.id);
+                          setView("notes");
+                        }}
                         className={cn(
-                          "flex w-full items-start gap-2 rounded-md px-2.5 py-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35",
+                          "flex w-full items-start gap-3 rounded-md px-3 py-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35",
                           selectedDocumentId === document.id
-                            ? "bg-primary-container/42 text-on-primary-container"
+                            ? "bg-primary-container/28 text-on-primary-container"
                             : "text-on-surface-variant hover:bg-surface-container",
                         )}
                       >
                         <FileText className="mt-0.5 h-4 w-4 shrink-0 text-secondary" />
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-sm">{document.file_name}</span>
-                          <span className="mt-1 flex items-center gap-2 text-[11px] text-text-muted">
+                          <span className="mt-1 flex items-center gap-2 text-[11px] text-text-dim">
                             <span className="truncate">{document.file_type}</span>
                             <span>{task?.status ?? document.status}</span>
                           </span>
@@ -2248,45 +2739,54 @@ function App() {
                     );
                   })
                 ) : (
-                  <div className="border border-dashed border-outline-variant/80 px-3 py-6 text-center text-xs leading-6 text-text-muted">
-                    当前知识库还没有文件
+                  <div className="rounded-md border border-dashed border-border-subtle px-3 py-6 text-center text-xs leading-6 text-text-dim">
+                    No notes in this vault
                   </div>
                 )}
               </div>
-
-              <button type="button" onClick={() => setView("workspace")} className={cn(secondaryButtonClass, "mt-2 justify-start")}>
-                <Upload className="h-4 w-4" />
-                在 Workspace 上传文件
-              </button>
             </section>
           </div>
 
-          <div className="border-t border-outline-variant px-2 py-2.5">
-            <div className="flex items-center gap-3 px-2 py-1.5">
-              <div className="flex size-8 items-center justify-center rounded-md bg-surface-container-high text-primary">
+          <div className="border-t border-border-subtle p-6">
+            <div className="flex items-center gap-3">
+              <div className="flex size-8 items-center justify-center rounded-full border border-border-subtle bg-surface-raised text-primary">
                 <UserRound className="h-4 w-4" />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium">{user?.display_name || user?.username}</div>
-                <div className="truncate text-xs text-text-muted">{user?.username}</div>
+                <div className="truncate text-sm font-semibold">{user?.display_name || user?.username}</div>
+                <div className="truncate text-xs text-text-dim">{IS_PREVIEW_MODE ? "Preview" : "Online"}</div>
               </div>
+              <button type="button" onClick={logout} className={iconButtonClass} title="Log out" aria-label="Log out">
+                <LogOut className="h-4 w-4" />
+              </button>
             </div>
           </div>
         </aside>
 
-        <main className="flex min-h-screen flex-col overflow-hidden bg-surface">
-          <header className="border-b border-outline-variant bg-surface-container-low">
-            <div className="flex min-h-10 items-center justify-between gap-3 px-2 sm:px-3">
-              <div className="flex min-w-0 items-center gap-2">
-                <div className="flex size-8 items-center justify-center rounded-md bg-primary text-sm font-bold text-on-primary lg:hidden">M</div>
-                <div data-testid="obsidian-active-tab" className="flex min-w-0 items-center rounded-t-md border-x border-t border-outline-variant bg-surface px-3 py-1.5">
-                  <CurrentViewIcon className="h-4 w-4 shrink-0 text-primary" />
-                  <span className="ml-2 truncate text-sm font-medium">{currentViewItem.label}</span>
-                  <span className="ml-2 hidden max-w-[260px] truncate text-xs text-text-muted sm:inline">
-                    {selectedKnowledgeBase?.name || "未选择知识库"}
-                  </span>
-                </div>
+        <main className="flex min-h-screen flex-col overflow-hidden bg-surface-base">
+          {view !== "graph" && view !== "notes" && view !== "ai" ? (
+          <header data-testid="sanctuary-topbar" className="border-b border-border-subtle bg-surface-base/80 backdrop-blur-md lg:h-16">
+            <div className="flex h-16 items-center justify-between gap-4 px-4 sm:px-6 lg:h-full lg:px-8">
+              <div className="flex min-w-0 flex-1 items-center gap-3">
+                <div className="flex size-9 items-center justify-center rounded-md bg-primary-container text-sm font-bold text-white lg:hidden">M</div>
+                <label className="hidden h-10 w-full max-w-sm items-center gap-3 rounded-md border border-border-subtle bg-surface-muted px-4 text-sm text-text-dim sm:flex">
+                  <Search className="h-4 w-4 shrink-0" />
+                  <span className="truncate">Search commands, notes</span>
+                  <span className="ml-auto rounded border border-border-subtle px-1.5 py-0.5 font-mono text-[10px]">K</span>
+                </label>
               </div>
+
+              <nav className="hidden items-center gap-8 text-sm font-semibold text-on-surface-variant md:flex">
+                <button type="button" onClick={() => setView("dashboard")} className="transition hover:text-on-surface">
+                  Recent
+                </button>
+                <button type="button" onClick={() => setView("notes")} className="transition hover:text-on-surface">
+                  Starred
+                </button>
+                <button type="button" onClick={() => setView("settings")} className="transition hover:text-on-surface">
+                  Archived
+                </button>
+              </nav>
 
               <div className="flex items-center gap-1">
                 <button
@@ -2298,13 +2798,13 @@ function App() {
                 >
                   <RefreshCw className="h-4 w-4" />
                 </button>
-                <button type="button" className={iconButtonClass} title="Right context" aria-label="Right context">
-                  <PanelRight className="h-4 w-4" />
+                <button type="button" onClick={() => setView("settings")} className={iconButtonClass} title="Settings" aria-label="Settings">
+                  <Settings className="h-4 w-4" />
                 </button>
               </div>
             </div>
 
-            <nav className="grid grid-cols-4 gap-1 border-t border-outline-variant px-2 py-2 lg:hidden">
+            <nav className="grid grid-cols-5 gap-1 border-t border-outline-variant px-2 py-2 lg:hidden">
               {VIEW_ITEMS.map((item) => (
                 <button
                   key={item.id}
@@ -2312,7 +2812,7 @@ function App() {
                   onClick={() => setView(item.id)}
                   className={cn(
                     "flex min-h-11 flex-col items-center justify-center gap-1 rounded-md px-1 text-[11px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35",
-                    view === item.id ? "bg-primary-container text-on-primary-container" : "text-text-muted hover:bg-surface-container",
+                    view === item.id ? "bg-primary-container text-on-primary-container" : "text-text-dim hover:bg-surface-container",
                   )}
                 >
                   <item.icon className="h-4 w-4" />
@@ -2324,7 +2824,7 @@ function App() {
             {banner ? (
               <div
                 className={cn(
-                  "mx-3 mb-3 flex items-start gap-3 rounded-md border px-4 py-3 text-sm sm:mx-4",
+                  "mx-4 mb-4 flex items-start gap-3 rounded-md border px-4 py-3 text-sm sm:mx-6 lg:mx-10",
                   banner.tone === "success" && "border-emerald-400/30 bg-emerald-500/10 text-emerald-300",
                   banner.tone === "error" && "border-red-400/30 bg-red-500/10 text-red-300",
                   banner.tone === "info" && "border-primary/30 bg-primary/10 text-on-primary-container",
@@ -2333,133 +2833,55 @@ function App() {
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                 <div className="flex-1">{banner.text}</div>
                 <button type="button" onClick={() => setBanner(null)} className="text-current/70 transition hover:text-current">
-                  关闭
+                  Close
                 </button>
               </div>
             ) : null}
           </header>
+          ) : null}
 
-          <div data-testid="obsidian-editor-pane" className="flex-1 overflow-y-auto px-3 py-4 sm:px-5 lg:px-7 lg:py-5">
-            <div className="mx-auto w-full max-w-[1360px]">
-              <div className="mb-5 border-b border-outline-variant/80 pb-3">
-                <div className="flex flex-col gap-2 xl:flex-row xl:items-end xl:justify-between">
-                  <div className="min-w-0">
-                    <div className="font-mono text-[10px] uppercase tracking-widest text-text-muted">{currentViewItem.hint}</div>
-                    <h1 className="mt-1 truncate text-xl font-semibold tracking-normal text-on-surface sm:text-2xl">
-                      {selectedDocument?.file_name || selectedKnowledgeBase?.name || "选择一个知识库开始"}
-                    </h1>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[11px] text-text-muted">
-                    <span>{knowledgeBases.length} vaults</span>
-                    <span>{documents.length} docs</span>
-                    <span>{indexedDocumentCount} indexed</span>
-                    <span>{activeTaskIds.length} active</span>
-                  </div>
+          <div
+            data-testid="obsidian-editor-pane"
+            className={cn(
+              "flex-1 overflow-y-auto",
+              view === "graph" ? "p-0" : view === "notes" || view === "ai" ? "p-0" : "px-4 py-7 sm:px-6 lg:px-8 lg:py-8",
+            )}
+          >
+            <div className={cn("w-full", view === "graph" || view === "notes" || view === "ai" ? "h-full max-w-none" : "mx-auto max-w-[1200px]")}>
+              {view !== "graph" && view !== "notes" && view !== "ai" ? (
+              <div data-testid="sanctuary-active-view" className="mb-10 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+                <div className="min-w-0">
+                  <div className="font-mono text-[10px] uppercase tracking-widest text-text-dim">{currentViewItem.hint}</div>
+                  <h2 className="mt-3 truncate text-4xl font-bold text-on-surface sm:text-5xl">{currentViewItem.label}</h2>
+                  <p className="mt-3 text-base text-on-surface-variant">
+                    {selectedDocument?.file_name || selectedKnowledgeBase?.name || "Select a vault to begin."}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-3 font-mono text-[11px] uppercase tracking-widest text-text-dim">
+                  <span>{knowledgeBases.length} vaults</span>
+                  <span>{documents.length} notes</span>
+                  <span>{indexedDocumentCount} indexed</span>
+                  <span>{activeTaskIds.length} active</span>
                 </div>
               </div>
+              ) : null}
 
-              {view === "workspace" && renderWorkspace()}
-              {view === "graph" && renderGraph()}
-              {view === "memory" && renderMemory()}
-              {view === "insights" && renderInsights()}
+              {view === "dashboard" && <div data-testid="dashboard-overview">{renderStitchDashboard()}</div>}
+              {view === "notes" && renderStitchNotes()}
+              {view === "graph" && renderStitchGraph()}
+              {view === "ai" && renderStitchAi()}
+              {view === "settings" && renderStitchSettings()}
             </div>
           </div>
 
-          <footer className="flex min-h-8 items-center justify-between gap-3 border-t border-outline-variant bg-surface-container-low px-3 font-mono text-[11px] text-text-muted sm:px-4">
+          {view !== "graph" && view !== "notes" && view !== "ai" ? (
+          <footer className="flex min-h-9 items-center justify-between gap-3 border-t border-outline-variant bg-surface-base px-4 font-mono text-[11px] uppercase tracking-widest text-text-dim sm:px-6 lg:px-10">
             <span className="truncate">{selectedKnowledgeBase?.name || "No vault selected"}</span>
-            <span className="hidden truncate sm:inline">{selectedDocument?.file_name || "No active file"}</span>
+            <span className="hidden truncate sm:inline">{selectedDocument?.file_name || "No active note"}</span>
             <span>{API_BASE_URL.replace(/^https?:\/\//, "")}</span>
           </footer>
+          ) : null}
         </main>
-
-        <aside className="hidden min-h-screen flex-col overflow-hidden border-l border-outline-variant bg-surface-container-low 2xl:flex">
-          <div className="flex h-10 items-center justify-between border-b border-outline-variant px-3">
-            <div className="text-sm font-semibold">Context</div>
-            <PanelRight className="h-4 w-4 text-text-muted" />
-          </div>
-
-          <div className="flex-1 overflow-y-auto px-3 py-3">
-            <section className="border-b border-outline-variant pb-4">
-              <div className="font-mono text-[10px] uppercase tracking-widest text-text-muted">Active note</div>
-              <div className="mt-3">
-                <div className="flex items-start gap-3">
-                  <FileText className="mt-0.5 h-4 w-4 shrink-0 text-secondary" />
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-medium">{selectedDocument?.file_name || "未选中文档"}</div>
-                    <div className="mt-1 text-xs leading-5 text-text-muted">
-                      {selectedDocument ? `${selectedDocument.file_type} · ${formatDate(selectedDocument.created_at)}` : "从左侧文件树选择文档。"}
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-3">
-                  <StatusPill text={selectedDocument?.status ?? "none"} />
-                </div>
-              </div>
-            </section>
-
-            <section className="border-b border-outline-variant py-4">
-              <div className="font-mono text-[10px] uppercase tracking-widest text-text-muted">Workspace outline</div>
-              <div className="mt-3 flex flex-col gap-1">
-                {VIEW_ITEMS.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setView(item.id)}
-                    className={cn(
-                      "flex items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35",
-                      view === item.id ? "bg-primary-container/42 text-on-primary-container" : "text-on-surface-variant hover:bg-surface-container",
-                    )}
-                  >
-                    <item.icon className="h-4 w-4" />
-                    <span className="flex-1">{item.label}</span>
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            <section className="border-b border-outline-variant py-4">
-              <div className="font-mono text-[10px] uppercase tracking-widest text-text-muted">Backlinks</div>
-              <div className="mt-3 flex flex-col gap-2">
-                {documents
-                  .filter((document) => document.id !== selectedDocumentId)
-                  .slice(0, 6)
-                  .map((document) => (
-                    <button
-                      key={document.id}
-                      type="button"
-                      onClick={() => setSelectedDocumentId(document.id)}
-                      className="rounded-md px-2.5 py-2 text-left transition hover:bg-surface-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
-                    >
-                      <div className="truncate text-sm text-on-surface">{document.file_name}</div>
-                      <div className="mt-1 text-xs text-text-muted">{document.status}</div>
-                    </button>
-                  ))}
-                {documents.length <= 1 ? <div className="text-xs leading-6 text-text-muted">暂无可显示的关联文档。</div> : null}
-              </div>
-            </section>
-
-            <section className="py-4">
-              <div className="font-mono text-[10px] uppercase tracking-widest text-text-muted">Runtime</div>
-              <div className="mt-3 flex flex-col gap-3 text-xs leading-6 text-on-surface-variant">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="inline-flex items-center gap-2">
-                    <ShieldCheck className="h-4 w-4 text-primary" />
-                    API
-                  </span>
-                  <StatusPill text={serviceHealth?.status ?? "unknown"} />
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span>Neo4j</span>
-                  <StatusPill text={neo4jHealth?.ok ? "ok" : "warn"} />
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span>Readiness</span>
-                  <StatusPill text={readiness?.overall_status ?? "unknown"} />
-                </div>
-              </div>
-            </section>
-          </div>
-        </aside>
       </div>
     </div>
   );

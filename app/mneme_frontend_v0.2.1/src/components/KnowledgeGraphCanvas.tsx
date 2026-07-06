@@ -13,10 +13,10 @@ type SimulationGraphNode = GraphNodeData & d3.SimulationNodeDatum;
 type SimulationGraphLink = GraphEdgeData & d3.SimulationLinkDatum<SimulationGraphNode>;
 
 const NODE_COLORS: Record<string, string> = {
-  user: "#d6d6d6",
-  knowledge_base: "#a88bfa",
-  document: "#c9c9c9",
-  memory_entry: "#7fcfbd",
+  user: "#c6c6c7",
+  knowledge_base: "#7c3aed",
+  document: "#d2bbff",
+  memory_entry: "#958da1",
 };
 
 export default function KnowledgeGraphCanvas({
@@ -81,8 +81,8 @@ export default function KnowledgeGraphCanvas({
 
     const link = root
       .append("g")
-      .attr("stroke", "#555555")
-      .attr("stroke-opacity", 0.62)
+      .attr("stroke", "#3f3f46")
+      .attr("stroke-opacity", 0.72)
       .selectAll("line")
       .data(edges)
       .join("line")
@@ -129,8 +129,8 @@ export default function KnowledgeGraphCanvas({
         }
         return datum.node_type === "document" ? 13 : datum.node_type === "memory_entry" ? 9 : 11;
       })
-      .attr("fill", "#242424")
-      .attr("stroke", (datum) => (datum.id === selectedNodeId ? "#ffffff" : NODE_COLORS[datum.node_type] ?? "#b8b8b8"))
+      .attr("fill", "#18181b")
+      .attr("stroke", (datum) => (datum.id === selectedNodeId ? "#e5e1e4" : NODE_COLORS[datum.node_type] ?? "#b8b8b8"))
       .attr("stroke-width", (datum) => (datum.id === selectedNodeId ? 3.2 : datum.id === data.root_node_id ? 2.8 : 2));
 
     node
@@ -151,10 +151,10 @@ export default function KnowledgeGraphCanvas({
       .text((datum) => datum.label)
       .attr("font-size", 14)
       .attr("font-weight", 500)
-      .attr("font-family", "IBM Plex Sans, Microsoft YaHei UI, ui-sans-serif, system-ui, sans-serif")
-      .attr("fill", "#e2e2e2")
+      .attr("font-family", "Inter, Microsoft YaHei UI, ui-sans-serif, system-ui, sans-serif")
+      .attr("fill", "#e5e1e4")
       .attr("paint-order", "stroke")
-      .attr("stroke", "#1f1f1f")
+      .attr("stroke", "#09090b")
       .attr("stroke-width", 4)
       .attr("dx", 20)
       .attr("dy", 5);
@@ -189,21 +189,21 @@ export default function KnowledgeGraphCanvas({
     }
 
     outerRingRef.current
-      .attr("stroke", (datum) => (datum.id === selectedNodeId ? "#ffffff" : NODE_COLORS[datum.node_type] ?? "#b8b8b8"))
+      .attr("stroke", (datum) => (datum.id === selectedNodeId ? "#e5e1e4" : NODE_COLORS[datum.node_type] ?? "#b8b8b8"))
       .attr("stroke-width", (datum) => (datum.id === selectedNodeId ? 3.2 : datum.id === data.root_node_id ? 2.8 : 2));
   }, [data, selectedNodeId]);
 
   if (!data) {
     return (
-      <div className="flex h-full items-center justify-center border border-dashed border-outline-variant bg-surface-container-low text-sm text-text-muted">
+      <div className="flex h-full items-center justify-center bg-[#0a0a0c] text-sm text-text-muted">
         当前没有图数据，请先选择范围并加载。
       </div>
     );
   }
 
   return (
-    <div className="flex h-full flex-col bg-surface">
-      <div className="flex items-center justify-between border-b border-outline-variant bg-surface-container-low px-4 py-3 text-xs text-text-muted">
+    <div className="relative flex h-full flex-col overflow-hidden bg-[#0a0a0c]">
+      <div className="glass-panel absolute left-4 right-4 top-4 z-10 flex items-center justify-between rounded-xl px-4 py-3 text-xs text-text-muted">
         <div className="flex flex-wrap gap-4">
           <span>Nodes {data.node_count}</span>
           <span>Edges {data.edge_count}</span>
@@ -218,7 +218,7 @@ export default function KnowledgeGraphCanvas({
           ))}
         </div>
       </div>
-      <div className="relative flex-1 bg-[radial-gradient(#2c2c2c_1px,transparent_1px)] [background-size:22px_22px]">
+      <div className="relative flex-1 bg-[radial-gradient(#18181b_1px,transparent_1px)] [background-size:24px_24px]">
         <svg ref={svgRef} className="h-full w-full" />
       </div>
     </div>

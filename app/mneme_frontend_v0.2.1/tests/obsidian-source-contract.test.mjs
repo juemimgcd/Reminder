@@ -6,17 +6,57 @@ const previewApiSource = readFileSync(new URL('../src/lib/previewApi.ts', import
 
 for (const testId of [
   'data-testid="obsidian-shell"',
-  'data-testid="obsidian-rail"',
-  'data-testid="obsidian-explorer"',
-  'data-testid="obsidian-active-tab"',
+  'data-testid="sanctuary-sidebar"',
+  'data-testid="sanctuary-topbar"',
+  'data-testid="sanctuary-active-view"',
   'data-testid="obsidian-editor-pane"',
 ]) {
   assert.ok(appSource.includes(testId), `Expected App.tsx to expose ${testId}`);
 }
 
 assert.ok(
-  appSource.includes('lg:grid-cols-[44px_260px_minmax(0,1fr)]'),
-  'Expected the desktop workbench grid to use an Obsidian-like 44px rail and compact explorer',
+  appSource.includes('lg:grid-cols-[256px_minmax(0,1fr)]'),
+  'Expected the desktop workbench grid to match the 256px Stitch Sanctuary sidebar',
+);
+
+for (const navLabel of ['Dashboard', 'Notes', 'Graph', 'AI Chat', 'Settings']) {
+  assert.ok(appSource.includes(`label: "${navLabel}"`), `Expected Sanctuary navigation to include ${navLabel}`);
+}
+
+for (const designToken of ['--color-surface-base: #09090b', '--color-primary-container: #7c3aed']) {
+  assert.ok(
+    readFileSync(new URL('../src/index.css', import.meta.url), 'utf8').toLowerCase().includes(designToken),
+    `Expected Obsidian Flux design token ${designToken}`,
+  );
+}
+
+assert.ok(
+  appSource.includes('data-testid="dashboard-overview"'),
+  'Expected the Workspace view to read as a Sanctuary dashboard overview',
+);
+
+for (const stitchClass of ['premium-card', 'glass-panel', 'premium-input', 'premium-tag']) {
+  assert.ok(appSource.includes(stitchClass) || readFileSync(new URL('../src/index.css', import.meta.url), 'utf8').includes(stitchClass), `Expected Stitch export style hook ${stitchClass}`);
+}
+
+for (const stitchLayoutHook of [
+  'data-testid="stitch-dashboard-grid"',
+  'data-testid="stitch-notes-layout"',
+  'data-testid="stitch-ai-layout"',
+  'data-testid="stitch-settings-layout"',
+  'data-testid="stitch-graph-canvas"',
+]) {
+  assert.ok(appSource.includes(stitchLayoutHook), `Expected App.tsx to expose ${stitchLayoutHook}`);
+}
+
+assert.ok(
+  appSource.includes('view === "graph" ? "p-0"'),
+  'Expected the Graph view to remove the ordinary page padding and behave like the Stitch full-canvas page',
+);
+
+assert.ok(
+  appSource.includes('view !== "graph" && view !== "notes" && view !== "ai"'),
+  'Expected the generic page heading to be skipped for Stitch-specialized views',
 );
 
 assert.ok(

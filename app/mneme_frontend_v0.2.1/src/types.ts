@@ -19,7 +19,7 @@ export interface GraphLink {
   target: string;
 }
 
-export type WorkspaceView = "workspace" | "graph" | "memory" | "insights";
+export type WorkspaceView = "dashboard" | "notes" | "graph" | "ai" | "settings";
 
 export interface ApiResponse<T> {
   code: number;
