@@ -9,7 +9,6 @@ import {
   GitBranch,
   Loader2,
   LogOut,
-  MessageSquareText,
   PanelRight,
   Plus,
   RefreshCw,
@@ -54,6 +53,7 @@ import type {
 type AuthStatus = "checking" | "guest" | "authed";
 type BannerTone = "success" | "error" | "info";
 type GraphScope = "user" | "knowledge_base" | "document";
+type WorkspaceCommandTab = "create" | "upload" | "ask" | "companion";
 
 interface BannerState {
   tone: BannerTone;
@@ -66,24 +66,30 @@ const ACTIVE_TASK_STATUSES = new Set(["queued", "running", "pending", "created",
 const VIEW_CACHE_TARGETS = ["graph", "memory", "insights"] as const;
 
 const VIEW_ITEMS: Array<{ id: WorkspaceView; label: string; icon: typeof FolderGit2; hint: string }> = [
-  { id: "workspace", label: "Workspace", icon: FolderGit2, hint: "知识库与文档" },
-  { id: "chat", label: "Chat", icon: MessageSquareText, hint: "问答与陪伴" },
+  { id: "workspace", label: "Workspace", icon: FolderGit2, hint: "知识库、文档与对话" },
   { id: "graph", label: "Graph", icon: GitBranch, hint: "结构与 GraphRAG" },
   { id: "memory", label: "Memory", icon: Database, hint: "记忆库与治理" },
   { id: "insights", label: "Insights", icon: Brain, hint: "画像、成长、分析" },
 ];
 
+const WORKSPACE_COMMANDS: Array<{ id: WorkspaceCommandTab; label: string; hint: string; icon: typeof FolderGit2 }> = [
+  { id: "create", label: "Create Vault", hint: "新建知识库", icon: Plus },
+  { id: "upload", label: "Upload File", hint: "加入当前 vault", icon: Upload },
+  { id: "ask", label: "Ask Vault", hint: "检索问答", icon: ScanSearch },
+  { id: "companion", label: "Companion", hint: "陪伴式回复", icon: Bot },
+];
+
 const iconButtonClass =
-  "inline-flex size-9 items-center justify-center rounded-md text-text-muted transition hover:bg-surface-container-high hover:text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex size-8 items-center justify-center rounded-md text-text-muted transition hover:bg-surface-container-high hover:text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 disabled:cursor-not-allowed disabled:opacity-50";
 
 const secondaryButtonClass =
-  "inline-flex h-9 items-center justify-center gap-2 rounded-md border border-outline-variant bg-surface-container px-3 text-xs font-medium text-on-surface-variant transition hover:border-outline hover:bg-surface-container-high hover:text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex h-8 items-center justify-center gap-2 rounded-md border border-outline-variant bg-surface-container px-3 text-xs font-medium text-on-surface-variant transition hover:border-outline hover:bg-surface-container-high hover:text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 disabled:cursor-not-allowed disabled:opacity-50";
 
 const primaryButtonClass =
-  "inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-3 text-xs font-semibold text-on-primary transition hover:bg-on-primary-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex h-8 items-center justify-center gap-2 rounded-md bg-primary px-3 text-xs font-semibold text-on-primary transition hover:bg-on-primary-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 disabled:cursor-not-allowed disabled:opacity-50";
 
 const inputClass =
-  "h-9 w-full rounded-md border border-outline-variant bg-surface-container-low px-3 text-sm text-on-surface outline-none placeholder:text-text-muted transition focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60";
+  "h-8 w-full rounded-md border border-outline-variant bg-surface-container-low px-2.5 text-sm text-on-surface outline-none placeholder:text-text-muted transition focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60";
 
 const KnowledgeGraphCanvas = lazy(() => import("./components/KnowledgeGraphCanvas"));
 const ReactMarkdown = lazy(() => import("react-markdown"));
@@ -160,30 +166,76 @@ function CardSection({
   compact?: boolean;
 }) {
   return (
-    <section className="overflow-hidden rounded-md border border-outline-variant bg-surface/95 shadow-[0_18px_58px_rgba(0,0,0,0.18)]">
+    <section className="overflow-hidden rounded-none border border-outline-variant/80 bg-surface/55 shadow-none">
       <div
         className={cn(
-          "flex items-start justify-between gap-4 border-b border-outline-variant bg-surface-container-low/92",
-          compact ? "px-4 py-3.5" : "px-5 py-4",
+          "flex items-start justify-between gap-4 border-b border-outline-variant/75 bg-surface-container-low/72",
+          compact ? "px-3.5 py-2.5" : "px-4 py-3",
         )}
       >
         <div>
           <h2 className="text-sm font-semibold text-on-surface">{title}</h2>
-          {description ? <p className="mt-1 text-xs leading-6 text-text-muted">{description}</p> : null}
+          {description ? <p className="mt-1 text-xs leading-5 text-text-muted">{description}</p> : null}
         </div>
         {actions}
       </div>
-      <div className={compact ? "px-4 py-4" : "px-5 py-5"}>{children}</div>
+      <div className={compact ? "px-3.5 py-3.5" : "px-4 py-4"}>{children}</div>
+    </section>
+  );
+}
+
+function FunctionBlock({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="border border-outline-variant/70 bg-surface-container-low/38">
+      <div className="border-b border-outline-variant/60 px-3 py-2">
+        <div className="text-sm font-semibold text-on-surface">{title}</div>
+        {description ? <div className="mt-1 text-xs leading-5 text-text-muted">{description}</div> : null}
+      </div>
+      <div className="px-3 py-3">{children}</div>
+    </section>
+  );
+}
+
+function OutputWorkspace({
+  title,
+  meta,
+  children,
+  testId,
+  className,
+  contentClassName,
+}: {
+  title: string;
+  meta?: ReactNode;
+  children: ReactNode;
+  testId?: string;
+  className?: string;
+  contentClassName?: string;
+}) {
+  return (
+    <section data-testid={testId} className={cn("min-h-[360px] border border-outline-variant/80 bg-surface/70", className)}>
+      <div className="flex min-h-10 items-center justify-between gap-3 border-b border-outline-variant/70 bg-surface-container-low/54 px-3">
+        <div className="truncate text-sm font-semibold text-on-surface">{title}</div>
+        {meta ? <div className="flex shrink-0 items-center gap-2 text-xs text-text-muted">{meta}</div> : null}
+      </div>
+      <div className={cn("px-4 py-4", contentClassName)}>{children}</div>
     </section>
   );
 }
 
 function MetricCard({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
   return (
-    <div className="rounded-md border border-outline-variant bg-surface-container-low/82 px-4 py-4">
+    <div className="border-l border-outline-variant/90 bg-transparent px-3 py-2">
       <div className="font-mono text-[10px] uppercase tracking-widest text-text-muted">{label}</div>
-      <div className="mt-3 truncate text-2xl font-semibold text-on-surface">{value}</div>
-      {hint ? <div className="mt-2 text-xs text-text-muted">{hint}</div> : null}
+      <div className="mt-1 truncate text-lg font-semibold text-on-surface">{value}</div>
+      {hint ? <div className="mt-1 truncate text-xs text-text-muted">{hint}</div> : null}
     </div>
   );
 }
@@ -203,7 +255,7 @@ function StatusPill({ text }: { text: string }) {
 
 function EmptyState({ title, text }: { title: string; text: string }) {
   return (
-    <div className="rounded-md border border-dashed border-outline-variant bg-surface-container-low/72 px-6 py-10 text-center">
+    <div className="border border-dashed border-outline-variant/80 bg-surface-container-low/42 px-5 py-8 text-center">
       <div className="text-sm font-medium text-on-surface">{title}</div>
       <div className="mx-auto mt-2 max-w-xl text-xs leading-6 text-text-muted">{text}</div>
     </div>
@@ -212,7 +264,7 @@ function EmptyState({ title, text }: { title: string; text: string }) {
 
 function PanelSkeleton({ text = "正在加载面板" }: { text?: string }) {
   return (
-    <div className="flex min-h-[220px] items-center justify-center rounded-md border border-dashed border-outline-variant bg-surface-container-low/72 text-sm text-text-muted">
+    <div className="flex min-h-[220px] items-center justify-center border border-dashed border-outline-variant/80 bg-surface-container-low/42 text-sm text-text-muted">
       <div className="inline-flex items-center gap-3">
         <Loader2 className="h-4 w-4 animate-spin" />
         {text}
@@ -230,6 +282,7 @@ function App() {
   const [busyKeys, setBusyKeys] = useState<Record<string, boolean>>({});
 
   const [view, setView] = useState<WorkspaceView>("workspace");
+  const [workspaceCommandTab, setWorkspaceCommandTab] = useState<WorkspaceCommandTab>("ask");
   const [user, setUser] = useState<UserPublic | null>(null);
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseData[]>([]);
   const [selectedKnowledgeBaseId, setSelectedKnowledgeBaseId] = useState(() => localStorage.getItem(SELECTED_KB_KEY) ?? "");
@@ -971,23 +1024,206 @@ function App() {
   };
 
   const renderWorkspace = () => {
-    const indexedCount = documents.filter((item) => item.status === "indexed").length;
-    const activeCount = documents.filter((item) =>
-      ["queued", "indexing", "parsing", "chunking", "embedding", "vector_upserting"].includes(item.status),
-    ).length;
-
     return (
-      <div className="space-y-6">
-        <div className="grid gap-4 md:grid-cols-3">
-          <MetricCard label="Knowledge Base" value={selectedKnowledgeBase?.name ?? "None"} hint={selectedKnowledgeBase?.description ?? "当前未选择知识库"} />
-          <MetricCard label="Documents" value={documents.length} hint={`${indexedCount} 已完成索引`} />
-          <MetricCard label="Active Tasks" value={activeCount} hint="索引中的文档状态会自动轮询刷新" />
-        </div>
+      <div className="space-y-5">
+        <section data-testid="unified-command-module" className="overflow-hidden border border-outline-variant/80 bg-surface/70">
+          <div className="flex min-h-10 items-center justify-between gap-3 border-b border-outline-variant/70 bg-surface-container-low/54 px-3">
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold text-on-surface">Workspace Commands</div>
+              <div className="truncate text-xs text-text-muted">知识库、文件上传和对话集中在一个命令面板里。</div>
+            </div>
+            <StatusPill text={selectedKnowledgeBase?.name ?? "no vault"} />
+          </div>
 
-        <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
+          <div className="grid min-h-[360px] xl:grid-cols-[248px_minmax(0,1fr)]">
+            <nav data-testid="workspace-command-tabs" className="border-b border-outline-variant/70 bg-surface-container-low/26 p-2 xl:border-b-0 xl:border-r">
+              <div className="px-2 py-1 font-mono text-[10px] uppercase tracking-widest text-text-muted">Commands</div>
+              <div className="mt-1 grid gap-1 sm:grid-cols-4 xl:grid-cols-1">
+                {WORKSPACE_COMMANDS.map((command) => (
+                  <button
+                    key={command.id}
+                    type="button"
+                    onClick={() => setWorkspaceCommandTab(command.id)}
+                    aria-pressed={workspaceCommandTab === command.id}
+                    className={cn(
+                      "flex min-h-12 items-center gap-2 rounded-md px-2.5 py-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35",
+                      workspaceCommandTab === command.id ? "bg-surface-container-high text-on-surface" : "text-on-surface-variant hover:bg-surface-container",
+                    )}
+                  >
+                    <command.icon className="h-4 w-4 shrink-0 text-primary" />
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium">{command.label}</span>
+                      <span className="block truncate text-[11px] text-text-muted">{command.hint}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </nav>
+
+            <div data-testid="workspace-command-panel" className="min-w-0 p-4">
+              {workspaceCommandTab === "create" ? (
+                <form data-testid="workspace-create-kb-command" className="mx-auto grid max-w-3xl gap-3" onSubmit={handleCreateKnowledgeBase}>
+                  <div>
+                    <div className="text-sm font-semibold text-on-surface">Create Vault</div>
+                    <div className="mt-1 text-xs leading-5 text-text-muted">创建新的知识库后会自动切换到它。</div>
+                  </div>
+                  <input
+                    value={knowledgeBaseForm.name}
+                    onChange={(event) => setKnowledgeBaseForm((current) => ({ ...current, name: event.target.value }))}
+                    className={inputClass}
+                    placeholder="新知识库名称"
+                  />
+                  <input
+                    value={knowledgeBaseForm.description}
+                    onChange={(event) => setKnowledgeBaseForm((current) => ({ ...current, description: event.target.value }))}
+                    className={inputClass}
+                    placeholder="描述，可选"
+                  />
+                  <div>
+                    <button type="submit" disabled={isBusy("create-kb")} className={primaryButtonClass}>
+                      {isBusy("create-kb") ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                      创建知识库
+                    </button>
+                  </div>
+                </form>
+              ) : null}
+
+              {workspaceCommandTab === "upload" ? (
+                <div data-testid="workspace-upload-command" className="mx-auto grid max-w-3xl gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-on-surface">Upload File</div>
+                    <div className="mt-1 text-xs leading-5 text-text-muted">文件会加入当前 vault，随后可在 Documents 中索引。</div>
+                  </div>
+                  <div className="border border-dashed border-outline-variant/80 bg-surface-container-low/36 px-4 py-5">
+                    <div className="truncate text-sm text-on-surface">
+                      {uploadFile ? uploadFile.name : "当前没有待上传文件"}
+                    </div>
+                    <div className="mt-1 text-xs text-text-muted">{uploadFile ? formatBytes(uploadFile.size) : "选择一个文件后再上传。"}</div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <label className={cn(secondaryButtonClass, "cursor-pointer")}>
+                        <Upload className="h-4 w-4" />
+                        选择文件
+                        <input type="file" className="hidden" onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)} />
+                      </label>
+                      <button
+                        type="button"
+                        disabled={!uploadFile || isBusy("upload") || !selectedKnowledgeBaseId}
+                        onClick={() => void handleUploadDocument()}
+                        className={primaryButtonClass}
+                      >
+                        {isBusy("upload") ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                        上传
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {workspaceCommandTab === "ask" ? (
+                <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+                  <form data-testid="workspace-chat-command" className="space-y-3" onSubmit={handleChatSubmit}>
+                    <div>
+                      <div className="text-sm font-semibold text-on-surface">Ask Vault</div>
+                      <div className="mt-1 text-xs leading-5 text-text-muted">对当前知识库提问，右侧显示最近一次回答。</div>
+                    </div>
+                    <textarea
+                      value={chatQuestion}
+                      onChange={(event) => setChatQuestion(event.target.value)}
+                      className="min-h-[132px] w-full rounded-md border border-outline-variant bg-surface-container-low px-3 py-2.5 text-sm leading-6 text-on-surface outline-none transition placeholder:text-text-muted focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
+                      placeholder="输入要检索和回答的问题"
+                    />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="inline-flex h-8 items-center gap-2 rounded-md border border-outline-variant bg-surface-container px-2.5 text-xs text-text-muted">
+                        Top K
+                        <input
+                          type="number"
+                          min={1}
+                          max={10}
+                          value={chatTopK}
+                          onChange={(event) => setChatTopK(Number(event.target.value) || 4)}
+                          className="h-6 w-12 border-none bg-transparent px-0 text-on-surface outline-none"
+                        />
+                      </label>
+                      <button type="submit" disabled={isBusy("chat") || !selectedKnowledgeBaseId} className={primaryButtonClass}>
+                        {isBusy("chat") ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanSearch className="h-4 w-4" />}
+                        提问
+                      </button>
+                    </div>
+                  </form>
+
+                  <section className="min-h-[214px] rounded-md border border-outline-variant/80 bg-surface-container-low/28 px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="font-mono text-[10px] uppercase tracking-widest text-text-muted">Answer</div>
+                      {chatResult ? <StatusPill text={chatResult.confidence} /> : null}
+                    </div>
+                    {chatResult ? (
+                      <div className="mt-3 space-y-3">
+                        <p className="whitespace-pre-wrap text-sm leading-7 text-slate-700">{chatResult.answer}</p>
+                        <div className="flex flex-wrap gap-3 text-xs text-text-muted">
+                          <span>{chatResult.citations.length} citations</span>
+                          {chatResult.route ? <span>{chatResult.route.target_pipeline}</span> : null}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-3 text-xs leading-6 text-text-muted">还没有问答结果。</div>
+                    )}
+                  </section>
+                </div>
+              ) : null}
+
+              {workspaceCommandTab === "companion" ? (
+                <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+                  <form className="space-y-3" onSubmit={handleCompanionSubmit}>
+                    <div>
+                      <div className="text-sm font-semibold text-on-surface">Companion Reply</div>
+                      <div className="mt-1 text-xs leading-5 text-text-muted">需要行动建议、状态整理或陪伴式反馈时使用。</div>
+                    </div>
+                    <textarea
+                      value={companionQuestion}
+                      onChange={(event) => setCompanionQuestion(event.target.value)}
+                      className="min-h-[132px] w-full rounded-md border border-outline-variant bg-surface-container-low px-3 py-2.5 text-sm leading-6 text-on-surface outline-none transition placeholder:text-text-muted focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
+                      placeholder="输入你的问题或当前状态"
+                    />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="inline-flex h-8 items-center gap-2 rounded-md border border-outline-variant bg-surface-container px-2.5 text-xs text-text-muted">
+                        Top K
+                        <input
+                          type="number"
+                          min={1}
+                          max={10}
+                          value={companionTopK}
+                          onChange={(event) => setCompanionTopK(Number(event.target.value) || 4)}
+                          className="h-6 w-12 border-none bg-transparent px-0 text-on-surface outline-none"
+                        />
+                      </label>
+                      <button type="submit" disabled={isBusy("companion") || !selectedKnowledgeBaseId} className={primaryButtonClass}>
+                        {isBusy("companion") ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}
+                        生成
+                      </button>
+                    </div>
+                  </form>
+
+                  <section className="min-h-[214px] rounded-md border border-outline-variant/80 bg-surface-container-low/28 px-4 py-3">
+                    <div className="font-mono text-[10px] uppercase tracking-widest text-text-muted">Reply</div>
+                    {companionResult ? (
+                      <div className="mt-3 space-y-3">
+                        <p className="whitespace-pre-wrap text-sm leading-7 text-slate-700">{companionResult.companion_message}</p>
+                        <div className="text-xs leading-6 text-text-muted">{companionResult.next_step_hint}</div>
+                      </div>
+                    ) : (
+                      <div className="mt-3 text-xs leading-6 text-text-muted">还没有陪伴回复。</div>
+                    )}
+                  </section>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </section>
+
+        <div className="grid gap-5 xl:grid-cols-[1.25fr_0.75fr]">
           <CardSection
             title="Documents"
-            description="上传、索引和删除都从这里开始。选中的知识库会作为目标作用域。"
+            description="这里仅管理当前知识库文档，上传入口已经集中到 Workspace Commands。"
             actions={
               <button
                 type="button"
@@ -1000,32 +1236,6 @@ function App() {
             }
           >
             <div className="space-y-4">
-              <div className="flex flex-col gap-3 border border-dashed border-slate-300 bg-slate-50 p-4 lg:flex-row lg:items-center">
-                <div className="flex-1 text-sm text-slate-600">
-                  {uploadFile ? `待上传：${uploadFile.name} · ${formatBytes(uploadFile.size)}` : "选择一个文档后上传到当前知识库。"}
-                </div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <label className="inline-flex h-10 cursor-pointer items-center gap-2 border border-slate-300 bg-white px-4 text-sm text-slate-700 transition hover:border-slate-950">
-                    <Upload className="h-4 w-4" />
-                    选择文件
-                    <input
-                      type="file"
-                      className="hidden"
-                      onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    disabled={!uploadFile || isBusy("upload")}
-                    onClick={() => void handleUploadDocument()}
-                    className="inline-flex h-10 items-center gap-2 bg-slate-950 px-4 text-sm text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-                  >
-                    {isBusy("upload") ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                    上传
-                  </button>
-                </div>
-              </div>
-
               {documents.length ? (
                 <div className="overflow-x-auto border border-slate-200">
                   <table className="min-w-full divide-y divide-slate-200 text-sm">
@@ -1200,235 +1410,246 @@ function App() {
 
   const renderChat = () => {
     return (
-      <div className="grid gap-6 xl:grid-cols-2">
-        <CardSection title="Knowledge Base Q&A" description="直接走 `/kb/chat/query`，返回答案、引用、置信度和路由决策。">
-          <form className="space-y-4" onSubmit={handleChatSubmit}>
-            <textarea
-              value={chatQuestion}
-              onChange={(event) => setChatQuestion(event.target.value)}
-              className="min-h-[160px] w-full border border-slate-300 px-4 py-3 text-sm leading-7 outline-none transition focus:border-slate-950"
-              placeholder="输入要在当前知识库里检索和回答的问题"
-            />
-            <div className="flex flex-wrap items-center gap-3">
-              <label className="inline-flex items-center gap-2 text-sm text-slate-600">
-                Top K
-                <input
-                  type="number"
-                  min={1}
-                  max={10}
-                  value={chatTopK}
-                  onChange={(event) => setChatTopK(Number(event.target.value) || 4)}
-                  className="h-10 w-20 border border-slate-300 px-3 outline-none focus:border-slate-950"
-                />
-              </label>
-              <button
-                type="submit"
-                disabled={isBusy("chat") || !selectedKnowledgeBaseId}
-                className="inline-flex h-10 items-center gap-2 bg-slate-950 px-4 text-sm text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-              >
-                {isBusy("chat") ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanSearch className="h-4 w-4" />}
-                发送问答
-              </button>
-            </div>
-          </form>
-
-          {chatResult ? (
-            <div className="mt-5 space-y-5">
-              <div className="border border-slate-200 bg-slate-50 px-4 py-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Answer</div>
-                  <StatusPill text={chatResult.confidence} />
-                </div>
-                <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-700">{chatResult.answer}</p>
-                {chatResult.route ? (
-                  <div className="mt-4 border-t border-slate-200 pt-4 text-xs leading-6 text-slate-500">
-                    <div>Type {chatResult.route.query_type}</div>
-                    <div>Pipeline {chatResult.route.target_pipeline}</div>
-                    <div>{chatResult.route.reason}</div>
-                  </div>
-                ) : null}
+      <div className="space-y-5">
+        <div data-testid="chat-function-grid" className="grid gap-3 xl:grid-cols-2">
+          <FunctionBlock title="Knowledge Base Q&A" description="只负责提交检索问答，不承载结果区。">
+            <form className="space-y-3" onSubmit={handleChatSubmit}>
+              <textarea
+                value={chatQuestion}
+                onChange={(event) => setChatQuestion(event.target.value)}
+                className="min-h-[116px] w-full border border-slate-300 px-3 py-2.5 text-sm leading-6 outline-none transition focus:border-slate-950"
+                placeholder="输入要在当前知识库里检索和回答的问题"
+              />
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="inline-flex items-center gap-2 text-sm text-slate-600">
+                  Top K
+                  <input
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={chatTopK}
+                    onChange={(event) => setChatTopK(Number(event.target.value) || 4)}
+                    className="h-9 w-20 border border-slate-300 px-3 outline-none focus:border-slate-950"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  disabled={isBusy("chat") || !selectedKnowledgeBaseId}
+                  className="inline-flex h-9 items-center gap-2 bg-slate-950 px-3 text-sm text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  {isBusy("chat") ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanSearch className="h-4 w-4" />}
+                  发送问答
+                </button>
               </div>
+            </form>
+          </FunctionBlock>
 
-              <div className="space-y-3">
-                {chatResult.citations.map((citation) => (
-                  <div key={`${citation.source_id}-${citation.chunk_id}`} className="border border-slate-200 px-4 py-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="font-medium text-slate-900">
-                        {citation.source_id} · {citation.document_id}
+          <FunctionBlock title="Companion Reply" description="只负责生成陪伴式回复，不承载输出区。">
+            <form className="space-y-3" onSubmit={handleCompanionSubmit}>
+              <textarea
+                value={companionQuestion}
+                onChange={(event) => setCompanionQuestion(event.target.value)}
+                className="min-h-[116px] w-full border border-slate-300 px-3 py-2.5 text-sm leading-6 outline-none transition focus:border-slate-950"
+                placeholder="输入一个更偏行动、状态或情绪支持的问题"
+              />
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="inline-flex items-center gap-2 text-sm text-slate-600">
+                  Top K
+                  <input
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={companionTopK}
+                    onChange={(event) => setCompanionTopK(Number(event.target.value) || 4)}
+                    className="h-9 w-20 border border-slate-300 px-3 outline-none focus:border-slate-950"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  disabled={isBusy("companion") || !selectedKnowledgeBaseId}
+                  className="inline-flex h-9 items-center gap-2 bg-slate-950 px-3 text-sm text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  {isBusy("companion") ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}
+                  生成陪伴回复
+                </button>
+              </div>
+            </form>
+          </FunctionBlock>
+        </div>
+
+        <OutputWorkspace
+          testId="chat-output-workspace"
+          title="Generated Workspace"
+          meta={
+            <>
+              {chatResult ? <StatusPill text={chatResult.confidence} /> : null}
+              {companionResult ? <StatusPill text="companion" /> : null}
+            </>
+          }
+        >
+          <div className="grid gap-5 xl:grid-cols-2">
+            <section className="min-w-0">
+              <div className="font-mono text-[10px] uppercase tracking-widest text-text-muted">Knowledge Base Answer</div>
+              {chatResult ? (
+                <div className="mt-3 space-y-4">
+                  <div className="border border-slate-200 bg-slate-50 px-4 py-4">
+                    <p className="whitespace-pre-wrap text-sm leading-7 text-slate-700">{chatResult.answer}</p>
+                    {chatResult.route ? (
+                      <div className="mt-4 border-t border-slate-200 pt-4 text-xs leading-6 text-slate-500">
+                        <div>Type {chatResult.route.query_type}</div>
+                        <div>Pipeline {chatResult.route.target_pipeline}</div>
+                        <div>{chatResult.route.reason}</div>
                       </div>
-                      <StatusPill text={citation.validation_status ?? "quote"} />
-                    </div>
-                    <p className="mt-3 text-sm leading-7 text-slate-700">{citation.quote}</p>
-                    <p className="mt-2 text-xs leading-6 text-slate-500">{citation.reason}</p>
+                    ) : null}
                   </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="mt-5">
-              <EmptyState title="还没有问答结果" text="提交问题后，这里会显示回答、证据引用和路由判断。" />
-            </div>
-          )}
-        </CardSection>
+                  <div className="space-y-3">
+                    {chatResult.citations.map((citation) => (
+                      <div key={`${citation.source_id}-${citation.chunk_id}`} className="border border-slate-200 px-4 py-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="font-medium text-slate-900">
+                            {citation.source_id} · {citation.document_id}
+                          </div>
+                          <StatusPill text={citation.validation_status ?? "quote"} />
+                        </div>
+                        <p className="mt-3 text-sm leading-7 text-slate-700">{citation.quote}</p>
+                        <p className="mt-2 text-xs leading-6 text-slate-500">{citation.reason}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-3">
+                  <EmptyState title="还没有问答结果" text="提交问题后，回答、证据引用和路由判断会出现在这个独立工作区。" />
+                </div>
+              )}
+            </section>
 
-        <CardSection title="Companion Reply" description="基于检索结果、画像与成长摘要生成更像产品输出的陪伴式回复。">
-          <form className="space-y-4" onSubmit={handleCompanionSubmit}>
-            <textarea
-              value={companionQuestion}
-              onChange={(event) => setCompanionQuestion(event.target.value)}
-              className="min-h-[160px] w-full border border-slate-300 px-4 py-3 text-sm leading-7 outline-none transition focus:border-slate-950"
-              placeholder="输入一个更偏行动、状态或情绪支持的问题"
-            />
-            <div className="flex flex-wrap items-center gap-3">
-              <label className="inline-flex items-center gap-2 text-sm text-slate-600">
-                Top K
-                <input
-                  type="number"
-                  min={1}
-                  max={10}
-                  value={companionTopK}
-                  onChange={(event) => setCompanionTopK(Number(event.target.value) || 4)}
-                  className="h-10 w-20 border border-slate-300 px-3 outline-none focus:border-slate-950"
-                />
-              </label>
-              <button
-                type="submit"
-                disabled={isBusy("companion") || !selectedKnowledgeBaseId}
-                className="inline-flex h-10 items-center gap-2 bg-slate-950 px-4 text-sm text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-              >
-                {isBusy("companion") ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}
-                生成陪伴回复
-              </button>
-            </div>
-          </form>
-
-          {companionResult ? (
-            <div className="mt-5 space-y-4">
-              <div className="border border-slate-200 bg-slate-50 px-4 py-4">
-                <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Companion Message</div>
-                <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-700">{companionResult.companion_message}</p>
-              </div>
-              <div className="grid gap-4 lg:grid-cols-2">
-                <div className="border border-slate-200 px-4 py-4">
-                  <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Direct Answer</div>
-                  <p className="mt-3 text-sm leading-7 text-slate-700">{companionResult.direct_answer}</p>
+            <section className="min-w-0">
+              <div className="font-mono text-[10px] uppercase tracking-widest text-text-muted">Companion Output</div>
+              {companionResult ? (
+                <div className="mt-3 space-y-4">
+                  <div className="border border-slate-200 bg-slate-50 px-4 py-4">
+                    <p className="whitespace-pre-wrap text-sm leading-7 text-slate-700">{companionResult.companion_message}</p>
+                  </div>
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <div className="border border-slate-200 px-4 py-4">
+                      <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Direct Answer</div>
+                      <p className="mt-3 text-sm leading-7 text-slate-700">{companionResult.direct_answer}</p>
+                    </div>
+                    <div className="border border-slate-200 px-4 py-4">
+                      <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Next Step</div>
+                      <p className="mt-3 text-sm leading-7 text-slate-700">{companionResult.next_step_hint}</p>
+                    </div>
+                  </div>
+                  <div className="border border-slate-200 px-4 py-4">
+                    <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Follow-up Questions</div>
+                    <ul className="mt-3 space-y-2 text-sm leading-7 text-slate-700">
+                      {companionResult.follow_up_questions.map((question) => (
+                        <li key={question}>• {question}</li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
-                <div className="border border-slate-200 px-4 py-4">
-                  <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Next Step</div>
-                  <p className="mt-3 text-sm leading-7 text-slate-700">{companionResult.next_step_hint}</p>
+              ) : (
+                <div className="mt-3">
+                  <EmptyState title="还没有陪伴回复" text="陪伴式反馈、下一步建议和追问会集中显示在这里。" />
                 </div>
-              </div>
-              <div className="grid gap-4 lg:grid-cols-2">
-                <div className="border border-slate-200 px-4 py-4">
-                  <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Profile Snapshot</div>
-                  <p className="mt-3 text-sm leading-7 text-slate-700">{companionResult.profile_snapshot}</p>
-                </div>
-                <div className="border border-slate-200 px-4 py-4">
-                  <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Growth Snapshot</div>
-                  <p className="mt-3 text-sm leading-7 text-slate-700">{companionResult.growth_snapshot}</p>
-                </div>
-              </div>
-              <div className="border border-slate-200 px-4 py-4">
-                <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Follow-up Questions</div>
-                <ul className="mt-3 space-y-2 text-sm leading-7 text-slate-700">
-                  {companionResult.follow_up_questions.map((question) => (
-                    <li key={question}>• {question}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          ) : (
-            <div className="mt-5">
-              <EmptyState title="还没有陪伴回复" text="这里会组合问答、画像与成长分析，输出更完整的陪伴式反馈。" />
-            </div>
-          )}
-        </CardSection>
+              )}
+            </section>
+          </div>
+        </OutputWorkspace>
       </div>
     );
   };
 
   const renderGraph = () => {
     return (
-      <div className="space-y-6">
-        <CardSection
-          title="Graph Controls"
-          description="支持 user / knowledge_base / document 三种图范围，也可以直接触发图投影回填与 GraphRAG 决策。"
-          actions={
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => void loadGraph({ force: true })}
-                disabled={isBusy("graph")}
-                className="inline-flex items-center gap-2 border border-slate-300 px-3 py-2 text-xs text-slate-700 transition hover:border-slate-950"
-              >
+      <div className="space-y-5">
+        <div data-testid="graph-function-grid" className="grid gap-3 xl:grid-cols-[0.9fr_1.1fr]">
+          <FunctionBlock title="Graph Scope" description="选择范围、关系和节点类型，只负责控制图谱。">
+            <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-1">
+              <label className="space-y-2 text-sm">
+                <span className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Graph Scope</span>
+                <select
+                  value={graphScope}
+                  onChange={(event) => setGraphScope(event.target.value as GraphScope)}
+                  className="h-10 w-full border border-slate-300 px-3 outline-none focus:border-slate-950"
+                >
+                  <option value="knowledge_base">Knowledge Base</option>
+                  <option value="user">User</option>
+                  <option value="document">Document</option>
+                </select>
+              </label>
+              {graphScope === "document" ? (
+                <label className="space-y-2 text-sm">
+                  <span className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Document</span>
+                  <select
+                    value={selectedDocumentId}
+                    onChange={(event) => setSelectedDocumentId(event.target.value)}
+                    className="h-10 w-full border border-slate-300 px-3 outline-none focus:border-slate-950"
+                  >
+                    {documents.map((document) => (
+                      <option key={document.id} value={document.id}>
+                        {document.file_name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+              <div className="flex flex-wrap gap-3 text-sm text-slate-600">
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={graphIncludeMemory} onChange={(event) => setGraphIncludeMemory(event.target.checked)} />
+                  Memory nodes
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={graphIncludeRelationships} onChange={(event) => setGraphIncludeRelationships(event.target.checked)} />
+                  Related edges
+                </label>
+              </div>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button type="button" onClick={() => void loadGraph({ force: true })} disabled={isBusy("graph")} className="inline-flex h-9 items-center gap-2 border border-slate-300 px-3 text-xs text-slate-700 transition hover:border-slate-950">
                 {isBusy("graph") ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
                 刷新图谱
               </button>
-              <button
-                type="button"
-                onClick={() => void handleGraphRebuild()}
-                disabled={isBusy("graph-rebuild")}
-                className="inline-flex items-center gap-2 bg-slate-950 px-3 py-2 text-xs text-white transition hover:bg-slate-800"
-              >
+              <button type="button" onClick={() => void handleGraphRebuild()} disabled={isBusy("graph-rebuild")} className="inline-flex h-9 items-center gap-2 bg-slate-950 px-3 text-xs text-white transition hover:bg-slate-800">
                 {isBusy("graph-rebuild") ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
                 回填图投影
               </button>
             </div>
-          }
+          </FunctionBlock>
+
+          <FunctionBlock title="GraphRAG Planner" description="提交规划查询，结果进入下方统一输出区。">
+            <form className="space-y-3" onSubmit={handleGraphPlannerSubmit}>
+              <textarea
+                value={graphPlannerQuery}
+                onChange={(event) => setGraphPlannerQuery(event.target.value)}
+                className="min-h-[112px] w-full border border-slate-300 px-3 py-2.5 text-sm leading-6 outline-none transition focus:border-slate-950"
+                placeholder="输入一个问题，让系统判断图谱是否值得介入检索规划"
+              />
+              <button type="submit" disabled={isBusy("graph-rag") || !selectedKnowledgeBaseId} className="inline-flex h-9 items-center gap-2 bg-slate-950 px-3 text-sm text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300">
+                {isBusy("graph-rag") ? <Loader2 className="h-4 w-4 animate-spin" /> : <GitBranch className="h-4 w-4" />}
+                生成图谱规划
+              </button>
+            </form>
+          </FunctionBlock>
+        </div>
+
+        <OutputWorkspace
+          testId="graph-output-workspace"
+          title="Graph Workspace"
+          meta={graphData ? <span>{graphData.node_count} nodes · {graphData.edge_count} edges</span> : null}
+          className="min-h-[calc(100vh-164px)]"
+          contentClassName="h-[calc(100vh-216px)] min-h-[640px] p-0"
         >
-          <div className="grid gap-4 lg:grid-cols-[0.9fr_1.6fr]">
-            <div className="space-y-4">
-              <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
-                <label className="space-y-2 text-sm">
-                  <span className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Graph Scope</span>
-                  <select
-                    value={graphScope}
-                    onChange={(event) => setGraphScope(event.target.value as GraphScope)}
-                    className="h-11 w-full border border-slate-300 px-3 outline-none focus:border-slate-950"
-                  >
-                    <option value="knowledge_base">Knowledge Base</option>
-                    <option value="user">User</option>
-                    <option value="document">Document</option>
-                  </select>
-                </label>
+          <div className="grid h-full min-h-0 gap-0 xl:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="min-h-[640px] xl:order-1 xl:min-h-0">
+              <Suspense fallback={<PanelSkeleton text="正在加载图谱组件" />}>
+                <KnowledgeGraphCanvas data={graphData} selectedNodeId={selectedGraphNode?.id ?? null} onSelectNode={setSelectedGraphNode} />
+              </Suspense>
+            </div>
 
-                {graphScope === "document" ? (
-                  <label className="space-y-2 text-sm">
-                    <span className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Document</span>
-                    <select
-                      value={selectedDocumentId}
-                      onChange={(event) => setSelectedDocumentId(event.target.value)}
-                      className="h-11 w-full border border-slate-300 px-3 outline-none focus:border-slate-950"
-                    >
-                      {documents.map((document) => (
-                        <option key={document.id} value={document.id}>
-                          {document.file_name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ) : null}
-
-                <div className="space-y-3 border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
-                  <label className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      checked={graphIncludeMemory}
-                      onChange={(event) => setGraphIncludeMemory(event.target.checked)}
-                    />
-                    Include memory nodes
-                  </label>
-                  <label className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      checked={graphIncludeRelationships}
-                      onChange={(event) => setGraphIncludeRelationships(event.target.checked)}
-                    />
-                    Include related edges
-                  </label>
-                </div>
-              </div>
-
+            <aside className="space-y-4 border-t border-outline-variant/70 bg-surface-container-low/24 p-3 xl:order-2 xl:border-l xl:border-t-0">
               {selectedGraphNode ? (
                 <div className="border border-slate-200 px-4 py-4">
                   <div className="flex items-center justify-between gap-3">
@@ -1448,100 +1669,33 @@ function App() {
               ) : (
                 <EmptyState title="还没有选中节点" text="加载图谱后，点击任意节点查看它的业务信息。" />
               )}
-
-              {graphRebuildResult ? (
-                <div className="border border-slate-200 bg-slate-50 px-4 py-4 text-xs leading-6 text-slate-600">
-                  <div className="font-medium text-slate-900">最近一次回填</div>
-                  <div className="mt-2">Scope {graphRebuildResult.scope}</div>
-                  <div>Documents {graphRebuildResult.document_count}</div>
-                  <div>Memory Entries {graphRebuildResult.memory_entry_count}</div>
+              {graphPlannerResult ? (
+                <div className="border border-slate-200 bg-slate-50 px-4 py-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="font-medium text-slate-900">Planner Decision</div>
+                    <StatusPill text={graphPlannerResult.graph_useful ? "useful" : "optional"} />
+                  </div>
+                  <p className="mt-3 text-sm leading-7 text-slate-700">{graphPlannerResult.summary}</p>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                    <MetricCard label="Seeds" value={graphPlannerResult.seed_count} />
+                    <MetricCard label="Expansions" value={graphPlannerResult.expansion_count} />
+                    <MetricCard label="Contexts" value={graphPlannerResult.context_count} />
+                  </div>
                 </div>
               ) : null}
-            </div>
-
-            <div className="h-[540px] min-h-[540px]">
-              <Suspense fallback={<PanelSkeleton text="正在加载图谱组件" />}>
-                <KnowledgeGraphCanvas
-                  data={graphData}
-                  selectedNodeId={selectedGraphNode?.id ?? null}
-                  onSelectNode={setSelectedGraphNode}
-                />
-              </Suspense>
-            </div>
+            </aside>
           </div>
-        </CardSection>
-
-        <CardSection title="GraphRAG Planner" description="调用 `/graph/knowledge-bases/{id}/rag` 查看图谱对当前问题是否有帮助。">
-          <form className="space-y-4" onSubmit={handleGraphPlannerSubmit}>
-            <textarea
-              value={graphPlannerQuery}
-              onChange={(event) => setGraphPlannerQuery(event.target.value)}
-              className="min-h-[120px] w-full border border-slate-300 px-4 py-3 text-sm leading-7 outline-none transition focus:border-slate-950"
-              placeholder="输入一个问题，让系统判断图谱是否值得介入检索规划"
-            />
-            <button
-              type="submit"
-              disabled={isBusy("graph-rag") || !selectedKnowledgeBaseId}
-              className="inline-flex h-10 items-center gap-2 bg-slate-950 px-4 text-sm text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-            >
-              {isBusy("graph-rag") ? <Loader2 className="h-4 w-4 animate-spin" /> : <GitBranch className="h-4 w-4" />}
-              生成图谱规划
-            </button>
-          </form>
-
-          {graphPlannerResult ? (
-            <div className="mt-5 grid gap-4 lg:grid-cols-[0.7fr_1.3fr]">
-              <div className="border border-slate-200 bg-slate-50 px-4 py-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="font-medium text-slate-900">Planner Decision</div>
-                  <StatusPill text={graphPlannerResult.graph_useful ? "useful" : "optional"} />
-                </div>
-                <p className="mt-3 text-sm leading-7 text-slate-700">{graphPlannerResult.summary}</p>
-                <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                  <MetricCard label="Seeds" value={graphPlannerResult.seed_count} />
-                  <MetricCard label="Expansions" value={graphPlannerResult.expansion_count} />
-                  <MetricCard label="Contexts" value={graphPlannerResult.context_count} />
-                </div>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-3">
-                {([
-                  ["Seeds", graphPlannerResult.seeds],
-                  ["Expansions", graphPlannerResult.expansions],
-                  ["Contexts", graphPlannerResult.contexts],
-                ] as const).map(([title, items]) => (
-                  <div key={title} className="border border-slate-200 px-4 py-4">
-                    <div className="font-medium text-slate-900">{title}</div>
-                    <div className="mt-3 space-y-3 text-xs leading-6 text-slate-600">
-                      {items.slice(0, 6).map((item, index) => (
-                        <div key={`${title}-${index}`} className="border-t border-slate-100 pt-3 first:border-none first:pt-0">
-                          <div className="font-medium text-slate-800">{String(item.title ?? item.document_id ?? item.entry_name ?? `Item ${index + 1}`)}</div>
-                          <div>{String(item.reason ?? item.summary ?? "-")}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="mt-5">
-              <EmptyState title="还没有规划结果" text="提交一个查询后，这里会显示种子节点、扩展节点和最终上下文候选。" />
-            </div>
-          )}
-        </CardSection>
+        </OutputWorkspace>
       </div>
     );
   };
 
   const renderMemory = () => {
     return (
-      <div className="space-y-6">
-        <CardSection
-          title="Memory Library"
-          description="时间线、按类型分组和主题聚类都来自 `/memory/knowledge-bases/{id}/library`。"
-          actions={
-            <div className="flex gap-2">
+      <div className="space-y-5">
+        <div data-testid="memory-function-grid" className="grid gap-3 xl:grid-cols-[0.72fr_1.28fr]">
+          <FunctionBlock title="Memory Actions" description="只负责刷新和重建记忆库，结果统一进入下方输出区。">
+            <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => void loadMemoryView({ force: true })}
@@ -1561,8 +1715,10 @@ function App() {
                 重建记忆
               </button>
             </div>
-          }
-        >
+          </FunctionBlock>
+        </div>
+
+        <OutputWorkspace testId="memory-output-workspace" title="Memory Workspace" meta={memoryLibrary ? <span>{memoryLibrary.timeline.length} timeline entries</span> : null}>
           <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
             <div className="space-y-6">
               <div className="border border-slate-200">
@@ -1683,7 +1839,7 @@ function App() {
               ) : null}
             </div>
           </div>
-        </CardSection>
+        </OutputWorkspace>
       </div>
     );
   };
@@ -1691,11 +1847,9 @@ function App() {
   const renderInsights = () => {
     return (
       <div className="space-y-6">
-        <CardSection
-          title="Profile / Growth / Analytics"
-          description="画像、证据、成长分析和分析报表会一起拉取。Advice 与 Companion 则保留独立触发。"
-          actions={
-            <div className="flex flex-wrap gap-2">
+        <div data-testid="insights-function-grid" className="grid gap-3 xl:grid-cols-[0.85fr_1.15fr]">
+          <FunctionBlock title="Insight Refresh" description="只负责拉取画像、证据、成长分析和报表。">
+            <div className="flex flex-wrap items-center gap-2">
               <label className="inline-flex items-center gap-2 border border-slate-300 px-3 py-2 text-xs text-slate-600">
                 Recent Days
                 <input
@@ -1717,8 +1871,29 @@ function App() {
                 刷新洞察
               </button>
             </div>
-          }
-        >
+          </FunctionBlock>
+
+          <FunctionBlock title="Growth Advice" description="只负责提交目标，生成内容进入下方输出区。">
+            <form className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]" onSubmit={handleAdviceSubmit}>
+              <input
+                value={adviceGoal}
+                onChange={(event) => setAdviceGoal(event.target.value)}
+                className="h-10 w-full border border-slate-300 bg-transparent px-3 text-sm outline-none transition focus:border-slate-950"
+                placeholder="可选：告诉系统你现在最想关注的目标"
+              />
+              <button
+                type="submit"
+                disabled={isBusy("advice") || !selectedKnowledgeBaseId}
+                className="inline-flex h-10 items-center justify-center gap-2 bg-slate-950 px-4 text-sm text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                {isBusy("advice") ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                生成建议
+              </button>
+            </form>
+          </FunctionBlock>
+        </div>
+
+        <OutputWorkspace testId="insights-output-workspace" title="Insights Workspace" meta={<span>{recentDays} recent days</span>}>
           <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
             <div className="space-y-6">
               <CardSection title="Personal Profile" compact>
@@ -1856,25 +2031,8 @@ function App() {
               </CardSection>
 
               <CardSection title="Growth Advice" compact>
-                <form className="space-y-4" onSubmit={handleAdviceSubmit}>
-                  <input
-                    value={adviceGoal}
-                    onChange={(event) => setAdviceGoal(event.target.value)}
-                    className="h-11 w-full border border-slate-300 px-4 text-sm outline-none transition focus:border-slate-950"
-                    placeholder="可选：告诉系统你现在最想关注的目标"
-                  />
-                  <button
-                    type="submit"
-                    disabled={isBusy("advice") || !selectedKnowledgeBaseId}
-                    className="inline-flex h-10 items-center gap-2 bg-slate-950 px-4 text-sm text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-                  >
-                    {isBusy("advice") ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                    生成建议
-                  </button>
-                </form>
-
                 {advice ? (
-                  <div className="mt-5 space-y-4 text-sm leading-7 text-slate-700">
+                  <div className="space-y-4 text-sm leading-7 text-slate-700">
                     <p>{advice.advice_summary}</p>
                     <div className="grid gap-4 md:grid-cols-2">
                       <div className="border border-slate-200 px-4 py-4">
@@ -1905,7 +2063,9 @@ function App() {
                       ))}
                     </div>
                   </div>
-                ) : null}
+                ) : (
+                  <EmptyState title="还没有成长建议" text="在上方 Growth Advice 输入目标后，建议会集中显示在这里。" />
+                )}
               </CardSection>
 
               <CardSection title="Analytics Markdown" compact>
@@ -1921,7 +2081,7 @@ function App() {
               </CardSection>
             </div>
           </div>
-        </CardSection>
+        </OutputWorkspace>
       </div>
     );
   };
@@ -1942,14 +2102,14 @@ function App() {
   }
 
   return (
-    <div className="mneme-workbench min-h-screen bg-background text-on-surface">
-      <div className="min-h-screen lg:grid lg:grid-cols-[52px_286px_minmax(0,1fr)] 2xl:grid-cols-[52px_286px_minmax(0,1fr)_320px]">
-        <aside className="hidden min-h-screen flex-col border-r border-outline-variant bg-surface-container-lowest lg:flex">
-          <div className="flex h-12 items-center justify-center border-b border-outline-variant">
-            <div className="flex size-8 items-center justify-center rounded-md bg-primary text-sm font-bold text-on-primary">M</div>
+    <div data-testid="obsidian-shell" className="mneme-workbench min-h-screen bg-background text-on-surface">
+      <div className="min-h-screen lg:grid lg:grid-cols-[44px_260px_minmax(0,1fr)] 2xl:grid-cols-[44px_260px_minmax(0,1fr)_292px]">
+        <aside data-testid="obsidian-rail" className="hidden min-h-screen flex-col border-r border-outline-variant bg-surface-container-lowest lg:flex">
+          <div className="flex h-10 items-center justify-center border-b border-outline-variant">
+            <div className="flex size-7 items-center justify-center rounded-md bg-primary text-xs font-bold text-on-primary">M</div>
           </div>
 
-          <nav className="flex flex-1 flex-col items-center gap-1 px-1.5 py-3">
+          <nav className="flex flex-1 flex-col items-center gap-1 px-1 py-2">
             {VIEW_ITEMS.map((item) => (
               <button
                 key={item.id}
@@ -1960,7 +2120,7 @@ function App() {
                 aria-pressed={view === item.id}
                 className={cn(
                   iconButtonClass,
-                  view === item.id && "bg-primary-container text-on-primary-container shadow-[inset_3px_0_0_var(--color-primary)]",
+                  view === item.id && "bg-surface-container-high text-on-surface shadow-[inset_2px_0_0_var(--color-primary)]",
                 )}
               >
                 <item.icon className="h-4 w-4" />
@@ -1968,7 +2128,7 @@ function App() {
             ))}
           </nav>
 
-          <div className="flex flex-col items-center gap-1 border-t border-outline-variant px-1.5 py-3">
+          <div className="flex flex-col items-center gap-1 border-t border-outline-variant px-1 py-2">
             <button type="button" className={iconButtonClass} title="Search" aria-label="Search">
               <Search className="h-4 w-4" />
             </button>
@@ -1981,12 +2141,12 @@ function App() {
           </div>
         </aside>
 
-        <aside className="hidden min-h-screen flex-col overflow-hidden border-r border-outline-variant bg-surface-container-low lg:flex">
-          <div className="border-b border-outline-variant px-4 py-3">
+        <aside data-testid="obsidian-explorer" className="hidden min-h-screen flex-col overflow-hidden border-r border-outline-variant bg-surface-container-low lg:flex">
+          <div className="border-b border-outline-variant px-3 py-2.5">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <div className="truncate text-sm font-semibold text-on-surface">Mneme Vault</div>
-                <div className="mt-1 truncate font-mono text-[10px] uppercase tracking-widest text-text-muted">
+                <div className="mt-0.5 truncate font-mono text-[10px] uppercase tracking-widest text-text-muted">
                   {IS_PREVIEW_MODE ? "Preview workspace" : "Live API workspace"}
                 </div>
               </div>
@@ -1994,31 +2154,17 @@ function App() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-3 py-3">
-            <section className="flex flex-col gap-2">
+          <div className="flex-1 overflow-y-auto px-2 py-2.5">
+            <section data-testid="sidebar-group-vaults" className="flex flex-col gap-2">
               <div className="flex items-center justify-between px-1 font-mono text-[10px] uppercase tracking-widest text-text-muted">
                 <span>Vaults</span>
                 <span>{knowledgeBases.length}</span>
               </div>
 
-              <form className="flex flex-col gap-2 rounded-md border border-outline-variant bg-surface/76 p-2.5" onSubmit={handleCreateKnowledgeBase}>
-                <input
-                  value={knowledgeBaseForm.name}
-                  onChange={(event) => setKnowledgeBaseForm((current) => ({ ...current, name: event.target.value }))}
-                  className={inputClass}
-                  placeholder="新知识库名称"
-                />
-                <input
-                  value={knowledgeBaseForm.description}
-                  onChange={(event) => setKnowledgeBaseForm((current) => ({ ...current, description: event.target.value }))}
-                  className={inputClass}
-                  placeholder="描述，可选"
-                />
-                <button type="submit" disabled={isBusy("create-kb")} className={primaryButtonClass}>
-                  {isBusy("create-kb") ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                  创建知识库
-                </button>
-              </form>
+              <button type="button" onClick={() => setView("workspace")} className={cn(secondaryButtonClass, "justify-start")}>
+                <Plus className="h-4 w-4" />
+                在 Workspace 创建知识库
+              </button>
 
               <div className="flex flex-col gap-1">
                 {knowledgeBases.length ? (
@@ -2028,7 +2174,7 @@ function App() {
                       className={cn(
                         "rounded-md border transition",
                         selectedKnowledgeBaseId === knowledgeBase.id
-                          ? "border-primary/40 bg-primary-container/34"
+                          ? "border-transparent bg-surface-container-high"
                           : "border-transparent hover:border-outline-variant hover:bg-surface-container",
                       )}
                     >
@@ -2061,14 +2207,14 @@ function App() {
                     </div>
                   ))
                 ) : (
-                  <div className="rounded-md border border-dashed border-outline-variant px-3 py-6 text-center text-xs leading-6 text-text-muted">
+                  <div className="border border-dashed border-outline-variant/80 px-3 py-6 text-center text-xs leading-6 text-text-muted">
                     还没有知识库
                   </div>
                 )}
               </div>
             </section>
 
-            <section className="mt-5 flex flex-col gap-2">
+            <section data-testid="sidebar-group-files" className="mt-5 flex flex-col gap-2">
               <div className="flex items-center justify-between px-1 font-mono text-[10px] uppercase tracking-widest text-text-muted">
                 <span>Files</span>
                 <span>{indexedDocumentCount}/{documents.length}</span>
@@ -2102,38 +2248,21 @@ function App() {
                     );
                   })
                 ) : (
-                  <div className="rounded-md border border-dashed border-outline-variant px-3 py-6 text-center text-xs leading-6 text-text-muted">
+                  <div className="border border-dashed border-outline-variant/80 px-3 py-6 text-center text-xs leading-6 text-text-muted">
                     当前知识库还没有文件
                   </div>
                 )}
               </div>
 
-              <div className="mt-2 rounded-md border border-outline-variant bg-surface/74 p-2.5">
-                <div className="truncate text-xs text-text-muted">
-                  {uploadFile ? `${uploadFile.name} · ${formatBytes(uploadFile.size)}` : "选择文件加入当前 vault"}
-                </div>
-                <div className="mt-2 flex gap-2">
-                  <label className={cn(secondaryButtonClass, "flex-1 cursor-pointer")}>
-                    <Upload className="h-4 w-4" />
-                    选择
-                    <input type="file" className="hidden" onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)} />
-                  </label>
-                  <button
-                    type="button"
-                    disabled={!uploadFile || isBusy("upload")}
-                    onClick={() => void handleUploadDocument()}
-                    className={primaryButtonClass}
-                  >
-                    {isBusy("upload") ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                    上传
-                  </button>
-                </div>
-              </div>
+              <button type="button" onClick={() => setView("workspace")} className={cn(secondaryButtonClass, "mt-2 justify-start")}>
+                <Upload className="h-4 w-4" />
+                在 Workspace 上传文件
+              </button>
             </section>
           </div>
 
-          <div className="border-t border-outline-variant px-3 py-3">
-            <div className="flex items-center gap-3 rounded-md bg-surface/72 px-2.5 py-2.5">
+          <div className="border-t border-outline-variant px-2 py-2.5">
+            <div className="flex items-center gap-3 px-2 py-1.5">
               <div className="flex size-8 items-center justify-center rounded-md bg-surface-container-high text-primary">
                 <UserRound className="h-4 w-4" />
               </div>
@@ -2145,12 +2274,12 @@ function App() {
           </div>
         </aside>
 
-        <main className="flex min-h-screen flex-col overflow-hidden bg-surface-dim">
-          <header className="border-b border-outline-variant bg-surface-container-low/95 backdrop-blur">
-            <div className="flex min-h-12 items-center justify-between gap-3 px-3 sm:px-4">
+        <main className="flex min-h-screen flex-col overflow-hidden bg-surface">
+          <header className="border-b border-outline-variant bg-surface-container-low">
+            <div className="flex min-h-10 items-center justify-between gap-3 px-2 sm:px-3">
               <div className="flex min-w-0 items-center gap-2">
                 <div className="flex size-8 items-center justify-center rounded-md bg-primary text-sm font-bold text-on-primary lg:hidden">M</div>
-                <div className="flex min-w-0 items-center rounded-t-md border-x border-t border-outline-variant bg-surface px-3 py-2">
+                <div data-testid="obsidian-active-tab" className="flex min-w-0 items-center rounded-t-md border-x border-t border-outline-variant bg-surface px-3 py-1.5">
                   <CurrentViewIcon className="h-4 w-4 shrink-0 text-primary" />
                   <span className="ml-2 truncate text-sm font-medium">{currentViewItem.label}</span>
                   <span className="ml-2 hidden max-w-[260px] truncate text-xs text-text-muted sm:inline">
@@ -2175,7 +2304,7 @@ function App() {
               </div>
             </div>
 
-            <nav className="grid grid-cols-5 gap-1 border-t border-outline-variant px-2 py-2 lg:hidden">
+            <nav className="grid grid-cols-4 gap-1 border-t border-outline-variant px-2 py-2 lg:hidden">
               {VIEW_ITEMS.map((item) => (
                 <button
                   key={item.id}
@@ -2210,26 +2339,26 @@ function App() {
             ) : null}
           </header>
 
-          <div className="flex-1 overflow-y-auto px-3 py-4 sm:px-4 lg:px-6 lg:py-6">
-            <div className="mx-auto w-full max-w-[1500px]">
-              <div className="mb-4 border-b border-outline-variant pb-4">
-                <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+          <div data-testid="obsidian-editor-pane" className="flex-1 overflow-y-auto px-3 py-4 sm:px-5 lg:px-7 lg:py-5">
+            <div className="mx-auto w-full max-w-[1360px]">
+              <div className="mb-5 border-b border-outline-variant/80 pb-3">
+                <div className="flex flex-col gap-2 xl:flex-row xl:items-end xl:justify-between">
                   <div className="min-w-0">
                     <div className="font-mono text-[10px] uppercase tracking-widest text-text-muted">{currentViewItem.hint}</div>
-                    <h1 className="mt-2 truncate text-2xl font-semibold tracking-normal text-on-surface sm:text-3xl">
+                    <h1 className="mt-1 truncate text-xl font-semibold tracking-normal text-on-surface sm:text-2xl">
                       {selectedDocument?.file_name || selectedKnowledgeBase?.name || "选择一个知识库开始"}
                     </h1>
                   </div>
-                  <div className="grid gap-2 sm:grid-cols-3 xl:min-w-[520px]">
-                    <MetricCard label="Vaults" value={knowledgeBases.length} hint={user?.display_name || user?.username || "-"} />
-                    <MetricCard label="Files" value={documents.length} hint={`${indexedDocumentCount} 已索引`} />
-                    <MetricCard label="Tasks" value={activeTaskIds.length} hint={selectedDocument?.status || "空闲"} />
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[11px] text-text-muted">
+                    <span>{knowledgeBases.length} vaults</span>
+                    <span>{documents.length} docs</span>
+                    <span>{indexedDocumentCount} indexed</span>
+                    <span>{activeTaskIds.length} active</span>
                   </div>
                 </div>
               </div>
 
               {view === "workspace" && renderWorkspace()}
-              {view === "chat" && renderChat()}
               {view === "graph" && renderGraph()}
               {view === "memory" && renderMemory()}
               {view === "insights" && renderInsights()}
@@ -2244,15 +2373,15 @@ function App() {
         </main>
 
         <aside className="hidden min-h-screen flex-col overflow-hidden border-l border-outline-variant bg-surface-container-low 2xl:flex">
-          <div className="flex h-12 items-center justify-between border-b border-outline-variant px-4">
+          <div className="flex h-10 items-center justify-between border-b border-outline-variant px-3">
             <div className="text-sm font-semibold">Context</div>
             <PanelRight className="h-4 w-4 text-text-muted" />
           </div>
 
-          <div className="flex-1 overflow-y-auto px-4 py-4">
-            <section className="border-b border-outline-variant pb-5">
+          <div className="flex-1 overflow-y-auto px-3 py-3">
+            <section className="border-b border-outline-variant pb-4">
               <div className="font-mono text-[10px] uppercase tracking-widest text-text-muted">Active note</div>
-              <div className="mt-3 rounded-md border border-outline-variant bg-surface/80 p-3">
+              <div className="mt-3">
                 <div className="flex items-start gap-3">
                   <FileText className="mt-0.5 h-4 w-4 shrink-0 text-secondary" />
                   <div className="min-w-0">
@@ -2268,7 +2397,7 @@ function App() {
               </div>
             </section>
 
-            <section className="border-b border-outline-variant py-5">
+            <section className="border-b border-outline-variant py-4">
               <div className="font-mono text-[10px] uppercase tracking-widest text-text-muted">Workspace outline</div>
               <div className="mt-3 flex flex-col gap-1">
                 {VIEW_ITEMS.map((item) => (
@@ -2288,7 +2417,7 @@ function App() {
               </div>
             </section>
 
-            <section className="border-b border-outline-variant py-5">
+            <section className="border-b border-outline-variant py-4">
               <div className="font-mono text-[10px] uppercase tracking-widest text-text-muted">Backlinks</div>
               <div className="mt-3 flex flex-col gap-2">
                 {documents
@@ -2299,7 +2428,7 @@ function App() {
                       key={document.id}
                       type="button"
                       onClick={() => setSelectedDocumentId(document.id)}
-                      className="rounded-md border border-outline-variant bg-surface/70 px-3 py-2 text-left transition hover:border-outline hover:bg-surface-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
+                      className="rounded-md px-2.5 py-2 text-left transition hover:bg-surface-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
                     >
                       <div className="truncate text-sm text-on-surface">{document.file_name}</div>
                       <div className="mt-1 text-xs text-text-muted">{document.status}</div>
@@ -2309,7 +2438,7 @@ function App() {
               </div>
             </section>
 
-            <section className="py-5">
+            <section className="py-4">
               <div className="font-mono text-[10px] uppercase tracking-widest text-text-muted">Runtime</div>
               <div className="mt-3 flex flex-col gap-3 text-xs leading-6 text-on-surface-variant">
                 <div className="flex items-center justify-between gap-3">

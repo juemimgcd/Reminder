@@ -13,10 +13,10 @@ type SimulationGraphNode = GraphNodeData & d3.SimulationNodeDatum;
 type SimulationGraphLink = GraphEdgeData & d3.SimulationLinkDatum<SimulationGraphNode>;
 
 const NODE_COLORS: Record<string, string> = {
-  user: "#f2eee6",
-  knowledge_base: "#9b8cff",
-  document: "#c29b61",
-  memory_entry: "#7dd3a8",
+  user: "#d6d6d6",
+  knowledge_base: "#a88bfa",
+  document: "#c9c9c9",
+  memory_entry: "#7fcfbd",
 };
 
 export default function KnowledgeGraphCanvas({
@@ -52,7 +52,7 @@ export default function KnowledgeGraphCanvas({
     }
 
     const width = svgRef.current.clientWidth || 960;
-    const height = svgRef.current.clientHeight || 540;
+    const height = svgRef.current.clientHeight || 720;
     const root = svg.append("g");
 
     const zoom = d3.zoom<SVGSVGElement, unknown>().scaleExtent([0.35, 2.5]).on("zoom", (event) => {
@@ -70,23 +70,23 @@ export default function KnowledgeGraphCanvas({
         d3
           .forceLink<SimulationGraphNode, SimulationGraphLink>(edges)
           .id((d) => d.id)
-          .distance((edge) => (edge.edge_type === "contains" ? 110 : 180))
-          .strength((edge) => (edge.edge_type === "contains" ? 0.8 : 0.35)),
+          .distance((edge) => (edge.edge_type === "contains" ? 150 : 230))
+          .strength((edge) => (edge.edge_type === "contains" ? 0.72 : 0.28)),
       )
-      .force("charge", d3.forceManyBody().strength(-340))
+      .force("charge", d3.forceManyBody().strength(-520))
       .force("center", d3.forceCenter(width / 2, height / 2))
       .force("collision", d3.forceCollide<SimulationGraphNode>().radius((node) => {
-        return node.node_type === "document" ? 28 : node.node_type === "memory_entry" ? 18 : 22;
+        return node.node_type === "document" ? 42 : node.node_type === "memory_entry" ? 28 : 34;
       }));
 
     const link = root
       .append("g")
-      .attr("stroke", "#4a443a")
-      .attr("stroke-opacity", 0.85)
+      .attr("stroke", "#555555")
+      .attr("stroke-opacity", 0.62)
       .selectAll("line")
       .data(edges)
       .join("line")
-      .attr("stroke-width", (edge) => (edge.edge_type === "related" ? 1.4 : 1.8))
+      .attr("stroke-width", (edge) => (edge.edge_type === "related" ? 1.2 : 1.6))
       .attr("stroke-dasharray", (edge) => (edge.edge_type === "related" ? "6 5" : null));
 
     const node = root
@@ -125,13 +125,13 @@ export default function KnowledgeGraphCanvas({
       .append("circle")
       .attr("r", (datum) => {
         if (datum.id === data.root_node_id) {
-          return 18;
+          return 20;
         }
-        return datum.node_type === "document" ? 12 : datum.node_type === "memory_entry" ? 8 : 10;
+        return datum.node_type === "document" ? 13 : datum.node_type === "memory_entry" ? 9 : 11;
       })
-      .attr("fill", "#1d1b18")
-      .attr("stroke", (datum) => (datum.id === selectedNodeId ? "#ded7ff" : NODE_COLORS[datum.node_type] ?? "#655d4f"))
-      .attr("stroke-width", (datum) => (datum.id === selectedNodeId ? 3 : datum.id === data.root_node_id ? 2.6 : 1.8));
+      .attr("fill", "#242424")
+      .attr("stroke", (datum) => (datum.id === selectedNodeId ? "#ffffff" : NODE_COLORS[datum.node_type] ?? "#b8b8b8"))
+      .attr("stroke-width", (datum) => (datum.id === selectedNodeId ? 3.2 : datum.id === data.root_node_id ? 2.8 : 2));
 
     node
       .append("circle")
@@ -141,7 +141,7 @@ export default function KnowledgeGraphCanvas({
         }
         return datum.node_type === "document" ? 4.5 : 3.5;
       })
-      .attr("fill", (datum) => NODE_COLORS[datum.node_type] ?? "#9f9688");
+      .attr("fill", (datum) => NODE_COLORS[datum.node_type] ?? "#b8b8b8");
 
     const labels = root
       .append("g")
@@ -149,11 +149,15 @@ export default function KnowledgeGraphCanvas({
       .data(nodes)
       .join("text")
       .text((datum) => datum.label)
-      .attr("font-size", 11)
-      .attr("font-family", "Inter, ui-sans-serif, system-ui, sans-serif")
-      .attr("fill", "#c3baaa")
-      .attr("dx", 16)
-      .attr("dy", 4);
+      .attr("font-size", 14)
+      .attr("font-weight", 500)
+      .attr("font-family", "IBM Plex Sans, Microsoft YaHei UI, ui-sans-serif, system-ui, sans-serif")
+      .attr("fill", "#e2e2e2")
+      .attr("paint-order", "stroke")
+      .attr("stroke", "#1f1f1f")
+      .attr("stroke-width", 4)
+      .attr("dx", 20)
+      .attr("dy", 5);
 
     outerRingRef.current = node.select<SVGCircleElement>("circle");
 
@@ -185,20 +189,20 @@ export default function KnowledgeGraphCanvas({
     }
 
     outerRingRef.current
-      .attr("stroke", (datum) => (datum.id === selectedNodeId ? "#ded7ff" : NODE_COLORS[datum.node_type] ?? "#655d4f"))
-      .attr("stroke-width", (datum) => (datum.id === selectedNodeId ? 3 : datum.id === data.root_node_id ? 2.6 : 1.8));
+      .attr("stroke", (datum) => (datum.id === selectedNodeId ? "#ffffff" : NODE_COLORS[datum.node_type] ?? "#b8b8b8"))
+      .attr("stroke-width", (datum) => (datum.id === selectedNodeId ? 3.2 : datum.id === data.root_node_id ? 2.8 : 2));
   }, [data, selectedNodeId]);
 
   if (!data) {
     return (
-      <div className="flex h-full items-center justify-center rounded-md border border-dashed border-outline-variant bg-surface-container-low text-sm text-text-muted">
+      <div className="flex h-full items-center justify-center border border-dashed border-outline-variant bg-surface-container-low text-sm text-text-muted">
         当前没有图数据，请先选择范围并加载。
       </div>
     );
   }
 
   return (
-    <div className="flex h-full flex-col rounded-md border border-outline-variant bg-surface">
+    <div className="flex h-full flex-col bg-surface">
       <div className="flex items-center justify-between border-b border-outline-variant bg-surface-container-low px-4 py-3 text-xs text-text-muted">
         <div className="flex flex-wrap gap-4">
           <span>Nodes {data.node_count}</span>
@@ -214,7 +218,7 @@ export default function KnowledgeGraphCanvas({
           ))}
         </div>
       </div>
-      <div className="relative flex-1 bg-[radial-gradient(#2a2721_1px,transparent_1px)] [background-size:18px_18px]">
+      <div className="relative flex-1 bg-[radial-gradient(#2c2c2c_1px,transparent_1px)] [background-size:22px_22px]">
         <svg ref={svgRef} className="h-full w-full" />
       </div>
     </div>

@@ -6,38 +6,38 @@
   --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
   --font-serif: "Noto Serif SC", "IBM Plex Sans", ui-serif, serif;
 
-  --color-surface: #202229;
-  --color-surface-dim: #15171d;
-  --color-surface-bright: #2d3039;
-  --color-surface-container-lowest: #11131a;
-  --color-surface-container-low: #191b22;
-  --color-surface-container: #242730;
-  --color-surface-container-high: #303441;
-  --color-surface-container-highest: #3c4250;
+  --color-surface: #1f1f1f;
+  --color-surface-dim: #191919;
+  --color-surface-bright: #2a2a2a;
+  --color-surface-container-lowest: #151515;
+  --color-surface-container-low: #202020;
+  --color-surface-container: #262626;
+  --color-surface-container-high: #303030;
+  --color-surface-container-highest: #3a3a3a;
 
-  --color-on-surface: #eef1f7;
-  --color-on-surface-variant: #c4cad6;
+  --color-on-surface: #e7e7e7;
+  --color-on-surface-variant: #c7c7c7;
   --color-inverse-surface: #f1f3f8;
   --color-inverse-on-surface: #161922;
 
-  --color-outline: #687184;
-  --color-outline-variant: #353b49;
+  --color-outline: #686868;
+  --color-outline-variant: #343434;
 
-  --color-primary: #b49cff;
-  --color-on-primary: #191527;
-  --color-primary-container: #332a53;
-  --color-on-primary-container: #ebe4ff;
+  --color-primary: #a88bfa;
+  --color-on-primary: #191525;
+  --color-primary-container: #32294a;
+  --color-on-primary-container: #ece5ff;
 
-  --color-secondary: #75d6c7;
+  --color-secondary: #8fc7bd;
   --color-on-secondary: #0e1e1c;
-  --color-secondary-container: #163934;
+  --color-secondary-container: #1c3734;
 
-  --color-background: #15171d;
-  --color-on-background: #eef1f7;
+  --color-background: #191919;
+  --color-on-background: #e7e7e7;
 
-  --color-text-primary: #eef1f7;
-  --color-text-muted: #939baa;
-  --color-accent-soft: #b49cff1f;
+  --color-text-primary: #e7e7e7;
+  --color-text-muted: #9a9a9a;
+  --color-accent-soft: #a88bfa1f;
 }
 
 @layer base {
@@ -50,16 +50,13 @@
   }
 
   html {
-    background: #15171d;
+    background: #191919;
   }
 
   body {
     min-height: 100vh;
     margin: 0;
-    background:
-      linear-gradient(180deg, rgba(180, 156, 255, 0.07), transparent 18rem),
-      linear-gradient(90deg, rgba(117, 214, 199, 0.05), transparent 28rem),
-      #15171d;
+    background: #191919;
     @apply text-on-background font-sans antialiased;
   }
 
@@ -74,7 +71,7 @@
   }
 
   ::selection {
-    background: rgba(180, 156, 255, 0.34);
+    background: rgba(168, 139, 250, 0.34);
     color: #f8f6ff;
   }
 
@@ -86,41 +83,39 @@
 
 @layer utilities {
   .mneme-workbench {
-    background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent 13rem),
-      var(--color-background);
+    background: var(--color-background);
   }
 
   .mneme-workbench [class*="bg-white"],
   .mneme-workbench [class*="bg-slate-50"],
   .mneme-workbench [class*="bg-slate-100"] {
-    background-color: rgba(36, 39, 48, 0.88);
+    background-color: rgba(38, 38, 38, 0.88);
   }
 
   .mneme-workbench [class*="border-slate"],
   .mneme-workbench [class*="border-white"] {
-    border-color: rgba(104, 113, 132, 0.48);
+    border-color: rgba(104, 104, 104, 0.42);
   }
 
   .mneme-workbench [class*="text-slate-950"],
   .mneme-workbench [class*="text-slate-900"],
   .mneme-workbench [class*="text-slate-800"],
   .mneme-workbench [class*="text-slate-700"] {
-    color: #eef1f7;
+    color: #e7e7e7;
   }
 
   .mneme-workbench [class*="text-slate-600"],
   .mneme-workbench [class*="text-slate-500"],
   .mneme-workbench [class*="text-slate-400"] {
-    color: #939baa;
+    color: #9a9a9a;
   }
 
   .mneme-workbench input,
   .mneme-workbench textarea,
   .mneme-workbench select {
-    background-color: #191b22;
-    border-color: rgba(104, 113, 132, 0.58);
-    color: #eef1f7;
+    background-color: #202020;
+    border-color: rgba(104, 104, 104, 0.58);
+    color: #e7e7e7;
     border-radius: 0.375rem;
   }
 
@@ -129,15 +124,15 @@
   }
 
   .mneme-workbench table {
-    border-color: rgba(104, 113, 132, 0.42);
+    border-color: rgba(104, 104, 104, 0.38);
   }
 
   .mneme-workbench thead {
-    background-color: rgba(25, 27, 34, 0.92);
+    background-color: rgba(32, 32, 32, 0.92);
   }
 
   .mneme-workbench tbody tr:hover {
-    background-color: rgba(48, 52, 65, 0.52);
+    background-color: rgba(48, 48, 48, 0.52);
   }
 
   .mneme-workbench ::-webkit-scrollbar {
@@ -150,12 +145,12 @@
   }
 
   .mneme-workbench ::-webkit-scrollbar-thumb {
-    background: #3c4250;
-    border: 2px solid #191b22;
+    background: #3a3a3a;
+    border: 2px solid #202020;
     border-radius: 999px;
   }
 
   .mneme-workbench ::-webkit-scrollbar-thumb:hover {
-    background: #687184;
+    background: #686868;
   }
 }
