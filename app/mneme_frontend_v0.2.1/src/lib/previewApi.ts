@@ -367,7 +367,7 @@ const previewApi = {
 };
 
 export function isPreviewMode() {
-  const envPreview = import.meta.env.VITE_MNEME_PREVIEW === "true";
+  const envPreview = import.meta.env.VITE_MNEME_PREVIEW === "true" || import.meta.env.MODE === "preview";
   if (envPreview) {
     return true;
   }
@@ -376,8 +376,15 @@ export function isPreviewMode() {
     return false;
   }
 
-  const params = new URLSearchParams(window.location.search);
-  return params.get("preview") === "1";
+  const searchParams = new URLSearchParams(window.location.search);
+  if (searchParams.get("preview") === "1" || searchParams.get("preview") === "true") {
+    return true;
+  }
+
+  const hash = window.location.hash.replace(/^#/, "");
+  const hashQuery = hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : hash;
+  const hashParams = new URLSearchParams(hashQuery);
+  return hashParams.get("preview") === "1" || hashParams.get("preview") === "true";
 }
 
 export default previewApi;
