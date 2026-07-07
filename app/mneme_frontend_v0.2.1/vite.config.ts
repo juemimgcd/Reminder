@@ -1,5 +1,5 @@
 import tailwindcss from '@tailwindcss/vite';
-import react from '@vitejs/plugin-react';
+import vue from '@vitejs/plugin-vue';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import {defineConfig} from 'vite';
@@ -7,7 +7,7 @@ import {defineConfig} from 'vite';
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [vue(), tailwindcss()],
   resolve: {
     alias: {
       '@': path.resolve(dirname, '.'),
@@ -23,14 +23,11 @@ export default defineConfig({
           if (id.includes("d3")) {
             return "graph-vendor";
           }
-          if (id.includes("react-markdown")) {
-            return "markdown-vendor";
-          }
-          if (id.includes("lucide-react")) {
+          if (id.includes("@lucide/vue")) {
             return "ui-vendor";
           }
-          if (id.includes("react") || id.includes("scheduler")) {
-            return "react-vendor";
+          if (id.includes("vue")) {
+            return "vue-vendor";
           }
           return "vendor";
         },

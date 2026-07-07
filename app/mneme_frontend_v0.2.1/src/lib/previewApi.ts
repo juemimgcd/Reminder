@@ -246,7 +246,7 @@ const previewApi = {
       overall_status: "preview",
       checks: [{ name: "backend", status: "skipped", reason: "Preview mode uses local fixture data." }],
       framework_decisions: [{ area: "frontend", decision: "mock-api", reason: "Allows visual review without backend services." }],
-      default_stack: ["React", "Vite", "Local preview API"],
+      default_stack: ["Vue", "TypeScript", "Vite", "Local preview API"],
       optional_stack: [],
       avoid_by_default: ["Network calls in preview mode"],
       markdown: "## Preview Readiness\n\nThe frontend is running against local demo data.",
