@@ -3,7 +3,7 @@ name: reminder
 x-app-base: &app-base
   build:
     context: .
-    dockerfile: Dockerfile
+    dockerfile: docker/Dockerfile
     args:
       PYTHON_VERSION: ${PYTHON_VERSION:-3.12}
       PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}

@@ -219,7 +219,7 @@ DEPLOY_PORT loaded from repository variable.
 如果服务器上项目实际不在 `/opt/reminder`，部署时会找不到：
 
 ```text
-bash: /opt/reminder/github-actions.deploy.sh: No such file or directory
+bash: /opt/reminder/.github/deploy/github-actions.deploy.sh: No such file or directory
 ```
 
 这时把 `DEPLOY_APP_DIR` 改成真实路径即可。

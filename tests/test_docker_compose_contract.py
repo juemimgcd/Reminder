@@ -12,6 +12,9 @@ class DockerComposeContractTest(unittest.TestCase):
         self.compose = yaml.safe_load(COMPOSE_FILE.read_text(encoding="utf-8"))
         self.services = self.compose["services"]
 
+    def test_app_build_uses_docker_directory_dockerfile(self):
+        self.assertEqual(self.compose["x-app-base"]["build"]["dockerfile"], "docker/Dockerfile")
+
     def test_vector_stack_is_opt_in_profile(self):
         for service_name in ("etcd", "minio", "milvus"):
             with self.subTest(service=service_name):

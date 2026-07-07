@@ -39,6 +39,7 @@ coverage/
 
 # Local data and generated archives
 storage/
+company_target/
 *.sqlite
 *.sqlite3
 *.db
