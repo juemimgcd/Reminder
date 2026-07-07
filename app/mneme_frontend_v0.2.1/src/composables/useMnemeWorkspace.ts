@@ -8,6 +8,7 @@ import type {
   ChatSessionData,
   CompanionAnswerResult,
   DocumentListItem,
+  DocumentPreviewData,
   EvidenceProfileData,
   GraphData,
   GrowthAdviceResult,
@@ -80,6 +81,7 @@ export function useMnemeWorkspace() {
   const aiModelConfigs = ref<AiModelConfigData[]>([]);
   const aiModelProviderPresets = ref<AiModelProviderPreset[]>([]);
   const activeAiModelConfigId = ref("");
+  const documentPreview = ref<DocumentPreviewData | null>(null);
 
   const loginForm = ref({ username: "", password: "" });
   const knowledgeBaseForm = ref({ name: "", description: "" });
@@ -297,6 +299,18 @@ export function useMnemeWorkspace() {
     activeAiModelConfigId.value = data.default_config_id ?? data.items[0]?.id ?? "";
   }
 
+  async function loadDocumentPreview(documentId: string) {
+    if (!token.value || !documentId) {
+      documentPreview.value = null;
+      return;
+    }
+    documentPreview.value = await api.documentPreview(token.value, documentId);
+  }
+
+  function clearDocumentPreview() {
+    documentPreview.value = null;
+  }
+
   async function askCompanion() {
     if (!token.value || !activeKnowledgeBaseId.value || !companionQuestion.value.trim()) {
       return;
@@ -358,6 +372,8 @@ export function useMnemeWorkspace() {
     companionResult,
     createChatSession,
     createKnowledgeBase,
+    clearDocumentPreview,
+    documentPreview,
     documents,
     graphData,
     indexedDocumentCount,
@@ -368,6 +384,7 @@ export function useMnemeWorkspace() {
     loadKnowledgeBasePanels,
     loadAiModelConfigs,
     loadChatSessions,
+    loadDocumentPreview,
     login,
     loginForm,
     logout,

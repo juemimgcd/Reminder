@@ -72,6 +72,7 @@ const SETTINGS_TABS = ["General", "AI Models", "Security", "Data Sync"];
 
 type ForceGraphNode = {
   id: string;
+  entityId: string;
   label: string;
   nodeType: string;
   depth: number;
@@ -151,6 +152,7 @@ watch(
       const previous = previousPositions.get(node.id);
       return {
         id: node.id,
+        entityId: node.entity_id,
         label: node.label,
         nodeType: node.node_type,
         depth: node.depth,
@@ -259,11 +261,17 @@ function clearGraphDocumentPreviewTimer() {
 function showGraphDocumentPreview(node: ForceGraphNode) {
   graphDocumentPreviewNode.value = node;
   graphDocumentPreviewTimer = null;
+  if (node.nodeType === "document") {
+    void workspace.loadDocumentPreview(node.entityId);
+  } else {
+    workspace.clearDocumentPreview();
+  }
 }
 
 function hideGraphDocumentPreview() {
   clearGraphDocumentPreviewTimer();
   graphDocumentPreviewNode.value = null;
+  workspace.clearDocumentPreview();
 }
 
 function startGraphNodeDrag(node: ForceGraphNode, event: PointerEvent) {
@@ -767,17 +775,20 @@ function endGraphNodeDrag() {
                       </div>
                     </div>
                     <div class="p-5">
-                      <h2 class="text-3xl font-semibold">{{ graphDocumentPreviewNode.label }}</h2>
+                      <h2 class="text-3xl font-semibold">{{ workspace.documentPreview.value?.file_name ?? graphDocumentPreviewNode.label }}</h2>
                       <div class="mt-4 flex flex-wrap gap-2">
                         <span class="premium-tag rounded px-2 py-1 font-mono text-xs text-on-surface-variant">#{{ graphDocumentPreviewNode.nodeType }}</span>
-                        <span class="premium-tag rounded px-2 py-1 font-mono text-xs text-on-surface-variant">#graph</span>
+                        <span class="premium-tag rounded px-2 py-1 font-mono text-xs text-on-surface-variant">#{{ workspace.documentPreview.value?.file_type ?? "graph" }}</span>
                         <span v-if="graphDocumentPreviewNode.depth === 0" class="premium-tag rounded px-2 py-1 font-mono text-xs text-on-surface-variant">#core</span>
                         <span class="premium-tag rounded border-dashed px-2 py-1 font-mono text-xs text-on-surface-variant">+ Add tag</span>
                       </div>
                       <div class="mt-8">
                         <p class="mb-4 font-mono text-xs uppercase tracking-wide text-text-muted">Summary</p>
                         <p class="text-base leading-7 text-on-surface-variant">
-                          {{ graphDocumentPreviewNode.label }} is linked inside the active knowledge graph. Hold the node to preview its source document and release to return to graph navigation.
+                          {{
+                            workspace.documentPreview.value?.summary ??
+                            `${graphDocumentPreviewNode.label} is linked inside the active knowledge graph. Hold the node to preview its source document and release to return to graph navigation.`
+                          }}
                         </p>
                         <a class="mt-4 inline-flex items-center gap-2 text-primary" href="#">Read full note <ChevronDown class="size-4 -rotate-90" /></a>
                       </div>
@@ -786,13 +797,20 @@ function endGraphNodeDrag() {
                         <div class="flex justify-between"><span class="text-text-muted">Depth</span><span>{{ graphDocumentPreviewNode.depth }}</span></div>
                         <div class="flex justify-between"><span class="text-text-muted">Type</span><span>{{ graphDocumentPreviewNode.nodeType }}</span></div>
                         <div class="flex justify-between"><span class="text-text-muted">Connections</span><span>{{ workspace.graphData.value?.edges.length ?? 0 }} nodes</span></div>
-                        <div class="flex justify-between"><span class="text-text-muted">Status</span><span class="text-emerald-300">Evergreen</span></div>
+                        <div class="flex justify-between"><span class="text-text-muted">Status</span><span class="text-emerald-300">{{ workspace.documentPreview.value?.status ?? "Evergreen" }}</span></div>
                       </div>
-                      <div class="mt-9">
-                        <p class="mb-4 font-mono text-xs uppercase tracking-wide text-text-muted">Backlinks (5)</p>
-                        <article class="border border-outline-variant/30 bg-surface-container-low p-3">
-                          <p class="font-semibold">Deep Learning</p>
-                          <p class="mt-1 text-sm text-text-muted">...subset of machine learning based on artificial neural networks.</p>
+                      <div v-if="workspace.documentPreview.value?.memory_entries.length" class="mt-9">
+                        <p class="mb-4 font-mono text-xs uppercase tracking-wide text-text-muted">Backlinks ({{ workspace.documentPreview.value.memory_entries.length }})</p>
+                        <article v-for="entry in workspace.documentPreview.value.memory_entries" :key="entry.entry_id" class="mb-3 border border-outline-variant/30 bg-surface-container-low p-3">
+                          <p class="font-semibold">{{ entry.entry_name }}</p>
+                          <p class="mt-1 text-sm text-text-muted">{{ entry.summary }}</p>
+                        </article>
+                      </div>
+                      <div v-if="workspace.documentPreview.value?.chunks.length" class="mt-9">
+                        <p class="mb-4 font-mono text-xs uppercase tracking-wide text-text-muted">Source Chunks</p>
+                        <article v-for="chunk in workspace.documentPreview.value.chunks" :key="chunk.chunk_id" class="mb-3 border border-outline-variant/30 bg-surface-container-low p-3">
+                          <p class="font-semibold">{{ chunk.section_title || `Chunk ${chunk.chunk_index + 1}` }}</p>
+                          <p class="mt-1 text-sm text-text-muted">{{ chunk.text }}</p>
                         </article>
                       </div>
                     </div>

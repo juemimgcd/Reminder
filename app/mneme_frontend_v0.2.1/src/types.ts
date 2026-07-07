@@ -104,6 +104,33 @@ export interface DocumentDeleteData {
   deleted_vector_count: number;
 }
 
+export interface DocumentPreviewChunk {
+  chunk_id: string;
+  chunk_index: number;
+  text: string;
+  page_no: number | null;
+  section_title: string | null;
+}
+
+export interface DocumentPreviewMemoryEntry {
+  entry_id: string;
+  entry_name: string;
+  entry_type: string;
+  summary: string;
+  importance_score: number;
+}
+
+export interface DocumentPreviewData {
+  document_id: string;
+  knowledge_base_id: string;
+  file_name: string;
+  file_type: string;
+  status: string;
+  summary: string;
+  chunks: DocumentPreviewChunk[];
+  memory_entries: DocumentPreviewMemoryEntry[];
+}
+
 export interface TaskRecordData {
   id: string;
   task_type: string;

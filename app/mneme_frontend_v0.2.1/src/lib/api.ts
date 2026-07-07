@@ -11,6 +11,7 @@ import type {
   DocumentDeleteData,
   DocumentIndexTaskData,
   DocumentListData,
+  DocumentPreviewData,
   DocumentUploadData,
   EvidenceProfileData,
   GraphData,
@@ -277,6 +278,9 @@ const realApi = {
       method: "DELETE",
       token,
     });
+  },
+  documentPreview(token: string, documentId: string, chunkLimit = 5) {
+    return request<DocumentPreviewData>(`/kb/documents/${documentId}/preview${buildQuery({ chunk_limit: chunkLimit })}`, { token });
   },
   getTask(taskId: string, token: string) {
     return request<TaskRecordData>(`/tasks/${taskId}`, { token });

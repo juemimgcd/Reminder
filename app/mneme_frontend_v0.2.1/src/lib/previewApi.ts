@@ -10,6 +10,7 @@
   DocumentDeleteData,
   DocumentIndexTaskData,
   DocumentListItem,
+  DocumentPreviewData,
   DocumentUploadData,
   EvidenceProfileData,
   GraphData,
@@ -156,6 +157,61 @@ let aiModelConfigs: AiModelConfigData[] = [
     updated_at: now,
   },
 ];
+
+const documentPreviews: Record<string, DocumentPreviewData> = {
+  "doc-zettelkasten": {
+    document_id: "doc-zettelkasten",
+    knowledge_base_id: "kb-demo-research",
+    file_name: "zettelkasten-principles.md",
+    file_type: "markdown",
+    status: "indexed",
+    summary: "Atomic notes are easier to recombine when each note carries a clear relationship to its neighbors.",
+    chunks: [
+      {
+        chunk_id: "chunk-zettel-1",
+        chunk_index: 0,
+        text: "Atomic notes are easier to recombine across contexts when links include intent.",
+        page_no: null,
+        section_title: "Atomicity",
+      },
+    ],
+    memory_entries: [
+      {
+        entry_id: "memory-atomic",
+        entry_name: "Atomic notes",
+        entry_type: "principle",
+        summary: "Small notes are easier to recombine across contexts.",
+        importance_score: 0.86,
+      },
+    ],
+  },
+  "doc-memory-graph": {
+    document_id: "doc-memory-graph",
+    knowledge_base_id: "kb-demo-research",
+    file_name: "memory-graph-design.pdf",
+    file_type: "pdf",
+    status: "indexed",
+    summary: "Graph neighborhoods can provide retrieval context before vector search, improving answer grounding and source inspection.",
+    chunks: [
+      {
+        chunk_id: "chunk-graph-1",
+        chunk_index: 0,
+        text: "Graph neighborhoods can provide retrieval context before vector search.",
+        page_no: 2,
+        section_title: "Retrieval Context",
+      },
+    ],
+    memory_entries: [
+      {
+        entry_id: "memory-context",
+        entry_name: "Contextual recall",
+        entry_type: "insight",
+        summary: "Graph neighborhoods can provide retrieval context before vector search.",
+        importance_score: 0.82,
+      },
+    ],
+  },
+};
 
 function delay<T>(value: T): Promise<T> {
   return Promise.resolve(value);
@@ -369,6 +425,21 @@ const previewApi = {
     const document = documents.find((item) => item.id === documentId);
     documents = documents.filter((item) => item.id !== documentId);
     return delay({ document_id: documentId, knowledge_base_id: document?.knowledge_base_id ?? knowledgeBases[0].id, chunk_count: 12, deleted_memory_entry_count: 2, deleted_task_count: 0, deleted_vector_count: 12 });
+  },
+  documentPreview(_token: string, documentId: string): Promise<DocumentPreviewData> {
+    const document = documents.find((item) => item.id === documentId) ?? documents[0];
+    return delay(
+      documentPreviews[documentId] ?? {
+        document_id: document.id,
+        knowledge_base_id: document.knowledge_base_id,
+        file_name: document.file_name,
+        file_type: document.file_type,
+        status: document.status,
+        summary: "No indexed preview content is available for this document yet.",
+        chunks: [],
+        memory_entries: [],
+      },
+    );
   },
   getTask(taskId: string): Promise<TaskRecordData> {
     return delay(tasks[taskId] ?? createTask(taskId, "preview-target"));

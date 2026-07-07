@@ -4,6 +4,7 @@ import shutil
 import uuid
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mneme.conf.config import settings
@@ -13,8 +14,19 @@ from app.mneme.crud.document import create_document, get_document_by_id, list_do
 from app.mneme.crud.knowledge_base import get_knowledge_base_by_id, get_or_create_default_knowledge_base
 from app.mneme.infra.rate_limit import enforce_fixed_window_rate_limit
 from app.mneme.infra.task_queue import enqueue_index_document_task
+from app.mneme.models.chunk import Chunk
+from app.mneme.models.memory import MemoryEntry
 from app.mneme.models.user import User
-from app.mneme.schemas.document import DocumentDeleteData, DocumentListData, DocumentListItem, DocumentIndexTaskData, DocumentUploadData
+from app.mneme.schemas.document import (
+    DocumentDeleteData,
+    DocumentListData,
+    DocumentListItem,
+    DocumentIndexTaskData,
+    DocumentPreviewChunk,
+    DocumentPreviewData,
+    DocumentPreviewMemoryEntry,
+    DocumentUploadData,
+)
 from app.mneme.domains.documents.service import submit_document_index_task
 from app.mneme.domains.documents.resources import delete_document_resources
 from app.mneme.domains.graph.projection import sync_document_projection
@@ -40,6 +52,17 @@ def ensure_user_context_matches(current_user: User, raw_user_id: int | None) -> 
     if raw_user_id is not None and raw_user_id != current_user.id:
         raise BusinessException(message="user context does not match current user", code=4008, status_code=403)
     return current_user.id
+
+
+def summarize_document_preview(chunks: list[Chunk], memory_entries: list[MemoryEntry]) -> str:
+    if memory_entries:
+        return memory_entries[0].summary
+    for chunk in chunks:
+        if chunk.section_summary:
+            return chunk.section_summary
+        if chunk.content:
+            return chunk.content[:360]
+    return "No indexed preview content is available for this document yet."
 
 
 @router.post("/upload")
@@ -217,6 +240,69 @@ async def index_document_api(
     return success_response(
         data=DocumentIndexTaskData(**result),
         message="index task submitted",
+    )
+
+
+@router.get("/{document_id}/preview")
+async def preview_document_api(
+        document_id: str,
+        chunk_limit: int = Query(default=5, ge=1, le=12),
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_database),
+):
+    document = await get_document_by_id(
+        db,
+        document_id=document_id,
+        user_id=current_user.id,
+    )
+    if not document:
+        raise BusinessException(message="document not found or not owned by current user", code=4044, status_code=404)
+
+    chunk_result = await db.execute(
+        select(Chunk)
+        .where(Chunk.document_pk == document.pk)
+        .order_by(Chunk.chunk_index.asc())
+        .limit(chunk_limit)
+    )
+    chunks = list(chunk_result.scalars().all())
+
+    memory_result = await db.execute(
+        select(MemoryEntry)
+        .where(MemoryEntry.document_pk == document.pk)
+        .order_by(MemoryEntry.importance_score.desc())
+        .limit(5)
+    )
+    memory_entries = list(memory_result.scalars().all())
+
+    return success_response(
+        data=DocumentPreviewData(
+            document_id=document.id,
+            knowledge_base_id=document.knowledge_base_id,
+            file_name=document.file_name,
+            file_type=document.file_type,
+            status=document.status,
+            summary=summarize_document_preview(chunks, memory_entries),
+            chunks=[
+                DocumentPreviewChunk(
+                    chunk_id=chunk.id,
+                    chunk_index=chunk.chunk_index,
+                    text=chunk.content[:800],
+                    page_no=chunk.page_no,
+                    section_title=chunk.section_title,
+                )
+                for chunk in chunks
+            ],
+            memory_entries=[
+                DocumentPreviewMemoryEntry(
+                    entry_id=entry.id,
+                    entry_name=entry.entry_name,
+                    entry_type=entry.entry_type,
+                    summary=entry.summary,
+                    importance_score=entry.importance_score,
+                )
+                for entry in memory_entries
+            ],
+        )
     )
 
 

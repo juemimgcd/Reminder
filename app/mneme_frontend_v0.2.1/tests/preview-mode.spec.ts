@@ -67,7 +67,7 @@ test('knowledge graph document panel stays open after long-pressing a node', asy
 
   await expect(page.getByText('Properties', { exact: true })).toBeHidden();
 
-  const node = page.getByTestId('force-node').first();
+  const node = page.locator('[data-node-id="node-doc-graph"]');
   await expect(node).toBeVisible();
   await node.scrollIntoViewIfNeeded();
   const box = await node.boundingBox();
@@ -80,6 +80,8 @@ test('knowledge graph document panel stays open after long-pressing a node', asy
   const panel = page.getByTestId('graph-document-preview-panel');
   await expect(panel).toBeVisible();
   await expect(panel).toContainText('Properties');
+  await expect(panel).toContainText('memory-graph-design.pdf');
+  await expect(panel).toContainText('Graph neighborhoods can provide retrieval context');
 
   await page.mouse.up();
   await expect(panel).toBeVisible();
