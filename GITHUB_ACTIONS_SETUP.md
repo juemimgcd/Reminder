@@ -43,6 +43,8 @@
 - `DEPLOY_BRANCH`
 - `DEPLOY_ENABLE_NGINX_SYNC`
 
+这些变量只负责把已经初始化过的服务器升级到最新代码。应用运行时的 `.env` 仍然保存在服务器项目目录里，不建议放进 GitHub Actions。
+
 ---
 
 ## 三、推荐配置方式
@@ -157,7 +159,7 @@ DEPLOY_SSH_KEY=你的私钥全文
 
 注意：
 
-- `push` 到 `master` 现在只会执行前端 / 后端检查，不会自动部署到服务器
+- `push` 到 `master` 现在只会执行 Vue 前端类型检查和后端源码编译检查，不会自动部署到服务器
 - 如果你要真正执行远程部署，需要在 GitHub Actions 页面手动触发 workflow，并把 `run_deploy` 选成 `true`
 
 仓库 Actions 页面：
@@ -236,3 +238,5 @@ bash: /opt/reminder/github-actions.deploy.sh: No such file or directory
 - `DEPLOY_PASSWORD`
 
 因为 SSH key 更适合自动化部署，也更安全。
+
+部署脚本会在服务器上进入 `DEPLOY_APP_DIR`，再调用根目录 `upgrade.sh`。`upgrade.sh` 会重新构建 Docker 镜像，镜像构建阶段会把 Vue 前端 `dist` 打进 FastAPI 应用镜像，所以线上仍然只需要维护一个 `reminder-app` 入口。
