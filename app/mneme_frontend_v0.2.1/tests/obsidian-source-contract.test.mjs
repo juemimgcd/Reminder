@@ -19,9 +19,24 @@ assert.ok(
   'Expected the workbench grid to match the 256px Stitch Sanctuary sidebar',
 );
 
-for (const navLabel of ['Dashboard', 'Notes', 'Graph', 'AI Chat', 'Settings']) {
-  assert.ok(appSource.includes(`label: "${navLabel}"`), `Expected Sanctuary navigation to include ${navLabel}`);
+for (const navLabel of ['Knowledge Graph', 'Research Vault', 'Semantic Map', 'AI Laboratory', 'System Settings']) {
+  assert.ok(appSource.includes(`label: "${navLabel}"`), `Expected Stitch navigation to include ${navLabel}`);
 }
+
+assert.ok(
+  appSource.includes('{ id: "graph", label: "Knowledge Graph"'),
+  'Expected the node graph canvas to be exposed as the Knowledge Graph module',
+);
+
+assert.ok(
+  appSource.includes('{ id: "dashboard", label: "Semantic Map"'),
+  'Expected the overview workspace to stop owning the Knowledge Graph label',
+);
+
+assert.ok(
+  readFileSync(new URL('../src/composables/useMnemeWorkspace.ts', import.meta.url), 'utf8').includes('ref<WorkspaceView>("graph")'),
+  'Expected preview/default workspace to open the node graph module first',
+);
 
 for (const designToken of ['--color-surface-base: #09090b', '--color-primary-container: #7c3aed']) {
   assert.ok(
@@ -41,12 +56,16 @@ for (const stitchClass of ['premium-card', 'glass-panel', 'premium-input', 'prem
 
 for (const stitchLayoutHook of [
   'data-testid="stitch-dashboard-grid"',
-  'data-testid="stitch-notes-layout"',
-  'data-testid="stitch-ai-layout"',
+  'data-testid="stitch-research-vault-layout"',
+  'data-testid="stitch-ai-laboratory-layout"',
   'data-testid="stitch-settings-layout"',
-  'data-testid="stitch-graph-canvas"',
+  'data-testid="stitch-graph-layout"',
 ]) {
   assert.ok(appSource.includes(stitchLayoutHook), `Expected App.vue to expose ${stitchLayoutHook}`);
+}
+
+for (const stitchText of ['Mneme Intelligence', 'Cognitive Sanctuary', 'New Research']) {
+  assert.ok(appSource.includes(stitchText), `Expected Stitch shell copy: ${stitchText}`);
 }
 
 assert.ok(
@@ -76,14 +95,77 @@ assert.ok(
 
 for (const layoutHook of [
   'data-testid="graph-function-grid"',
-  'testId="graph-output-workspace"',
+  'data-testid="graph-output-workspace"',
   'data-testid="memory-function-grid"',
-  'testId="memory-output-workspace"',
+  'data-testid="memory-output-workspace"',
   'data-testid="insights-function-grid"',
-  'testId="insights-output-workspace"',
+  'data-testid="insights-output-workspace"',
 ]) {
   assert.ok(appSource.includes(layoutHook), `Expected App.vue to separate controls and outputs with ${layoutHook}`);
 }
+
+for (const invalidVueAttribute of [
+  'testId="graph-output-workspace"',
+  'testId="memory-output-workspace"',
+  'testId="insights-output-workspace"',
+]) {
+  assert.ok(!appSource.includes(invalidVueAttribute), `Expected Vue template to avoid React-style ${invalidVueAttribute}`);
+}
+
+for (const graphReferenceText of [
+  'Machine Learning',
+  'Neural Networks',
+  'All Nodes',
+  'Orphans',
+  'Long press to preview',
+  'Backlinks',
+]) {
+  assert.ok(appSource.includes(graphReferenceText), `Expected Knowledge Graph to mirror Stitch graph reference text: ${graphReferenceText}`);
+}
+
+assert.ok(
+  !appSource.includes('xl:grid-cols-[320px_minmax(0,1fr)_376px]'),
+  'Expected Knowledge Graph document preview to be summoned from the canvas, not pinned as a permanent third column',
+);
+
+for (const graphInteractionText of [
+  'forceSimulation',
+  'forceManyBody',
+  'forceLink',
+  'graphFileRailCollapsed',
+  'graphDocumentPreviewNode',
+  'showGraphDocumentPreview',
+  'hideGraphDocumentPreview',
+  'data-testid="graph-file-rail"',
+  'data-testid="graph-file-rail-toggle"',
+  'data-testid="graph-document-preview-panel"',
+  'data-testid="force-node"',
+  '@pointerdown="startGraphNodeDrag',
+  '@pointermove="moveGraphNodeDrag"',
+]) {
+  assert.ok(appSource.includes(graphInteractionText), `Expected Knowledge Graph to implement interactive graph behavior: ${graphInteractionText}`);
+}
+
+for (const aiReferenceText of [
+  'Deep Thought Mode',
+  'New Memory',
+  'Search history...',
+  'Today, 14:03',
+  'Context: Node B',
+  'AI responses may be structurally imperfect',
+  'aiHistoryRailCollapsed',
+  'data-testid="ai-history-rail"',
+  'data-testid="ai-history-rail-toggle"',
+  'Collapse chat history',
+  'Expand chat history',
+]) {
+  assert.ok(appSource.includes(aiReferenceText), `Expected AI Laboratory to mirror Stitch chat reference text: ${aiReferenceText}`);
+}
+
+assert.ok(
+  appSource.includes('fixed bottom-0 right-0') || appSource.includes('sticky bottom-0'),
+  'Expected AI Laboratory input to stay anchored near the bottom like the Stitch chat reference',
+);
 
 assert.ok(
   !appSource.includes('{ id: "chat", label: "Chat"'),
@@ -102,8 +184,8 @@ for (const centralizedHook of [
 }
 
 assert.ok(
-  appSource.includes('title="Graph Workspace"') && appSource.includes('min-h-[calc(100vh-164px)]'),
-  'Expected Graph to use a large Obsidian-like workspace instead of a small split canvas',
+  appSource.includes('title="Graph Workspace"') && appSource.includes('h-screen min-h-screen'),
+  'Expected Graph to use a full-height Obsidian-like workspace instead of a small split canvas',
 );
 
 assert.ok(

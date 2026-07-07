@@ -21,6 +21,7 @@ class DocumentsDomainConvergenceTest(unittest.TestCase):
         paths = {route.path for route in app.routes}
         self.assertIn("/kb/documents/upload", paths)
         self.assertIn("/kb/documents", paths)
+        self.assertIn("/kb/documents/{document_id}/preview", paths)
         self.assertIn("/kb/documents/{document_id}/index", paths)
         self.assertIn("/kb/documents/{document_id}", paths)
 

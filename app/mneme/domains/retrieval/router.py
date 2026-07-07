@@ -2,12 +2,13 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mneme.conf.config import settings
-from app.mneme.conf.database import get_database
+from app.mneme.conf.database import get_write_database
 from app.mneme.conf.logging import app_logger
 from app.mneme.crud.knowledge_base import get_knowledge_base_by_id
 from app.mneme.infra.rate_limit import enforce_fixed_window_rate_limit
 from app.mneme.models.user import User
 from app.mneme.schemas.chat import ChatQueryData, ChatQueryRequest
+from app.mneme.domains.chat.service import ask_in_chat_session, message_to_data
 from app.mneme.domains.retrieval.query_service import generate_rag_answer
 from app.mneme.utils.auth import get_current_user
 from app.mneme.utils.exceptions import BusinessException
@@ -21,7 +22,7 @@ router = APIRouter(prefix="/kb/chat", tags=["chat"])
 async def query_chat(
     payload: ChatQueryRequest,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_database),
+    db: AsyncSession = Depends(get_write_database),
 ):
     app_logger.bind(module="chat_router").info(
         f"chat query request user_id={current_user.id} knowledge_base_id={payload.knowledge_base_id} "
@@ -41,6 +42,27 @@ async def query_chat(
 
     if knowledge_base.user_id != current_user.id:
         raise BusinessException(message="知识库不属于当前用户", code=4007)
+
+    if payload.session_id:
+        _session, messages = await ask_in_chat_session(
+            db,
+            current_user=current_user,
+            session_id=payload.session_id,
+            question=payload.question,
+            top_k=payload.top_k,
+            expected_knowledge_base_id=payload.knowledge_base_id,
+        )
+        assistant_message = message_to_data(messages[-1])
+        data = ChatQueryData(
+            answer=assistant_message.content,
+            sources=assistant_message.sources,
+            citations=assistant_message.citations,
+            confidence=assistant_message.route.confidence if assistant_message.route else "medium",
+            uncertainty=None,
+            route=assistant_message.route,
+            debug=None,
+        )
+        return success_response(data=data)
 
     result = await generate_rag_answer(
         question=payload.question,

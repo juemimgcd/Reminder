@@ -1,10 +1,16 @@
 ﻿import type {
+  AiModelConfigData,
+  AiModelConfigListData,
   AuthTokenData,
+  ChatMessageData,
   ChatQueryData,
+  ChatSessionData,
+  ChatSessionDetailData,
   CompanionAnswerResult,
   DocumentDeleteData,
   DocumentIndexTaskData,
   DocumentListItem,
+  DocumentPreviewData,
   DocumentUploadData,
   EvidenceProfileData,
   GraphData,
@@ -88,6 +94,124 @@ let documents: DocumentListItem[] = [
 ];
 
 let tasks: Record<string, TaskRecordData> = {};
+
+let chatSessions: ChatSessionData[] = [
+  {
+    id: "chat-preview-vault-review",
+    user_id: previewUser.id,
+    knowledge_base_id: "kb-demo-research",
+    title: "Preview Vault Review",
+    message_count: 2,
+    last_message_at: now,
+    archived_at: null,
+    created_at: now,
+    updated_at: now,
+  },
+];
+
+let chatMessages: Record<string, ChatMessageData[]> = {
+  "chat-preview-vault-review": [
+    {
+      id: "msg-preview-user-1",
+      session_id: "chat-preview-vault-review",
+      user_id: previewUser.id,
+      knowledge_base_id: "kb-demo-research",
+      role: "user",
+      content: "How should I review this vault?",
+      sources: [],
+      citations: [],
+      route: null,
+      model_config_id: "model-preview-deepseek",
+      created_at: "2026-06-24T08:01:00.000Z",
+    },
+    {
+      id: "msg-preview-assistant-1",
+      session_id: "chat-preview-vault-review",
+      user_id: previewUser.id,
+      knowledge_base_id: "kb-demo-research",
+      role: "assistant",
+      content: "Start with the indexed documents, then inspect graph neighborhoods that connect memory entries to source notes.",
+      sources: [],
+      citations: [],
+      route: null,
+      model_config_id: "model-preview-deepseek",
+      created_at: "2026-06-24T08:01:10.000Z",
+    },
+  ],
+};
+
+let aiModelConfigs: AiModelConfigData[] = [
+  {
+    id: "model-preview-deepseek",
+    user_id: previewUser.id,
+    label: "Preview DeepSeek",
+    provider: "deepseek",
+    base_url: "https://api.deepseek.com",
+    model_name: "deepseek-v4-flash",
+    temperature: 0,
+    context_window: 64000,
+    is_default: true,
+    enabled: true,
+    has_api_key: true,
+    created_at: now,
+    updated_at: now,
+  },
+];
+
+const documentPreviews: Record<string, DocumentPreviewData> = {
+  "doc-zettelkasten": {
+    document_id: "doc-zettelkasten",
+    knowledge_base_id: "kb-demo-research",
+    file_name: "zettelkasten-principles.md",
+    file_type: "markdown",
+    status: "indexed",
+    summary: "Atomic notes are easier to recombine when each note carries a clear relationship to its neighbors.",
+    chunks: [
+      {
+        chunk_id: "chunk-zettel-1",
+        chunk_index: 0,
+        text: "Atomic notes are easier to recombine across contexts when links include intent.",
+        page_no: null,
+        section_title: "Atomicity",
+      },
+    ],
+    memory_entries: [
+      {
+        entry_id: "memory-atomic",
+        entry_name: "Atomic notes",
+        entry_type: "principle",
+        summary: "Small notes are easier to recombine across contexts.",
+        importance_score: 0.86,
+      },
+    ],
+  },
+  "doc-memory-graph": {
+    document_id: "doc-memory-graph",
+    knowledge_base_id: "kb-demo-research",
+    file_name: "memory-graph-design.pdf",
+    file_type: "pdf",
+    status: "indexed",
+    summary: "Graph neighborhoods can provide retrieval context before vector search, improving answer grounding and source inspection.",
+    chunks: [
+      {
+        chunk_id: "chunk-graph-1",
+        chunk_index: 0,
+        text: "Graph neighborhoods can provide retrieval context before vector search.",
+        page_no: 2,
+        section_title: "Retrieval Context",
+      },
+    ],
+    memory_entries: [
+      {
+        entry_id: "memory-context",
+        entry_name: "Contextual recall",
+        entry_type: "insight",
+        summary: "Graph neighborhoods can provide retrieval context before vector search.",
+        importance_score: 0.82,
+      },
+    ],
+  },
+};
 
 function delay<T>(value: T): Promise<T> {
   return Promise.resolve(value);
@@ -302,6 +426,21 @@ const previewApi = {
     documents = documents.filter((item) => item.id !== documentId);
     return delay({ document_id: documentId, knowledge_base_id: document?.knowledge_base_id ?? knowledgeBases[0].id, chunk_count: 12, deleted_memory_entry_count: 2, deleted_task_count: 0, deleted_vector_count: 12 });
   },
+  documentPreview(_token: string, documentId: string): Promise<DocumentPreviewData> {
+    const document = documents.find((item) => item.id === documentId) ?? documents[0];
+    return delay(
+      documentPreviews[documentId] ?? {
+        document_id: document.id,
+        knowledge_base_id: document.knowledge_base_id,
+        file_name: document.file_name,
+        file_type: document.file_type,
+        status: document.status,
+        summary: "No indexed preview content is available for this document yet.",
+        chunks: [],
+        memory_entries: [],
+      },
+    );
+  },
   getTask(taskId: string): Promise<TaskRecordData> {
     return delay(tasks[taskId] ?? createTask(taskId, "preview-target"));
   },
@@ -315,6 +454,104 @@ const previewApi = {
   },
   chatQuery(_token: string, payload: { question: string; knowledge_base_id: string; top_k?: number; session_id?: string | null }): Promise<ChatQueryData> {
     return delay({ answer: `Preview answer for: ${payload.question}`, confidence: "medium", uncertainty: "This is local demo data, not a backend answer.", route: { query_type: "preview", requires_retrieval: true, target_pipeline: "mock", confidence: "medium", reason: "Preview mode returns deterministic fixture content." }, sources: [{ source_id: "source-preview-1", knowledge_base_id: payload.knowledge_base_id, document_id: "doc-zettelkasten", chunk_id: "chunk-zettel-1", page_no: null, text: "Atomic notes are easier to recombine across contexts." }], citations: [{ source_id: "source-preview-1", document_id: "doc-zettelkasten", chunk_id: "chunk-zettel-1", page_no: null, quote: "Atomic notes are easier to recombine", reason: "Matches the preview question theme.", validation_status: "preview", quote_found: true, validation_reason: "Fixture quote." }], debug: null });
+  },
+  listChatSessions(_token: string, knowledgeBaseId: string): Promise<{ items: ChatSessionData[]; total: number }> {
+    const items = chatSessions.filter((session) => session.knowledge_base_id === knowledgeBaseId && !session.archived_at);
+    return delay({ items, total: items.length });
+  },
+  createChatSession(_token: string, payload: { knowledge_base_id: string; title?: string | null }): Promise<ChatSessionData> {
+    const session: ChatSessionData = {
+      id: `chat-preview-${Date.now()}`,
+      user_id: previewUser.id,
+      knowledge_base_id: payload.knowledge_base_id,
+      title: payload.title || "New Chat",
+      message_count: 0,
+      last_message_at: null,
+      archived_at: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    chatSessions = [session, ...chatSessions];
+    chatMessages[session.id] = [];
+    return delay(session);
+  },
+  getChatSession(_token: string, sessionId: string): Promise<ChatSessionDetailData> {
+    const session = chatSessions.find((item) => item.id === sessionId) ?? chatSessions[0];
+    return delay({ session, messages: chatMessages[session.id] ?? [] });
+  },
+  deleteChatSession(_token: string, sessionId: string): Promise<{ session_id: string; deleted_count: number }> {
+    chatSessions = chatSessions.filter((item) => item.id !== sessionId);
+    delete chatMessages[sessionId];
+    return delay({ session_id: sessionId, deleted_count: 1 });
+  },
+  sendChatSessionMessage(_token: string, sessionId: string, payload: { question: string; top_k?: number }): Promise<ChatSessionDetailData> {
+    const session = chatSessions.find((item) => item.id === sessionId) ?? chatSessions[0];
+    const createdAt = new Date().toISOString();
+    const nextMessages: ChatMessageData[] = [
+      {
+        id: `msg-preview-user-${Date.now()}`,
+        session_id: session.id,
+        user_id: previewUser.id,
+        knowledge_base_id: session.knowledge_base_id,
+        role: "user",
+        content: payload.question,
+        sources: [],
+        citations: [],
+        route: null,
+        model_config_id: "model-preview-deepseek",
+        created_at: createdAt,
+      },
+      {
+        id: `msg-preview-assistant-${Date.now()}`,
+        session_id: session.id,
+        user_id: previewUser.id,
+        knowledge_base_id: session.knowledge_base_id,
+        role: "assistant",
+        content: `Preview answer for: ${payload.question}`,
+        sources: [],
+        citations: [],
+        route: { query_type: "preview", requires_retrieval: true, target_pipeline: "mock", confidence: "medium", reason: "Preview session message." },
+        model_config_id: "model-preview-deepseek",
+        created_at: createdAt,
+      },
+    ];
+    chatMessages[session.id] = [...(chatMessages[session.id] ?? []), ...nextMessages];
+    session.message_count = chatMessages[session.id].length;
+    session.last_message_at = createdAt;
+    return delay({ session, messages: nextMessages });
+  },
+  listAiModelConfigs(): Promise<AiModelConfigListData> {
+    return delay({
+      provider_presets: [
+        { provider: "deepseek", label: "DeepSeek", base_url: "https://api.deepseek.com", model_name: "deepseek-v4-flash" },
+        { provider: "qwen", label: "Qwen", base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1", model_name: "qwen-plus" },
+      ],
+      items: aiModelConfigs,
+      default_config_id: aiModelConfigs.find((item) => item.is_default)?.id ?? null,
+    });
+  },
+  createAiModelConfig(_token: string, payload: { label: string; provider: string; base_url: string; model_name: string; api_key?: string | null; temperature?: number; context_window?: number; is_default?: boolean; enabled?: boolean }): Promise<AiModelConfigData> {
+    const config: AiModelConfigData = { id: `model-preview-${Date.now()}`, user_id: previewUser.id, label: payload.label, provider: payload.provider, base_url: payload.base_url, model_name: payload.model_name, temperature: payload.temperature ?? 0, context_window: payload.context_window ?? 64000, is_default: Boolean(payload.is_default), enabled: payload.enabled ?? true, has_api_key: Boolean(payload.api_key), created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    if (config.is_default) {
+      aiModelConfigs = aiModelConfigs.map((item) => ({ ...item, is_default: false }));
+    }
+    aiModelConfigs = [...aiModelConfigs, config];
+    return delay(config);
+  },
+  updateAiModelConfig(_token: string, configId: string, payload: Partial<{ label: string; provider: string; base_url: string; model_name: string; api_key: string | null; temperature: number; context_window: number; enabled: boolean }>): Promise<AiModelConfigData> {
+    aiModelConfigs = aiModelConfigs.map((item) => item.id === configId ? { ...item, ...payload, has_api_key: payload.api_key !== undefined ? Boolean(payload.api_key) : item.has_api_key, updated_at: new Date().toISOString() } : item);
+    return delay(aiModelConfigs.find((item) => item.id === configId) ?? aiModelConfigs[0]);
+  },
+  testAiModelConfig(_token: string, configId: string): Promise<{ config_id: string; ok: boolean; message: string }> {
+    return delay({ config_id: configId, ok: true, message: "Preview model config is ready." });
+  },
+  setDefaultAiModelConfig(_token: string, configId: string): Promise<AiModelConfigData> {
+    aiModelConfigs = aiModelConfigs.map((item) => ({ ...item, is_default: item.id === configId }));
+    return delay(aiModelConfigs.find((item) => item.id === configId) ?? aiModelConfigs[0]);
+  },
+  deleteAiModelConfig(_token: string, configId: string): Promise<{ config_id: string; deleted_count: number }> {
+    aiModelConfigs = aiModelConfigs.filter((item) => item.id !== configId);
+    return delay({ config_id: configId, deleted_count: 1 });
   },
   companionReply(_token: string, knowledgeBaseId: string, payload: { question: string; top_k?: number }): Promise<CompanionAnswerResult> {
     return delay({ knowledge_base_id: knowledgeBaseId, question: payload.question, direct_answer: "In preview mode, Mneme can show how companion answers will be laid out without calling the backend.", citations: [{ document_id: "doc-memory-graph", chunk_id: "chunk-graph-1", page_no: 2, text: "Graph context improves answer grounding.", reason: "Preview citation." }], profile_snapshot: profileData.profile_summary, growth_snapshot: growthData.stage_summary, next_step_hint: "Try switching to Graph or Insights to inspect populated preview panels.", follow_up_questions: ["Which documents anchor this answer?", "What changed in the last 30 days?"], companion_message: "This is a local preview companion response." });

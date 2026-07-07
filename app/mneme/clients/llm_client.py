@@ -41,7 +41,21 @@ def _normalize_provider(provider: str) -> str:
     return "qwen"
 
 
-def build_llm_kwargs(config=settings) -> dict:
+def build_llm_kwargs(config=settings, user_config: dict | None = None) -> dict:
+    if user_config:
+        provider = _normalize_provider(str(user_config.get("provider", "")))
+        defaults = LLM_PROVIDER_DEFAULTS[provider]
+        api_key = str(user_config.get("api_key") or "")
+        kwargs = {
+            "model": str(user_config.get("model") or defaults["model"]),
+            "api_key": api_key,
+            "base_url": str(user_config.get("base_url") or defaults["base_url"]),
+            "temperature": float(user_config.get("temperature", config.LLM_TEMPERATURE)),
+        }
+        if provider == "mimo" and api_key:
+            kwargs["default_headers"] = {"api-key": api_key}
+        return kwargs
+
     provider = _normalize_provider(config.LLM_PROVIDER)
     defaults = LLM_PROVIDER_DEFAULTS[provider]
 
@@ -71,3 +85,9 @@ def get_llm() -> Any:
     from langchain_openai import ChatOpenAI
 
     return ChatOpenAI(**build_llm_kwargs(settings))
+
+
+def get_llm_for_user_config(user_config: dict | None) -> Any:
+    from langchain_openai import ChatOpenAI
+
+    return ChatOpenAI(**build_llm_kwargs(settings, user_config=user_config))
