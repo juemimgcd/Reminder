@@ -10,7 +10,12 @@ PIP_EXTRA_INDEX_URL=
 APP_PORT=8000
 APP_HOST_PORT=127.0.0.1:8000
 UVICORN_WORKERS=2
+# Empty keeps Docker startup lightweight. Set to "vector" to start milvus + etcd + minio.
+COMPOSE_PROFILES=
 WAIT_FOR_TIMEOUT_SECONDS=180
+# Optional. When COMPOSE_PROFILES=vector, you may include milvus wait targets here.
+WAIT_FOR_HOSTS=
+WAIT_FOR_URLS=
 FORWARDED_ALLOW_IPS=127.0.0.1
 TRUSTED_HOSTS=["your-domain.com","www.your-domain.com","127.0.0.1","localhost"]
 
@@ -44,7 +49,9 @@ HF_HUB_DOWNLOAD_TIMEOUT=600
 HF_TOKEN=
 VECTOR_BACKEND=milvus
 GRAPH_BACKEND=neo4j
-MILVUS_URI=http://127.0.0.1:19530
+# Empty lets Docker Compose use http://milvus:19530 inside containers.
+# For local non-Docker runs, app config defaults to http://127.0.0.1:19530.
+MILVUS_URI=
 MILVUS_TOKEN=
 MILVUS_DB_NAME=default
 MILVUS_COLLECTION_NAME=document_chunks
@@ -64,16 +71,16 @@ NEO4J_HTTP_PORT=7474
 
 # Supported: qwen, mimo, kimi, glm, deepseek.
 # LLM_API_KEY is a generic override; provider-specific keys below are also supported.
-LLM_PROVIDER=qwen
+LLM_PROVIDER=deepseek
 LLM_API_KEY=
-DASHSCOPE_API_KEY=replace-with-your-dashscope-api-key
+DASHSCOPE_API_KEY=
 MIMO_API_KEY=
 KIMI_API_KEY=
 GLM_API_KEY=
-DEEPSEEK_API_KEY=
+DEEPSEEK_API_KEY=replace-with-your-deepseek-api-key
 # Leave LLM_BASE_URL and LLM_MODEL_NAME blank to use the provider defaults.
-LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-LLM_MODEL_NAME=qwen-plus
+LLM_BASE_URL=
+LLM_MODEL_NAME=
 LLM_TEMPERATURE=0.0
 
 JWT_SECRET=replace-with-a-long-random-secret

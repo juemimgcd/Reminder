@@ -69,10 +69,10 @@ cp deploy/env/backend.production.example .env
 - `APP_HOST_PORT=127.0.0.1:8000` 表示应用只暴露给本机，公网访问统一走 Nginx。
 - `FORWARDED_ALLOW_IPS=127.0.0.1` 表示仅信任来自本机 Nginx 的 `X-Forwarded-*` 头。
 - `TRUSTED_HOSTS` 应包含你的正式域名，避免错误 Host 头直接打到应用。
-- Compose 内部会自动使用 `postgres`、`redis`、`milvus`、`neo4j` 这些容器名互连，不需要你手工改容器间地址。
+- Compose 内部会自动使用 `postgres`、`redis`、`neo4j` 这些容器名互连；启用 `vector` profile 后，应用也会通过 `milvus` 容器名访问向量库。
 - 当前生产模板默认把 `MILVUS_MEMORY_LIMIT` 收敛到 `2g`，更适合中小规格机器。
 - 当前模板已经预留 `RERANKER_*` 和 `RETRIEVAL_*` 参数，可用来打开 `BAAI/bge-reranker-v2-m3` 和放大召回候选池。
-- `LLM_PROVIDER` 支持 `qwen`、`mimo`、`kimi`、`glm`、`deepseek`。可以配置对应的 provider key，也可以统一使用 `LLM_API_KEY`；`LLM_BASE_URL` 和 `LLM_MODEL_NAME` 留空时会使用 provider 默认值。
+- `LLM_PROVIDER` 支持 `qwen`、`mimo`、`kimi`、`glm`、`deepseek`，生产模板默认是 `deepseek`。可以配置对应的 provider key，也可以统一使用 `LLM_API_KEY`；`LLM_BASE_URL` 和 `LLM_MODEL_NAME` 留空时会使用 provider 默认值。
 
 ## 5. 首次启动
 
@@ -80,6 +80,20 @@ cp deploy/env/backend.production.example .env
 docker compose up -d --build
 docker compose ps
 curl http://127.0.0.1:8000/health
+```
+
+默认启动不再包含 Milvus standalone，因此不会拉起 `milvus + etcd + minio` 这组三个高磁盘占用服务。需要文档向量索引和 RAG 检索时，使用：
+
+```bash
+COMPOSE_PROFILES=vector docker compose up -d --build
+```
+
+如果你希望应用和 worker 在启动时也等待 Milvus ready，可以在 `.env` 中同时配置：
+
+```env
+COMPOSE_PROFILES=vector
+WAIT_FOR_HOSTS=postgres:5432,redis:6379,neo4j:7687,milvus:19530
+WAIT_FOR_URLS=http://milvus:9091/healthz
 ```
 
 如果 `health` 返回正常，说明：
@@ -98,12 +112,12 @@ curl http://127.0.0.1:8000/health
 
 仓库已经提供了单机代理模板：
 
-- [deploy/nginx/reminder.conf](nginx/reminder.conf)
+- [nginx/reminder.conf](../nginx/reminder.conf)
 
 安装方式：
 
 ```bash
-sudo cp deploy/nginx/reminder.conf /etc/nginx/sites-available/reminder.conf
+sudo cp nginx/reminder.conf /etc/nginx/sites-available/reminder.conf
 sudo ln -sfn /etc/nginx/sites-available/reminder.conf /etc/nginx/sites-enabled/reminder.conf
 ```
 
@@ -156,7 +170,7 @@ bash upgrade.sh
 
 1. 拉取最新代码
 2. 重新构建并重启 Compose 服务
-3. 同步 `deploy/nginx/reminder.conf`
+3. 同步 `nginx/reminder.conf`
 4. 检查并重载 Nginx
 5. 输出容器状态
 
@@ -175,15 +189,15 @@ ENABLE_NGINX_SYNC=0 bash upgrade.sh
 
 相关文件：
 
-- [github-actions.deploy.sh](../github-actions.deploy.sh)
-- [github-actions.secrets.example](../github-actions.secrets.example)
+- [.github/deploy/github-actions.deploy.sh](../.github/deploy/github-actions.deploy.sh)
+- [.github/deploy/github-actions.secrets.example](../.github/deploy/github-actions.secrets.example)
 - `.github/workflows/reminder-deploy.yml`
 
 说明：
 
 - 真正的 workflow 文件必须放在 `.github/workflows/`
-- 根目录 `github-actions.deploy.sh` 会在服务器上调用 `upgrade.sh`
-- 根目录 `github-actions.secrets.example` 用来说明 GitHub 仓库需要配置哪些 Secrets 和 Variables
+- `.github/deploy/github-actions.deploy.sh` 会在服务器上调用 `upgrade.sh`
+- `.github/deploy/github-actions.secrets.example` 用来说明 GitHub 仓库需要配置哪些 Secrets 和 Variables
 
 至少需要在 GitHub 仓库里配置这些认证 Secrets 之一：
 
@@ -244,6 +258,19 @@ sudo tail -f /var/log/nginx/error.log
 - 当前目录是不是仓库根目录
 - `.env` 是否还在
 - `docker compose ps` 里是不是有未健康的基础服务
+
+### Milvus 占用磁盘太大
+
+Milvus standalone 本身需要 `milvus`、`etcd`、`minio` 三个服务；这个部署形态适合完整向量检索，但对小机器不轻量。当前 Compose 已经改成默认不启动 Milvus，只有设置 `COMPOSE_PROFILES=vector` 才启动。
+
+如果你之前已经启动过旧版 Compose，旧数据卷还会留在 Docker 里。确认不再需要历史向量索引后，可以清理：
+
+```bash
+docker compose down
+docker volume rm reminder_milvus_data reminder_minio_data reminder_etcd_data
+```
+
+这会删除已有 Milvus 数据；后续如果重新启用 `vector` profile，需要重新索引文档。
 
 ## 11. 直接公网暴露的情况
 

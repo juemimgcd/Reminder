@@ -5,6 +5,15 @@ from app.mneme.conf.config import Settings
 
 
 class LlmProviderConfigTest(unittest.TestCase):
+    def test_default_provider_uses_deepseek(self):
+        settings = Settings(_env_file=None)
+
+        kwargs = build_llm_kwargs(settings)
+
+        self.assertEqual(settings.LLM_PROVIDER, "deepseek")
+        self.assertEqual(kwargs["base_url"], "https://api.deepseek.com")
+        self.assertEqual(kwargs["model"], "deepseek-v4-flash")
+
     def test_requested_providers_resolve_openai_compatible_defaults(self):
         cases = {
             "qwen": ("https://dashscope.aliyuncs.com/compatible-mode/v1", "qwen-plus", "DASHSCOPE_API_KEY"),

@@ -243,7 +243,6 @@ AI 在输出目录树之前，必须先判断下面这些问题：
 │  ├─ <domain>_organizer.py  # 可选：上游上下文整理
 │  └─ <domain>_service.py    # 可选：跨节点编排
 ├─ conf/                     # 可选：配置收口
-├─ scripts/                  # 可选：调试、验证、批处理
 ├─ docs/                     # 可选：流程文档、设计说明
 ├─ main.py                   # 可选：FastAPI 入口
 └─ target.md

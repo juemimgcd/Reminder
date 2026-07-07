@@ -135,7 +135,7 @@ jobs:
 
           if (( ${#missing[@]} > 0 )); then
             echo "::error::Missing required GitHub Actions deploy configuration: ${missing[*]}"
-            echo "::error::Set them in Repository variables or Repository secrets. See github-actions.secrets.example in the repo root."
+            echo "::error::Set them in Repository variables or Repository secrets. See .github/deploy/github-actions.secrets.example."
             exit 1
           fi
 

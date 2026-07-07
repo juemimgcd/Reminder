@@ -6,7 +6,7 @@ APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BRANCH="${BRANCH:-master}"
 ENABLE_NGINX_SYNC="${ENABLE_NGINX_SYNC:-1}"
 NGINX_SITE_NAME="${NGINX_SITE_NAME:-reminder.conf}"
-NGINX_CONF_SOURCE="${NGINX_CONF_SOURCE:-${APP_DIR}/deploy/nginx/reminder.conf}"
+NGINX_CONF_SOURCE="${NGINX_CONF_SOURCE:-${APP_DIR}/nginx/reminder.conf}"
 NGINX_AVAILABLE_PATH="${NGINX_AVAILABLE_PATH:-/etc/nginx/sites-available/${NGINX_SITE_NAME}}"
 NGINX_ENABLED_PATH="${NGINX_ENABLED_PATH:-/etc/nginx/sites-enabled/${NGINX_SITE_NAME}}"
 
