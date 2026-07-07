@@ -16,7 +16,7 @@ from app.mneme.domains.retrieval.context_service import (
 )
 from app.mneme.tasks.index_tasks import index_document_task
 from app.mneme.services.task_state_service import ALLOWED_TASK_TRANSITIONS
-from app.mneme.pipelines.document_index_pipeline import run_document_index_pipeline
+from app.mneme.domains.documents.pipeline import run_document_index_pipeline
 from app.mneme.pipelines.memory_extract_pipeline import run_memory_extract_pipeline
 
 

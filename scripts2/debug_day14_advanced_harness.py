@@ -8,7 +8,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from app.mneme.conf.config import settings
 from app.mneme.domains.retrieval.context_service import build_query_context
-from app.mneme.pipelines.document_index_pipeline import run_document_index_pipeline
+from app.mneme.domains.documents.pipeline import run_document_index_pipeline
 from app.mneme.pipelines.memory_extract_pipeline import run_memory_extract_pipeline
 
 
