@@ -138,3 +138,15 @@ test('ai laboratory renders API-backed sessions and appends sent messages', asyn
   await page.getByRole('button', { name: 'System Settings', exact: true }).click();
   await expect(page.getByTestId('stitch-settings-layout')).toContainText('Preview DeepSeek');
 });
+
+test('settings can trigger graph and memory sync actions', async ({ page }) => {
+  await page.goto('/?preview=1');
+  await page.getByRole('button', { name: 'System Settings', exact: true }).click();
+
+  const settings = page.getByTestId('stitch-settings-layout');
+  await settings.getByRole('button', { name: 'Rebuild Graph' }).click();
+  await expect(settings).toContainText('Graph rebuild completed for Demo Research Vault');
+
+  await settings.getByRole('button', { name: 'Rebuild Memory' }).click();
+  await expect(settings).toContainText('Memory rebuild processed 2 documents');
+});

@@ -1028,6 +1028,19 @@ function endGraphNodeDrag() {
                       <span class="size-5 rounded-full bg-white"></span>
                     </div>
                   </div>
+                  <div class="mt-4 grid gap-3 sm:grid-cols-2">
+                    <button class="premium-action-btn inline-flex h-11 items-center justify-center gap-2 rounded-md px-4 font-mono text-sm" @click="workspace.rebuildActiveGraph">
+                      <RefreshCw class="size-4" :class="workspace.syncBusyTarget.value === 'graph' ? 'animate-spin' : ''" />
+                      Rebuild Graph
+                    </button>
+                    <button class="premium-action-btn inline-flex h-11 items-center justify-center gap-2 rounded-md px-4 font-mono text-sm" @click="workspace.rebuildActiveMemory">
+                      <Database class="size-4" />
+                      Rebuild Memory
+                    </button>
+                  </div>
+                  <p v-if="workspace.syncStatus.value" class="mt-4 rounded-md border border-outline-variant/30 bg-surface-container-low px-4 py-3 text-sm text-on-surface-variant">
+                    {{ workspace.syncStatus.value }}
+                  </p>
                 </article>
 
                 <article data-testid="insights-function-grid" class="glass-panel rounded-lg p-6">

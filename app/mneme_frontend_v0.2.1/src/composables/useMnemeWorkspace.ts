@@ -82,6 +82,8 @@ export function useMnemeWorkspace() {
   const aiModelProviderPresets = ref<AiModelProviderPreset[]>([]);
   const activeAiModelConfigId = ref("");
   const documentPreview = ref<DocumentPreviewData | null>(null);
+  const syncStatus = ref("");
+  const syncBusyTarget = ref<"graph" | "memory" | "">("");
 
   const loginForm = ref({ username: "", password: "" });
   const knowledgeBaseForm = ref({ name: "", description: "" });
@@ -311,6 +313,38 @@ export function useMnemeWorkspace() {
     documentPreview.value = null;
   }
 
+  async function rebuildActiveGraph() {
+    if (!token.value || !activeKnowledgeBaseId.value) {
+      return;
+    }
+    syncBusyTarget.value = "graph";
+    try {
+      const result = await api.rebuildKnowledgeBaseGraph(token.value, activeKnowledgeBaseId.value);
+      syncStatus.value = `Graph rebuild ${result.status} for ${selectedKnowledgeBase.value?.name ?? activeKnowledgeBaseId.value}`;
+      graphData.value = await api.getKnowledgeBaseGraph(token.value, activeKnowledgeBaseId.value, {
+        include_memory: true,
+        include_relationships: true,
+      });
+    } finally {
+      syncBusyTarget.value = "";
+    }
+  }
+
+  async function rebuildActiveMemory() {
+    if (!token.value || !activeKnowledgeBaseId.value) {
+      return;
+    }
+    syncBusyTarget.value = "memory";
+    try {
+      const result = await api.rebuildMemory(token.value, activeKnowledgeBaseId.value);
+      syncStatus.value = `Memory rebuild processed ${result.processed_document_count} documents and ${result.entry_count} entries`;
+      memoryLibrary.value = await api.memoryLibrary(token.value, activeKnowledgeBaseId.value);
+      memoryGovernance.value = await api.memoryGovernance(token.value, activeKnowledgeBaseId.value);
+    } finally {
+      syncBusyTarget.value = "";
+    }
+  }
+
   async function askCompanion() {
     if (!token.value || !activeKnowledgeBaseId.value || !companionQuestion.value.trim()) {
       return;
@@ -394,6 +428,8 @@ export function useMnemeWorkspace() {
     profile,
     profileEvidence,
     readiness,
+    rebuildActiveGraph,
+    rebuildActiveMemory,
     refreshAdvice,
     selectedDocuments,
     selectedKnowledgeBase,
@@ -402,6 +438,8 @@ export function useMnemeWorkspace() {
     selectChatSession,
     sendChatMessage,
     serviceHealth,
+    syncBusyTarget,
+    syncStatus,
     user,
     view,
     workspaceCommandTab,
