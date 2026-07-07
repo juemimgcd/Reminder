@@ -43,3 +43,21 @@ test('preview workbench uses the Sanctuary wide layout instead of a rail dashboa
   await expect(sidebar.getByRole('button', { name: 'AI Laboratory', exact: true })).toBeVisible();
   await expect(sidebar.getByRole('button', { name: 'System Settings', exact: true })).toBeVisible();
 });
+
+test('knowledge graph file rail can collapse and expand from the canvas handle', async ({ page }) => {
+  await page.goto('/?preview=1');
+
+  const rail = page.getByTestId('graph-file-rail');
+  const toggle = page.getByTestId('graph-file-rail-toggle');
+
+  await expect(page.getByTestId('stitch-graph-layout')).toBeVisible();
+  await expect(rail).toBeVisible();
+
+  await toggle.click();
+  await expect(rail).toBeHidden();
+  await expect(toggle).toHaveAttribute('title', 'Expand file list');
+
+  await toggle.click();
+  await expect(rail).toBeVisible();
+  await expect(toggle).toHaveAttribute('title', 'Collapse file list');
+});

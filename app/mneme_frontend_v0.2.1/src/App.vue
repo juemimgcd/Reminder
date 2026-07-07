@@ -45,7 +45,8 @@ import {
   ZoomIn,
   ZoomOut,
 } from "@lucide/vue";
-import { computed } from "vue";
+import { forceCenter, forceCollide, forceLink, forceManyBody, forceSimulation, type Simulation } from "d3";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useMnemeWorkspace, type WorkspaceCommandTab } from "./composables/useMnemeWorkspace";
 import type { WorkspaceView } from "./types";
 
@@ -67,6 +68,29 @@ const WORKSPACE_COMMANDS: Array<{ id: WorkspaceCommandTab; label: string; hint: 
 ];
 
 const SETTINGS_TABS = ["General", "AI Models", "Security", "Data Sync"];
+
+type ForceGraphNode = {
+  id: string;
+  label: string;
+  nodeType: string;
+  depth: number;
+  x?: number;
+  y?: number;
+  fx?: number | null;
+  fy?: number | null;
+};
+
+type ForceGraphLink = {
+  id: string;
+  source: string | ForceGraphNode;
+  target: string | ForceGraphNode;
+};
+
+const graphFileRailCollapsed = ref(false);
+const graphSimulationNodes = ref<ForceGraphNode[]>([]);
+const graphSimulationLinks = ref<ForceGraphLink[]>([]);
+const draggingGraphNode = ref<ForceGraphNode | null>(null);
+let graphSimulation: Simulation<ForceGraphNode, ForceGraphLink> | null = null;
 
 const currentViewItem = computed(() => VIEW_ITEMS.find((item) => item.id === workspace.view.value) ?? VIEW_ITEMS[0]);
 const graphNodePositions = computed(() => {
@@ -111,6 +135,62 @@ const chatTranscript = computed(() => [
   },
 ]);
 
+watch(
+  () => workspace.graphData.value,
+  (graph) => {
+    graphSimulation?.stop();
+
+    if (!graph) {
+      graphSimulationNodes.value = [];
+      graphSimulationLinks.value = [];
+      return;
+    }
+
+    const previousPositions = new Map(graphSimulationNodes.value.map((node) => [node.id, { x: node.x, y: node.y }]));
+    const nodes: ForceGraphNode[] = graph.nodes.map((node, index) => {
+      const angle = (Math.PI * 2 * index) / Math.max(graph.nodes.length, 1) - Math.PI / 2;
+      const previous = previousPositions.get(node.id);
+      return {
+        id: node.id,
+        label: node.label,
+        nodeType: node.node_type,
+        depth: node.depth,
+        x: previous?.x ?? 380 + Math.cos(angle) * (node.depth === 0 ? 0 : 165 - node.depth * 24),
+        y: previous?.y ?? 340 + Math.sin(angle) * (node.depth === 0 ? 0 : 165 - node.depth * 24),
+      };
+    });
+    const links: ForceGraphLink[] = graph.edges.map((edge) => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+    }));
+
+    graphSimulationNodes.value = nodes;
+    graphSimulationLinks.value = links;
+    graphSimulation = forceSimulation<ForceGraphNode>(nodes)
+      .force(
+        "link",
+        forceLink<ForceGraphNode, ForceGraphLink>(links)
+          .id((node) => node.id)
+          .distance(125)
+          .strength(0.42),
+      )
+      .force("charge", forceManyBody<ForceGraphNode>().strength(-520))
+      .force("center", forceCenter<ForceGraphNode>(380, 340))
+      .force("collide", forceCollide<ForceGraphNode>().radius((node) => (node.depth === 0 ? 50 : 34)).strength(0.9))
+      .alpha(0.95)
+      .on("tick", () => {
+        graphSimulationNodes.value = [...nodes];
+        graphSimulationLinks.value = [...links];
+      });
+  },
+  { immediate: true },
+);
+
+onBeforeUnmount(() => {
+  graphSimulation?.stop();
+});
+
 function formatDate(value?: string | null) {
   if (!value) {
     return "Unknown";
@@ -131,6 +211,74 @@ function statusClass(status?: string | null) {
 function openCreateCommand() {
   workspace.workspaceCommandTab.value = "create";
   workspace.view.value = "dashboard";
+}
+
+function endpointNode(endpoint: string | ForceGraphNode) {
+  if (typeof endpoint !== "string") {
+    return endpoint;
+  }
+  return graphSimulationNodes.value.find((node) => node.id === endpoint) ?? null;
+}
+
+function endpointX(endpoint: string | ForceGraphNode) {
+  return endpointNode(endpoint)?.x ?? 380;
+}
+
+function endpointY(endpoint: string | ForceGraphNode) {
+  return endpointNode(endpoint)?.y ?? 340;
+}
+
+function graphNodeRadius(node: ForceGraphNode) {
+  return node.depth === 0 ? 22 : node.depth === 1 ? 15 : 9;
+}
+
+function graphNodeFill(node: ForceGraphNode) {
+  return node.depth === 0 ? "#7c3aed" : "#c6c6c7";
+}
+
+function graphPointerPoint(event: PointerEvent) {
+  const svg = (event.currentTarget as SVGElement).ownerSVGElement ?? (event.currentTarget as SVGSVGElement);
+  const point = svg.createSVGPoint();
+  point.x = event.clientX;
+  point.y = event.clientY;
+  const matrix = svg.getScreenCTM();
+  if (!matrix) {
+    return { x: event.offsetX, y: event.offsetY };
+  }
+  return point.matrixTransform(matrix.inverse());
+}
+
+function startGraphNodeDrag(node: ForceGraphNode, event: PointerEvent) {
+  draggingGraphNode.value = node;
+  const point = graphPointerPoint(event);
+  node.fx = point.x;
+  node.fy = point.y;
+  node.x = point.x;
+  node.y = point.y;
+  graphSimulation?.alphaTarget(0.28).restart();
+  (event.currentTarget as Element).setPointerCapture?.(event.pointerId);
+}
+
+function moveGraphNodeDrag(event: PointerEvent) {
+  if (!draggingGraphNode.value) {
+    return;
+  }
+  const point = graphPointerPoint(event);
+  draggingGraphNode.value.fx = point.x;
+  draggingGraphNode.value.fy = point.y;
+  draggingGraphNode.value.x = point.x;
+  draggingGraphNode.value.y = point.y;
+  graphSimulationNodes.value = [...graphSimulationNodes.value];
+}
+
+function endGraphNodeDrag() {
+  if (!draggingGraphNode.value) {
+    return;
+  }
+  draggingGraphNode.value.fx = null;
+  draggingGraphNode.value.fy = null;
+  draggingGraphNode.value = null;
+  graphSimulation?.alphaTarget(0);
 }
 </script>
 
@@ -445,8 +593,17 @@ function openCreateCommand() {
             </div>
 
             <div v-else-if="workspace.view.value === 'graph'" data-testid="stitch-graph-layout" class="relative min-h-screen overflow-hidden bg-[#08080a]" title="Graph Workspace">
-              <div data-testid="graph-function-grid" class="grid h-screen min-h-screen grid-cols-1 xl:grid-cols-[320px_minmax(0,1fr)_376px]">
-                <aside class="stitch-panel border-r border-outline-variant/30">
+              <div
+                data-testid="graph-function-grid"
+                class="grid h-screen min-h-screen grid-cols-1 transition-[grid-template-columns] duration-200"
+                :class="graphFileRailCollapsed ? 'xl:grid-cols-[0_minmax(0,1fr)_376px]' : 'xl:grid-cols-[320px_minmax(0,1fr)_376px]'"
+              >
+                <aside
+                  data-testid="graph-file-rail"
+                  class="stitch-panel border-r border-outline-variant/30"
+                  :class="graphFileRailCollapsed ? 'invisible pointer-events-none overflow-hidden border-r-0' : ''"
+                  :aria-hidden="graphFileRailCollapsed"
+                >
                   <div class="flex h-[68px] items-center gap-4 border-b border-outline-variant/20 px-5">
                     <Menu class="size-5 text-text-muted" />
                     <h2 class="text-base font-medium">Files</h2>
@@ -511,31 +668,52 @@ function openCreateCommand() {
                     </div>
                   </div>
 
-                  <svg class="h-full min-h-[640px] w-full" viewBox="0 0 760 680" role="img" aria-label="Knowledge graph">
+                  <svg
+                    class="h-full min-h-[640px] w-full touch-none select-none"
+                    viewBox="0 0 760 680"
+                    role="img"
+                    aria-label="Knowledge graph"
+                    @pointermove="moveGraphNodeDrag"
+                    @pointerup="endGraphNodeDrag"
+                    @pointerleave="endGraphNodeDrag"
+                  >
                     <g stroke="#3f3f46" stroke-width="2">
-                      <line x1="386" y1="360" x2="300" y2="285" />
-                      <line x1="386" y1="360" x2="500" y2="215" />
-                      <line x1="386" y1="360" x2="320" y2="500" />
-                      <line x1="300" y1="285" x2="165" y2="215" />
-                      <line x1="500" y1="215" x2="635" y2="140" />
-                      <line x1="500" y1="215" x2="615" y2="285" />
-                      <line x1="320" y1="500" x2="470" y2="628" />
-                      <line x1="320" y1="500" x2="170" y2="585" />
+                      <line
+                        v-for="edge in graphSimulationLinks"
+                        :key="edge.id"
+                        :x1="endpointX(edge.source)"
+                        :y1="endpointY(edge.source)"
+                        :x2="endpointX(edge.target)"
+                        :y2="endpointY(edge.target)"
+                      />
                     </g>
-                    <g fill="#c6c6c7">
-                      <circle cx="300" cy="285" r="15" />
-                      <circle cx="500" cy="215" r="15" />
-                      <circle cx="320" cy="500" r="15" />
-                      <circle cx="635" cy="140" r="8" />
-                      <circle cx="615" cy="285" r="8" />
-                      <circle cx="470" cy="628" r="9" />
-                      <circle cx="170" cy="585" r="8" />
+                    <g
+                      v-for="node in graphSimulationNodes"
+                      :key="node.id"
+                      data-testid="force-node"
+                      :data-node-id="node.id"
+                      class="cursor-grab active:cursor-grabbing"
+                      @pointerdown="startGraphNodeDrag(node, $event)"
+                    >
+                      <circle
+                        :cx="node.x ?? 380"
+                        :cy="node.y ?? 340"
+                        :r="graphNodeRadius(node)"
+                        :fill="graphNodeFill(node)"
+                        :stroke="node.depth === 0 ? '#d2bbff' : 'transparent'"
+                        :stroke-width="node.depth === 0 ? 4 : 0"
+                      />
+                      <text
+                        :x="node.x ?? 380"
+                        :y="(node.y ?? 340) + graphNodeRadius(node) + 24"
+                        fill="#fafafa"
+                        :font-size="node.depth === 0 ? 20 : 15"
+                        :font-weight="node.depth === 0 ? 700 : 500"
+                        text-anchor="middle"
+                      >
+                        {{ node.label }}
+                      </text>
                     </g>
-                    <circle cx="386" cy="360" r="20" fill="#7c3aed" stroke="#d2bbff" stroke-width="4" />
-                    <text x="386" y="410" fill="#fafafa" font-size="22" font-weight="700" text-anchor="middle">Neural Networks</text>
-                    <text x="300" y="330" fill="#b8b2c2" font-size="18" text-anchor="middle">Optimization</text>
-                    <text x="500" y="255" fill="#b8b2c2" font-size="18" text-anchor="middle">Deep Learning</text>
-                    <text x="320" y="545" fill="#b8b2c2" font-size="18" text-anchor="middle">Machine Learning</text>
                   </svg>
 
                   <div class="glass-panel absolute left-[58%] top-[47%] hidden items-center gap-3 rounded px-4 py-3 text-sm text-on-surface-variant xl:flex">
@@ -543,8 +721,14 @@ function openCreateCommand() {
                     <span>Long press to preview</span>
                   </div>
 
-                  <button class="glass-panel absolute left-[-16px] top-1/2 grid size-12 place-items-center rounded-full text-text-muted">
-                    <ChevronDown class="size-5 rotate-90" />
+                  <button
+                    data-testid="graph-file-rail-toggle"
+                    class="glass-panel absolute top-1/2 z-50 grid size-12 place-items-center rounded-full text-text-muted"
+                    :class="graphFileRailCollapsed ? 'left-4' : 'left-[-16px]'"
+                    :title="graphFileRailCollapsed ? 'Expand file list' : 'Collapse file list'"
+                    @click="graphFileRailCollapsed = !graphFileRailCollapsed"
+                  >
+                    <ChevronDown class="size-5" :class="graphFileRailCollapsed ? '-rotate-90' : 'rotate-90'" />
                   </button>
 
                   <div class="glass-panel absolute bottom-7 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-lg p-2">

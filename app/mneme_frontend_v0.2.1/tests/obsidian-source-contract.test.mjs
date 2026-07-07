@@ -128,6 +128,20 @@ assert.ok(
   'Expected Knowledge Graph to use the wider Stitch graph properties panel',
 );
 
+for (const graphInteractionText of [
+  'forceSimulation',
+  'forceManyBody',
+  'forceLink',
+  'graphFileRailCollapsed',
+  'data-testid="graph-file-rail"',
+  'data-testid="graph-file-rail-toggle"',
+  'data-testid="force-node"',
+  '@pointerdown="startGraphNodeDrag',
+  '@pointermove="moveGraphNodeDrag"',
+]) {
+  assert.ok(appSource.includes(graphInteractionText), `Expected Knowledge Graph to implement interactive graph behavior: ${graphInteractionText}`);
+}
+
 for (const aiReferenceText of [
   'Deep Thought Mode',
   'New Memory',
