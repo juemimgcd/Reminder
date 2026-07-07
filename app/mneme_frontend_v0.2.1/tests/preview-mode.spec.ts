@@ -23,23 +23,22 @@ test('preview workbench uses the Sanctuary wide layout instead of a rail dashboa
   const sidebar = page.getByTestId('sanctuary-sidebar');
   const topbar = page.getByTestId('sanctuary-topbar');
   const editorPane = page.getByTestId('obsidian-editor-pane');
-  const activeView = page.getByTestId('sanctuary-active-view');
 
   await expect(shell).toBeVisible();
   await expect(sidebar).toBeVisible();
-  await expect(topbar).toBeVisible();
+  await expect(topbar).toBeHidden();
   await expect(editorPane).toBeVisible();
   await expect(sidebar).toContainText('Mneme Intelligence');
   await expect(sidebar).toContainText('Cognitive Sanctuary');
-  await expect(activeView).toContainText('Knowledge Graph');
+  await expect(sidebar.getByRole('button', { name: 'Knowledge Graph', exact: true })).toBeVisible();
+  await expect(page.getByTestId('stitch-graph-layout')).toBeVisible();
 
   await expect(editorPane.getByText('Vaults', { exact: true })).not.toBeVisible();
-  await expect(editorPane.getByText('Files', { exact: true })).not.toBeVisible();
+  await expect(editorPane.getByText('Files', { exact: true })).toBeVisible();
   await expect(editorPane.getByText('Tasks', { exact: true })).not.toBeVisible();
 
   await expect(shell).toHaveCSS('background-color', 'rgb(9, 9, 11)');
   await expect(sidebar).toHaveCSS('width', '256px');
-  await expect(topbar).toHaveCSS('height', '64px');
   await expect(sidebar.getByRole('button', { name: 'Research Vault', exact: true })).toBeVisible();
   await expect(sidebar.getByRole('button', { name: 'AI Laboratory', exact: true })).toBeVisible();
   await expect(sidebar.getByRole('button', { name: 'System Settings', exact: true })).toBeVisible();

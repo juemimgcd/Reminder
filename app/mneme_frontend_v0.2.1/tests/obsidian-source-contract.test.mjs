@@ -23,6 +23,21 @@ for (const navLabel of ['Knowledge Graph', 'Research Vault', 'Semantic Map', 'AI
   assert.ok(appSource.includes(`label: "${navLabel}"`), `Expected Stitch navigation to include ${navLabel}`);
 }
 
+assert.ok(
+  appSource.includes('{ id: "graph", label: "Knowledge Graph"'),
+  'Expected the node graph canvas to be exposed as the Knowledge Graph module',
+);
+
+assert.ok(
+  appSource.includes('{ id: "dashboard", label: "Semantic Map"'),
+  'Expected the overview workspace to stop owning the Knowledge Graph label',
+);
+
+assert.ok(
+  readFileSync(new URL('../src/composables/useMnemeWorkspace.ts', import.meta.url), 'utf8').includes('ref<WorkspaceView>("graph")'),
+  'Expected preview/default workspace to open the node graph module first',
+);
+
 for (const designToken of ['--color-surface-base: #09090b', '--color-primary-container: #7c3aed']) {
   assert.ok(
     readFileSync(new URL('../src/index.css', import.meta.url), 'utf8').toLowerCase().includes(designToken),
@@ -97,6 +112,38 @@ for (const invalidVueAttribute of [
   assert.ok(!appSource.includes(invalidVueAttribute), `Expected Vue template to avoid React-style ${invalidVueAttribute}`);
 }
 
+for (const graphReferenceText of [
+  'Machine Learning',
+  'Neural Networks',
+  'All Nodes',
+  'Orphans',
+  'Long press to preview',
+  'Backlinks',
+]) {
+  assert.ok(appSource.includes(graphReferenceText), `Expected Knowledge Graph to mirror Stitch graph reference text: ${graphReferenceText}`);
+}
+
+assert.ok(
+  appSource.includes('xl:grid-cols-[320px_minmax(0,1fr)_376px]'),
+  'Expected Knowledge Graph to use the wider Stitch graph properties panel',
+);
+
+for (const aiReferenceText of [
+  'Deep Thought Mode',
+  'New Memory',
+  'Search history...',
+  'Today, 14:03',
+  'Context: Node B',
+  'AI responses may be structurally imperfect',
+]) {
+  assert.ok(appSource.includes(aiReferenceText), `Expected AI Laboratory to mirror Stitch chat reference text: ${aiReferenceText}`);
+}
+
+assert.ok(
+  appSource.includes('fixed bottom-0 right-0') || appSource.includes('sticky bottom-0'),
+  'Expected AI Laboratory input to stay anchored near the bottom like the Stitch chat reference',
+);
+
 assert.ok(
   !appSource.includes('{ id: "chat", label: "Chat"'),
   'Expected chat to be centralized in Workspace instead of remaining a separate page',
@@ -114,8 +161,8 @@ for (const centralizedHook of [
 }
 
 assert.ok(
-  appSource.includes('title="Graph Workspace"') && appSource.includes('min-h-[calc(100vh-164px)]'),
-  'Expected Graph to use a large Obsidian-like workspace instead of a small split canvas',
+  appSource.includes('title="Graph Workspace"') && appSource.includes('h-screen min-h-screen'),
+  'Expected Graph to use a full-height Obsidian-like workspace instead of a small split canvas',
 );
 
 assert.ok(

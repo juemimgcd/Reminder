@@ -50,7 +50,7 @@ export function useMnemeWorkspace() {
   const banner = ref("");
   const isLoading = ref(false);
 
-  const view = ref<WorkspaceView>("dashboard");
+  const view = ref<WorkspaceView>("graph");
   const workspaceCommandTab = ref<WorkspaceCommandTab>("ask");
   const user = ref<UserPublic | null>(null);
   const knowledgeBases = ref<KnowledgeBaseData[]>([]);

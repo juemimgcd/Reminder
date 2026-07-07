@@ -25,6 +25,7 @@ import {
   LogOut,
   Menu,
   MessageSquare,
+  MoreVertical,
   Network,
   Pencil,
   Pin,
@@ -51,9 +52,9 @@ import type { WorkspaceView } from "./types";
 const workspace = useMnemeWorkspace();
 
 const VIEW_ITEMS: Array<{ id: WorkspaceView; label: string; icon: unknown; hint: string }> = [
-  { id: "dashboard", label: "Knowledge Graph", icon: Network, hint: "Workspace overview and semantic health" },
+  { id: "dashboard", label: "Semantic Map", icon: Network, hint: "Workspace overview and semantic health" },
   { id: "notes", label: "Research Vault", icon: FolderOpen, hint: "Documents and durable memory" },
-  { id: "graph", label: "Semantic Map", icon: GitBranch, hint: "GraphRAG structure" },
+  { id: "graph", label: "Knowledge Graph", icon: GitBranch, hint: "GraphRAG node structure" },
   { id: "ai", label: "AI Laboratory", icon: FlaskConical, hint: "Ask and companion replies" },
   { id: "settings", label: "System Settings", icon: SlidersHorizontal, hint: "Health, profile, and analytics" },
 ];
@@ -173,14 +174,14 @@ function openCreateCommand() {
               <BrainCircuit class="size-5" />
             </div>
             <div class="min-w-0">
-              <h1 class="text-[22px] font-bold leading-7 text-primary">Mneme Intelligence</h1>
-              <p class="font-mono text-[11px] uppercase text-on-surface-variant">Cognitive Sanctuary</p>
+              <h1 class="text-[22px] font-bold leading-7 text-primary">{{ workspace.view.value === "ai" ? "Cognitive Sanctuary" : "Mneme Intelligence" }}</h1>
+              <p class="font-mono text-[11px] uppercase text-on-surface-variant">{{ workspace.view.value === "ai" ? "Deep Thought Mode" : "Cognitive Sanctuary" }}</p>
             </div>
           </div>
 
           <button class="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-primary-container px-4 font-mono text-sm font-semibold text-on-primary-container transition hover:brightness-110" @click="openCreateCommand">
             <Plus class="size-4" />
-            New Research
+            {{ workspace.view.value === "ai" ? "New Memory" : "New Research" }}
           </button>
         </div>
 
@@ -251,7 +252,7 @@ function openCreateCommand() {
       </aside>
 
       <section class="flex min-w-0 flex-col">
-        <header data-testid="sanctuary-topbar" class="flex h-16 items-center justify-between border-b border-white/5 bg-surface/65 px-5 backdrop-blur-xl lg:px-8">
+        <header v-if="workspace.view.value !== 'graph' && workspace.view.value !== 'ai'" data-testid="sanctuary-topbar" class="flex h-16 items-center justify-between border-b border-white/5 bg-surface/65 px-5 backdrop-blur-xl lg:px-8">
           <div data-testid="sanctuary-active-view" class="min-w-0">
             <p class="truncate font-mono text-xs text-primary">{{ currentViewItem.hint }}</p>
             <h2 class="truncate text-xl font-semibold">{{ currentViewItem.label }}</h2>
@@ -443,146 +444,268 @@ function openCreateCommand() {
               </section>
             </div>
 
-            <div v-else-if="workspace.view.value === 'graph'" data-testid="stitch-graph-layout" class="relative min-h-[calc(100vh-164px)] overflow-hidden bg-[#0a0a0c]" title="Graph Workspace">
-              <div data-testid="graph-function-grid" class="grid h-[calc(100vh-64px)] min-h-[calc(100vh-164px)] grid-cols-1 xl:grid-cols-[320px_minmax(0,1fr)_340px]">
-                <aside class="stitch-panel border-r border-outline-variant/30 p-5">
-                  <div class="mb-5 flex h-10 items-center gap-3">
+            <div v-else-if="workspace.view.value === 'graph'" data-testid="stitch-graph-layout" class="relative min-h-screen overflow-hidden bg-[#08080a]" title="Graph Workspace">
+              <div data-testid="graph-function-grid" class="grid h-screen min-h-screen grid-cols-1 xl:grid-cols-[320px_minmax(0,1fr)_376px]">
+                <aside class="stitch-panel border-r border-outline-variant/30">
+                  <div class="flex h-[68px] items-center gap-4 border-b border-outline-variant/20 px-5">
                     <Menu class="size-5 text-text-muted" />
-                    <h2 class="text-lg font-semibold">Files</h2>
-                    <button class="premium-action-btn ml-auto grid size-8 place-items-center rounded-md"><FilePlus2 class="size-4" /></button>
+                    <h2 class="text-base font-medium">Files</h2>
+                    <div class="ml-auto flex gap-3 text-text-muted">
+                      <FilePlus2 class="size-5" />
+                      <FolderPlus class="size-5" />
+                    </div>
                   </div>
-                  <div class="grid gap-1">
-                    <button v-for="doc in workspace.selectedDocuments.value" :key="doc.id" class="flex items-center gap-3 rounded-md px-3 py-2 text-left text-sm text-on-surface-variant hover:bg-surface-container">
-                      <File class="size-4 text-primary" />
+                  <div class="space-y-4 p-5">
+                    <div>
+                      <div class="mb-3 flex items-center gap-3 text-on-surface">
+                        <FolderOpen class="size-5 text-on-surface-variant" />
+                        <span class="text-base">Machine Learning</span>
+                      </div>
+                      <div class="ml-8 grid gap-1">
+                        <button class="flex h-10 items-center gap-3 rounded bg-surface-container-high px-3 text-left text-primary">
+                          <File class="size-5" />
+                          <span>Neural Networks</span>
+                        </button>
+                        <button class="flex h-10 items-center gap-3 rounded px-3 text-left text-on-surface-variant hover:bg-surface-container">
+                          <File class="size-5" />
+                          <span>Gradient Descent</span>
+                        </button>
+                        <button class="flex h-10 items-center gap-3 rounded px-3 text-left text-on-surface-variant hover:bg-surface-container">
+                          <File class="size-5" />
+                          <span>Optimization</span>
+                        </button>
+                      </div>
+                    </div>
+                    <button class="flex h-10 items-center gap-3 rounded px-3 text-left text-on-surface-variant hover:bg-surface-container">
+                      <FolderOpen class="size-5" />
+                      <span>Architecture</span>
+                    </button>
+                    <button class="flex h-10 items-center gap-3 rounded px-3 text-left text-on-surface-variant hover:bg-surface-container">
+                      <FolderOpen class="size-5" />
+                      <span>Research Papers</span>
+                    </button>
+                    <button v-for="doc in workspace.selectedDocuments.value" :key="doc.id" class="flex h-10 items-center gap-3 rounded px-3 text-left text-on-surface-variant hover:bg-surface-container">
+                      <File class="size-5" />
                       <span class="truncate">{{ doc.file_name }}</span>
                     </button>
                   </div>
                 </aside>
 
-                <section data-testid="graph-output-workspace" class="relative min-h-[560px] overflow-hidden">
-                  <div class="absolute left-5 top-5 z-10 flex flex-wrap gap-3">
-                    <button class="glass-panel flex h-11 items-center gap-2 rounded-md px-4 text-sm text-on-surface">
-                      <Network class="size-4 text-primary" />
+                <section data-testid="graph-output-workspace" class="relative min-h-[640px] overflow-hidden bg-[#070708]">
+                  <div class="absolute left-5 top-5 z-10 flex gap-10">
+                    <button class="glass-panel flex h-16 items-center gap-3 rounded-md px-5 text-base text-on-surface">
+                      <Network class="size-7 text-primary" />
                       Graph View
                     </button>
-                    <div class="glass-panel flex h-11 items-center gap-2 rounded-md px-4 text-sm text-text-muted">
-                      <Search class="size-4" />
-                      Search knowledge base...
+                    <div class="grid gap-3">
+                      <div class="glass-panel flex h-12 w-[328px] items-center gap-3 rounded-lg px-5 text-text-muted">
+                        <Search class="size-5" />
+                        Search knowledge base...
+                      </div>
+                      <div class="glass-panel flex h-16 items-center gap-5 rounded-lg px-3">
+                        <button class="rounded border border-primary/40 bg-primary/10 px-3 py-2 text-sm text-primary">All Nodes</button>
+                        <button class="px-3 py-2 text-sm text-on-surface-variant">Tags</button>
+                        <button class="px-3 py-2 text-sm text-on-surface-variant">Orphans</button>
+                        <button class="border-l border-outline-variant/30 pl-5 text-on-surface-variant"><SlidersHorizontal class="size-5" /></button>
+                      </div>
                     </div>
                   </div>
-                  <svg class="h-full min-h-[560px] w-full" viewBox="0 0 520 470" role="img" aria-label="Knowledge graph">
-                    <line
-                      v-for="edge in workspace.graphData.value?.edges ?? []"
-                      :key="edge.id"
-                      :x1="graphNodePositions.find((node) => node.id === edge.source)?.x ?? 260"
-                      :y1="graphNodePositions.find((node) => node.id === edge.source)?.y ?? 235"
-                      :x2="graphNodePositions.find((node) => node.id === edge.target)?.x ?? 260"
-                      :y2="graphNodePositions.find((node) => node.id === edge.target)?.y ?? 235"
-                      stroke="#3f3f46"
-                      stroke-width="2"
-                    />
-                    <g v-for="node in graphNodePositions" :key="node.id">
-                      <circle :cx="node.x" :cy="node.y" :r="node.depth === 0 ? 28 : 18" :fill="node.depth === 0 ? '#7c3aed' : '#c6c6c7'" opacity="0.92" />
-                      <text :x="node.x" :y="node.y + 38" fill="#e5e1e4" font-size="13" text-anchor="middle">{{ node.label }}</text>
+
+                  <svg class="h-full min-h-[640px] w-full" viewBox="0 0 760 680" role="img" aria-label="Knowledge graph">
+                    <g stroke="#3f3f46" stroke-width="2">
+                      <line x1="386" y1="360" x2="300" y2="285" />
+                      <line x1="386" y1="360" x2="500" y2="215" />
+                      <line x1="386" y1="360" x2="320" y2="500" />
+                      <line x1="300" y1="285" x2="165" y2="215" />
+                      <line x1="500" y1="215" x2="635" y2="140" />
+                      <line x1="500" y1="215" x2="615" y2="285" />
+                      <line x1="320" y1="500" x2="470" y2="628" />
+                      <line x1="320" y1="500" x2="170" y2="585" />
                     </g>
+                    <g fill="#c6c6c7">
+                      <circle cx="300" cy="285" r="15" />
+                      <circle cx="500" cy="215" r="15" />
+                      <circle cx="320" cy="500" r="15" />
+                      <circle cx="635" cy="140" r="8" />
+                      <circle cx="615" cy="285" r="8" />
+                      <circle cx="470" cy="628" r="9" />
+                      <circle cx="170" cy="585" r="8" />
+                    </g>
+                    <circle cx="386" cy="360" r="20" fill="#7c3aed" stroke="#d2bbff" stroke-width="4" />
+                    <text x="386" y="410" fill="#fafafa" font-size="22" font-weight="700" text-anchor="middle">Neural Networks</text>
+                    <text x="300" y="330" fill="#b8b2c2" font-size="18" text-anchor="middle">Optimization</text>
+                    <text x="500" y="255" fill="#b8b2c2" font-size="18" text-anchor="middle">Deep Learning</text>
+                    <text x="320" y="545" fill="#b8b2c2" font-size="18" text-anchor="middle">Machine Learning</text>
                   </svg>
-                  <div class="glass-panel absolute bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-lg p-2">
-                    <button class="premium-action-btn grid size-10 place-items-center rounded-md"><ZoomIn class="size-4" /></button>
-                    <button class="premium-action-btn grid size-10 place-items-center rounded-md"><ZoomOut class="size-4" /></button>
-                    <button class="premium-action-btn grid size-10 place-items-center rounded-md"><Play class="size-4" /></button>
+
+                  <div class="glass-panel absolute left-[58%] top-[47%] hidden items-center gap-3 rounded px-4 py-3 text-sm text-on-surface-variant xl:flex">
+                    <Workflow class="size-7 text-primary" />
+                    <span>Long press to preview</span>
+                  </div>
+
+                  <button class="glass-panel absolute left-[-16px] top-1/2 grid size-12 place-items-center rounded-full text-text-muted">
+                    <ChevronDown class="size-5 rotate-90" />
+                  </button>
+
+                  <div class="glass-panel absolute bottom-7 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-lg p-2">
+                    <button class="premium-action-btn grid size-12 place-items-center rounded-md"><ZoomIn class="size-5" /></button>
+                    <button class="premium-action-btn grid size-12 place-items-center rounded-md"><ZoomOut class="size-5" /></button>
+                    <button class="premium-action-btn grid size-12 place-items-center rounded-md"><Target class="size-5" /></button>
+                    <button class="premium-action-btn grid size-12 place-items-center rounded-md"><Play class="size-5" /></button>
                   </div>
                 </section>
 
-                <aside class="stitch-panel border-l border-outline-variant/30 p-5">
-                  <div class="mb-8 flex items-center justify-between">
-                    <p class="font-mono text-xs uppercase text-text-muted">Properties</p>
-                    <div class="flex gap-2">
-                      <Pencil class="size-5 text-text-muted" />
-                      <X class="size-5 text-text-muted" />
+                <aside class="stitch-panel border-l border-outline-variant/30">
+                  <div class="flex h-[68px] items-center justify-between border-b border-outline-variant/20 px-5">
+                    <p class="font-semibold">Properties</p>
+                    <div class="flex gap-5 text-text-muted">
+                      <Pencil class="size-5" />
+                      <X class="size-5" />
                     </div>
                   </div>
-                  <h2 class="text-2xl font-semibold">{{ graphSelectedNode?.label ?? "Knowledge Graph" }}</h2>
-                  <div class="mt-4 flex flex-wrap gap-2">
-                    <span class="premium-tag rounded px-2 py-1 font-mono text-xs text-on-surface-variant">#{{ graphSelectedNode?.node_type ?? "graph" }}</span>
-                    <span class="premium-tag rounded px-2 py-1 font-mono text-xs text-on-surface-variant">#{{ workspace.graphData.value?.scope ?? "scope" }}</span>
-                  </div>
-                  <div class="mt-8">
-                    <p class="mb-3 font-mono text-xs uppercase text-text-muted">Summary</p>
-                    <p class="text-sm leading-6 text-on-surface-variant">{{ graphSummary }}</p>
-                  </div>
-                  <div class="mt-8 grid gap-3 text-sm">
-                    <div class="flex justify-between"><span class="text-text-muted">Nodes</span><strong>{{ workspace.graphData.value?.nodes.length ?? 0 }}</strong></div>
-                    <div class="flex justify-between"><span class="text-text-muted">Connections</span><strong>{{ workspace.graphData.value?.edges.length ?? 0 }}</strong></div>
-                    <div class="flex justify-between"><span class="text-text-muted">Status</span><strong class="text-emerald-300">{{ activeHealthLabel }}</strong></div>
+                  <div class="p-5">
+                    <h2 class="text-3xl font-semibold">Neural Networks</h2>
+                    <div class="mt-4 flex flex-wrap gap-2">
+                      <span class="premium-tag rounded px-2 py-1 font-mono text-xs text-on-surface-variant">#ai</span>
+                      <span class="premium-tag rounded px-2 py-1 font-mono text-xs text-on-surface-variant">#machine-learning</span>
+                      <span class="premium-tag rounded px-2 py-1 font-mono text-xs text-on-surface-variant">#core</span>
+                      <span class="premium-tag rounded border-dashed px-2 py-1 font-mono text-xs text-on-surface-variant">+ Add tag</span>
+                    </div>
+                    <div class="mt-8">
+                      <p class="mb-4 font-mono text-xs uppercase tracking-wide text-text-muted">Summary</p>
+                      <p class="text-base leading-7 text-on-surface-variant">A computing system inspired by the biological neural networks that constitute animal brains. Neural networks are composed of node layers, containing an input layer, one or more hidden layers, and an output layer.</p>
+                      <a class="mt-4 inline-flex items-center gap-2 text-primary" href="#">Read full note <ChevronDown class="size-4 -rotate-90" /></a>
+                    </div>
+                    <div class="mt-9 grid gap-4 text-sm">
+                      <p class="font-mono text-xs uppercase tracking-wide text-text-muted">Metadata</p>
+                      <div class="flex justify-between"><span class="text-text-muted">Created</span><span>Oct 12, 2023</span></div>
+                      <div class="flex justify-between"><span class="text-text-muted">Modified</span><span>2 days ago</span></div>
+                      <div class="flex justify-between"><span class="text-text-muted">Connections</span><span>{{ workspace.graphData.value?.edges.length ?? 8 }} nodes</span></div>
+                      <div class="flex justify-between"><span class="text-text-muted">Status</span><span class="text-emerald-300">Evergreen</span></div>
+                    </div>
+                    <div class="mt-9">
+                      <p class="mb-4 font-mono text-xs uppercase tracking-wide text-text-muted">Backlinks (5)</p>
+                      <article class="border border-outline-variant/30 bg-surface-container-low p-3">
+                        <p class="font-semibold">Deep Learning</p>
+                        <p class="mt-1 text-sm text-text-muted">...subset of machine learning based on artificial neural networks.</p>
+                      </article>
+                    </div>
                   </div>
                 </aside>
               </div>
             </div>
 
-            <div v-else-if="workspace.view.value === 'ai'" data-testid="stitch-ai-laboratory-layout" class="grid h-[calc(100vh-64px)] min-h-0 grid-cols-1 bg-surface-base lg:grid-cols-[320px_minmax(0,1fr)]">
+            <div v-else-if="workspace.view.value === 'ai'" data-testid="stitch-ai-laboratory-layout" class="grid h-screen min-h-0 grid-cols-1 bg-[#070708] lg:grid-cols-[320px_minmax(0,1fr)]">
               <aside class="stitch-panel border-r border-outline-variant/30 p-5">
-                <div class="mb-5 flex items-center gap-3">
-                  <Bot class="size-5 text-primary" />
-                  <h2 class="text-xl font-semibold">AI Laboratory</h2>
-                </div>
-                <div class="premium-input mb-5 flex h-10 items-center gap-2 rounded-md px-3 text-sm text-text-muted">
+                <div class="premium-input mb-5 flex h-10 items-center gap-3 rounded px-3 text-text-muted">
                   <Search class="size-4" />
                   Search history...
                 </div>
-                <button class="mb-5 flex h-11 w-full items-center justify-center gap-2 rounded-md bg-surface-container-high text-sm font-semibold">
-                  <MessageSquare class="size-4" />
+                <button class="mb-6 flex h-12 w-full items-center justify-center gap-3 rounded bg-surface-container-high text-base font-semibold">
+                  <MessageSquare class="size-5" />
                   New Chat
                 </button>
                 <div class="grid gap-2">
-                  <button class="rounded-md border border-primary/40 bg-surface-container-high px-3 py-3 text-left">
+                  <button class="rounded border border-primary/40 bg-surface-container-high px-4 py-3 text-left">
                     <span class="block truncate text-sm font-semibold text-primary">Project Mnemosyne: Synthesis</span>
                     <span class="text-xs text-text-muted">Today, 14:03</span>
                   </button>
-                  <button class="rounded-md px-3 py-3 text-left text-on-surface-variant hover:bg-surface-container">
+                  <button class="rounded px-4 py-3 text-left text-on-surface-variant hover:bg-surface-container">
                     <span class="block truncate text-sm font-semibold">Quantum Entanglement Analysis</span>
                     <span class="text-xs text-text-muted">Yesterday, 09:45</span>
                   </button>
+                  <button class="rounded px-4 py-3 text-left text-on-surface-variant hover:bg-surface-container">
+                    <span class="block truncate text-sm font-semibold">Neural Network Synthesis</span>
+                    <span class="text-xs text-text-muted">Oct 24, 2023</span>
+                  </button>
+                  <button class="rounded px-4 py-3 text-left text-on-surface-variant hover:bg-surface-container">
+                    <span class="block truncate text-sm font-semibold">Project Mnemosyne Plan</span>
+                    <span class="text-xs text-text-muted">Oct 22, 2023</span>
+                  </button>
                 </div>
+                <button class="glass-panel absolute right-[-18px] top-1/2 hidden size-12 place-items-center rounded-full text-text-muted lg:grid">
+                  <ChevronDown class="size-5 rotate-90" />
+                </button>
               </aside>
 
-              <section data-testid="chat-function-grid" class="flex min-w-0 flex-col">
-                <header class="flex h-20 items-center justify-between border-b border-outline-variant/20 px-6">
+              <section data-testid="chat-function-grid" class="relative flex min-w-0 flex-col">
+                <header class="flex h-20 items-center justify-between border-b border-outline-variant/10 px-8">
                   <div>
-                    <h2 class="text-2xl font-semibold">Project Mnemosyne: Synthesis</h2>
-                    <p class="font-mono text-xs text-text-muted">
-                      <span class="text-primary">●</span> Model: M-Cognitive v4.2 · Context: 128k Tokens
+                    <h2 class="text-3xl font-semibold leading-none">Project Mnemosyne: Synthesis</h2>
+                    <p class="mt-2 font-mono text-xs text-text-muted">
+                      <span class="text-primary">●</span> Model: M-Cognitive v4.2 - Context: 128k Tokens
                     </p>
                   </div>
-                  <div class="flex gap-3 text-text-muted">
+                  <div class="flex gap-6 text-on-surface-variant">
                     <Search class="size-5" />
-                    <Pin class="size-5" />
+                    <MoreVertical class="size-5" />
                   </div>
                 </header>
 
-                <div class="flex-1 overflow-auto px-6 py-8">
-                  <div class="mx-auto grid max-w-4xl gap-6">
-                    <div v-for="message in chatTranscript" :key="message.role" class="flex" :class="message.role === 'user' ? 'justify-end' : 'justify-start'">
-                      <article
-                        class="max-w-[760px] rounded-lg p-5 text-sm leading-7"
-                        :class="message.role === 'user' ? 'bg-surface-container-high text-on-surface' : 'border-l-4 border-primary bg-surface-container-low/60 text-on-surface-variant'"
-                      >
-                        {{ message.text }}
+                <div class="flex-1 overflow-auto px-8 pb-8 pt-16">
+                  <div class="mx-auto max-w-[900px]">
+                    <div class="mb-12 flex justify-center">
+                      <span class="rounded-full bg-surface-container-high px-4 py-1 font-mono text-xs text-on-surface-variant">Today, 14:03</span>
+                    </div>
+
+                    <div class="mb-8 flex justify-end">
+                      <div class="max-w-[675px] rounded bg-surface-container-high px-6 py-5 text-base leading-7">
+                        Analyze the latest research nodes connected to "Quantum Entanglement in Biological Systems". Summarize the core contradictions in the recent methodologies.
+                      </div>
+                    </div>
+
+                    <div class="mb-8 grid grid-cols-[44px_minmax(0,1fr)] gap-5">
+                      <div class="grid size-10 place-items-center rounded-lg border border-primary/40 bg-primary/10 text-primary">
+                        <Bot class="size-5" />
+                      </div>
+                      <article class="rounded border border-outline-variant/30 border-l-4 border-l-primary bg-[#0c0c0e] p-6 text-base leading-8">
+                        <p>Based on the current knowledge graph traversal, there are 3 primary nodes referencing "Quantum Entanglement in Biological Systems" updated in the last 72 hours.</p>
+                        <p class="mt-5">The core contradictions arise from the environmental decoherence models used:</p>
+                        <ul class="mt-4 list-disc space-y-3 pl-6">
+                          <li><span class="text-primary">Node A (Dr. Chen, 2024):</span> Posits that macromolecular shielding extends coherence times up to 100fs.</li>
+                          <li><span class="text-primary">Node B (Symposium proceedings):</span> Argues thermal noise disrupts entanglement within 10fs, challenging the shielding hypothesis entirely.</li>
+                        </ul>
+                        <div class="mt-8 flex flex-wrap gap-3 border-t border-outline-variant/20 pt-4">
+                          <span class="premium-tag rounded px-3 py-1 font-mono text-xs text-on-surface-variant">doc_ref_492.pdf</span>
+                          <span class="premium-tag rounded px-3 py-1 font-mono text-xs text-on-surface-variant">Graph Node: Bio-Q</span>
+                        </div>
                       </article>
                     </div>
-                    <div v-if="workspace.chatResult.value?.citations.length" class="flex flex-wrap gap-2">
-                      <span v-for="citation in workspace.chatResult.value.citations" :key="citation.source_id" class="premium-tag rounded px-3 py-1 font-mono text-xs text-on-surface-variant">
-                        {{ citation.document_id }}
-                      </span>
+
+                    <div class="mb-8 flex justify-end">
+                      <div class="max-w-[520px] rounded bg-surface-container-high px-6 py-4 text-base">Can you generate a visual map of these contradictions?</div>
+                    </div>
+
+                    <div class="mb-24 grid grid-cols-[44px_minmax(0,1fr)] gap-5">
+                      <div class="grid size-10 place-items-center rounded-lg border border-primary/40 bg-primary/10 text-primary">
+                        <Bot class="size-5" />
+                      </div>
+                      <div class="inline-flex w-fit items-center gap-2 rounded border border-outline-variant/30 border-l-4 border-l-primary bg-[#0c0c0e] px-5 py-4">
+                        <span class="size-2 rounded-full bg-primary"></span>
+                        <span class="size-2 rounded-full bg-primary"></span>
+                        <span class="size-2 rounded-full bg-primary"></span>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                <form data-testid="workspace-chat-command" class="border-t border-outline-variant/20 p-5" @submit.prevent="workspace.askVault">
-                  <div class="mx-auto flex max-w-4xl items-end gap-3 rounded-lg border border-outline-variant/30 bg-surface-container-low p-3">
-                    <textarea v-model="workspace.chatQuestion.value" class="premium-input min-h-16 flex-1 resize-none p-3" placeholder="Message Mneme..." />
-                    <button class="grid size-11 place-items-center rounded-md bg-primary-container text-on-primary-container">
-                      <Send class="size-5" />
-                    </button>
+                <form data-testid="workspace-chat-command" class="sticky bottom-0 border-t border-outline-variant/10 bg-[#070708]/95 px-8 pb-7 pt-4 backdrop-blur" @submit.prevent="workspace.askVault">
+                  <div class="mx-auto max-w-[900px]">
+                    <div class="rounded-lg border border-outline-variant/30 bg-surface-container-low p-4">
+                      <div class="mb-3 flex w-fit items-center gap-2 rounded-full bg-surface-container-high px-3 py-1 font-mono text-xs text-on-surface-variant">
+                        Context: Node B
+                        <X class="size-3" />
+                      </div>
+                      <div class="flex items-center gap-4">
+                        <Upload class="size-5 text-on-surface-variant" />
+                        <Workflow class="size-5 text-on-surface-variant" />
+                        <textarea v-model="workspace.chatQuestion.value" class="premium-input min-h-12 flex-1 resize-none border-0 bg-transparent p-3" placeholder="Message Cognitive Sanctuary... (/ for commands, @ for nodes)" />
+                        <button class="grid size-12 place-items-center rounded bg-primary-container text-on-primary-container">
+                          <Send class="size-6" />
+                        </button>
+                      </div>
+                    </div>
+                    <p class="mt-3 text-center font-mono text-xs text-text-muted">AI responses may be structurally imperfect. Verify critical data against original research nodes.</p>
                   </div>
                 </form>
               </section>
