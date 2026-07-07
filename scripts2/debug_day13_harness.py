@@ -8,15 +8,15 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from app.mneme.infra.circuit_breaker import _BREAKER_STATE
 from app.mneme.infra.rate_limit import _WINDOW_COUNTERS
-from app.mneme.services.context_service import (
+from app.mneme.domains.retrieval.context_service import (
     build_similarity_search_kwargs,
     deduplicate_retrieved_documents,
     merge_adjacent_scored_documents,
     trim_scored_documents_by_budget,
 )
 from app.mneme.tasks.index_tasks import index_document_task
-from app.mneme.services.task_state_service import ALLOWED_TASK_TRANSITIONS
-from app.mneme.pipelines.document_index_pipeline import run_document_index_pipeline
+from app.mneme.domains.tasks.state import ALLOWED_TASK_TRANSITIONS
+from app.mneme.domains.documents.pipeline import run_document_index_pipeline
 from app.mneme.pipelines.memory_extract_pipeline import run_memory_extract_pipeline
 
 

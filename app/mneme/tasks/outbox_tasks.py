@@ -2,7 +2,7 @@ import asyncio
 
 from app.mneme.conf.logging import app_logger
 from app.mneme.infra.celery_app import celery_app
-from app.mneme.services.outbox_service import dispatch_pending_outbox_events, process_outbox_event_by_id
+from app.mneme.domains.tasks.outbox import dispatch_pending_outbox_events, process_outbox_event_by_id
 
 
 @celery_app.task(name="tasks.process_outbox_event_task")

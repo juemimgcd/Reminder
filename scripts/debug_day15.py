@@ -10,7 +10,7 @@ if str(PROJECT_ROOT) not in sys.path:
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(errors="replace")
 
-from app.mneme.services.graph_rag_service import build_graph_rag_decision, compare_graph_retrieval
+from app.mneme.domains.graph.rag import build_graph_rag_decision, compare_graph_retrieval
 
 
 def build_document(*, document_id: str, file_name: str, created_at: datetime):

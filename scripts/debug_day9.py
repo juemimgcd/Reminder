@@ -9,7 +9,7 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(errors="replace")
 
 from app.mneme.schemas.chat import ContextItem
-from app.mneme.services.retrieval_fusion_service import fuse_and_rerank_context_items
+from app.mneme.domains.retrieval.fusion import fuse_and_rerank_context_items
 
 
 def build_item(

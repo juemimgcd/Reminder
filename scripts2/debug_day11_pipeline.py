@@ -10,7 +10,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.mneme.pipelines.document_index_pipeline import run_document_index_pipeline
+from app.mneme.domains.documents.pipeline import run_document_index_pipeline
 
 
 async def main():
@@ -47,23 +47,23 @@ async def main():
 
     with (
         patch(
-            "pipelines.document_index_pipeline.update_document_status_with_projection",
+            "domains.documents.pipeline.update_document_status_with_projection",
             new=AsyncMock(side_effect=[fake_document, fake_document]),
         ),
         patch(
-            "pipelines.document_index_pipeline.load_langchain_documents",
+            "domains.documents.pipeline.load_langchain_documents",
             new=AsyncMock(return_value=fake_loaded_docs),
         ),
         patch(
-            "pipelines.document_index_pipeline.split_documents",
+            "domains.documents.pipeline.split_documents",
             new=AsyncMock(return_value=fake_chunk_docs),
         ),
         patch(
-            "pipelines.document_index_pipeline.persist_chunks_for_document",
+            "domains.documents.pipeline.persist_chunks_for_document",
             new=AsyncMock(return_value=None),
         ),
         patch(
-            "pipelines.document_index_pipeline.rebuild_memory_entries_for_document",
+            "domains.documents.pipeline.rebuild_memory_entries_for_document",
             new=AsyncMock(
                 return_value={
                     "chunk_count": 1,
@@ -73,7 +73,7 @@ async def main():
             ),
         ),
         patch(
-            "pipelines.document_index_pipeline.add_documents_to_vector_store_in_batches",
+            "domains.documents.pipeline.add_documents_to_vector_store_in_batches",
             new=AsyncMock(
                 return_value={
                     "batch_count": 1,

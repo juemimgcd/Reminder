@@ -8,7 +8,7 @@ if str(PROJECT_ROOT) not in sys.path:
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(errors="replace")
 
-from app.mneme.services.production_readiness_service import (
+from app.mneme.domains.health.readiness import (
     AVOID_BY_DEFAULT,
     DEFAULT_STACK,
     OPTIONAL_STACK,

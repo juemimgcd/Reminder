@@ -1,6 +1,6 @@
 import asyncio
 
-from app.mneme.services.advice_service import build_growth_advice
+from app.mneme.domains.advice.service import build_growth_advice
 
 
 profile = {

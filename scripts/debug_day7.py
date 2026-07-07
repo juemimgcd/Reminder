@@ -8,7 +8,7 @@ if str(PROJECT_ROOT) not in sys.path:
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(errors="replace")
 
-from app.mneme.services.query_router_service import route_query
+from app.mneme.domains.retrieval.query_router import route_query
 
 
 def main():

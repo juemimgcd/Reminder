@@ -8,7 +8,7 @@ if str(PROJECT_ROOT) not in sys.path:
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(errors="replace")
 
-from app.mneme.services.task_state_service import (
+from app.mneme.domains.tasks.state import (
     ACTIVE_TASK_STATUSES,
     CANCELLED,
     FAILED,

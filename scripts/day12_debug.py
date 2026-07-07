@@ -1,6 +1,6 @@
 import asyncio
 
-from app.mneme.services.companion_service import build_companion_response
+from app.mneme.domains.companion.service import build_companion_response
 
 
 rag_result = {

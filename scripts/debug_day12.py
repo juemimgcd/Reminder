@@ -9,7 +9,7 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(errors="replace")
 
 from app.mneme.schemas.chat import EvidenceCitationDraft
-from app.mneme.services.citation_validation_service import apply_citation_confidence_policy, validate_citation_drafts
+from app.mneme.domains.retrieval.citation_validation import apply_citation_confidence_policy, validate_citation_drafts
 
 
 def main():

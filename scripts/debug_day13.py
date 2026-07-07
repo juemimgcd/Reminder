@@ -10,7 +10,7 @@ if str(PROJECT_ROOT) not in sys.path:
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(errors="replace")
 
-from app.mneme.services.memory_governance_service import build_memory_governance_view
+from app.mneme.domains.memory.governance import build_memory_governance_view
 
 
 def build_entry(
