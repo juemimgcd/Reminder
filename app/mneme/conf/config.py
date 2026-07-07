@@ -101,7 +101,13 @@ class Settings(BaseSettings):
     NEO4J_DATABASE: str = "neo4j"
     NEO4J_MAX_CONNECTION_POOL_SIZE: int = 20
 
+    LLM_PROVIDER: str = "qwen"
+    LLM_API_KEY: str = ""
     DASHSCOPE_API_KEY: str = ""
+    MIMO_API_KEY: str = ""
+    KIMI_API_KEY: str = ""
+    GLM_API_KEY: str = ""
+    DEEPSEEK_API_KEY: str = ""
     LLM_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     LLM_MODEL_NAME: str = "qwen-plus"
     LLM_TEMPERATURE: float = 0.0

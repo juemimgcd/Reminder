@@ -14,7 +14,7 @@
 
 - Nginx 监听 `80/443`
 - Nginx 把所有请求代理到 `127.0.0.1:8000`
-- 前端页面和后端 API 都由 `reminder-app` 统一提供
+- Vue 前端页面和后端 API 都由 `reminder-app` 统一提供
 
 这意味着你不需要再单独部署一套前端静态站点。
 
@@ -59,7 +59,8 @@ cp deploy/env/backend.production.example .env
 - `POSTGRES_PASSWORD`
 - `MINIO_ROOT_PASSWORD`
 - `NEO4J_PASSWORD`
-- `DASHSCOPE_API_KEY`
+- `LLM_PROVIDER`
+- `DASHSCOPE_API_KEY` / `MIMO_API_KEY` / `KIMI_API_KEY` / `GLM_API_KEY` / `DEEPSEEK_API_KEY`
 - `JWT_SECRET`
 - 如果你要启用交叉编码器重排，建议配置 `RERANKER_ENABLED=true`
 
@@ -71,6 +72,7 @@ cp deploy/env/backend.production.example .env
 - Compose 内部会自动使用 `postgres`、`redis`、`milvus`、`neo4j` 这些容器名互连，不需要你手工改容器间地址。
 - 当前生产模板默认把 `MILVUS_MEMORY_LIMIT` 收敛到 `2g`，更适合中小规格机器。
 - 当前模板已经预留 `RERANKER_*` 和 `RETRIEVAL_*` 参数，可用来打开 `BAAI/bge-reranker-v2-m3` 和放大召回候选池。
+- `LLM_PROVIDER` 支持 `qwen`、`mimo`、`kimi`、`glm`、`deepseek`。可以配置对应的 provider key，也可以统一使用 `LLM_API_KEY`；`LLM_BASE_URL` 和 `LLM_MODEL_NAME` 留空时会使用 provider 默认值。
 
 ## 5. 首次启动
 
@@ -84,8 +86,8 @@ curl http://127.0.0.1:8000/health
 
 - 数据库迁移容器已经跑完
 - 应用容器已经启动
-- 前端已经打包进镜像
-- 后端和嵌入式前端都可以通过 `127.0.0.1:8000` 访问
+- Vue 前端已经打包进镜像
+- 后端和嵌入式 Vue 前端都可以通过 `127.0.0.1:8000` 访问
 
 这时本机访问：
 
@@ -96,7 +98,7 @@ curl http://127.0.0.1:8000/health
 
 仓库已经提供了单机代理模板：
 
-- [deploy/nginx/reminder.conf](/E:/python_files/agentic_rag/deploy/nginx/reminder.conf)
+- [deploy/nginx/reminder.conf](nginx/reminder.conf)
 
 安装方式：
 
@@ -128,7 +130,7 @@ sudo certbot --nginx -d your-domain.com
 
 仓库里已经有 Compose 服务模板：
 
-- [deploy/systemd/reminder-compose.service](/E:/python_files/agentic_rag/deploy/systemd/reminder-compose.service)
+- [deploy/systemd/reminder-compose.service](systemd/reminder-compose.service)
 
 安装：
 
@@ -173,8 +175,8 @@ ENABLE_NGINX_SYNC=0 bash upgrade.sh
 
 相关文件：
 
-- [github-actions.deploy.sh](/E:/python_files/agentic_rag/github-actions.deploy.sh)
-- [github-actions.secrets.example](/E:/python_files/agentic_rag/github-actions.secrets.example)
+- [github-actions.deploy.sh](../github-actions.deploy.sh)
+- [github-actions.secrets.example](../github-actions.secrets.example)
 - `.github/workflows/reminder-deploy.yml`
 
 说明：
@@ -200,10 +202,10 @@ ENABLE_NGINX_SYNC=0 bash upgrade.sh
 
 默认行为：
 
-- push 到 `master` 时自动执行
+- push 到 `master` 时自动执行前端类型检查和后端编译检查
 - 也支持在 GitHub Actions 页面手动触发
-- 先做前端检查和后端源码编译检查
-- 检查通过后再 SSH 到服务器执行部署脚本
+- 先做 Vue 前端类型检查和后端源码编译检查
+- 只有手动触发并把 `run_deploy` 选成 `true` 时，检查通过后才会 SSH 到服务器执行部署脚本
 
 如果你当前服务器还是 FinalShell 这类“用户名 + 密码”登录方式，也可以先直接配置：
 

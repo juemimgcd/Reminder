@@ -1,6 +1,6 @@
 # Reminder Frontend
 
-这个前端现在直接对接 Reminder 后端接口，不再是静态 AI Studio 原型。
+这个前端现在是 Vue 3 + Vite 工作台，直接对接 Reminder 后端接口，不再是静态 AI Studio 原型。
 
 ## Run Locally
 
@@ -35,4 +35,13 @@ npm run dev
 bash start.sh
 ```
 
-这会同时启动后端 `uvicorn` 和前端 `vite build --watch`，最终由后端统一托管页面。
+这会同时启动后端 `uvicorn` 和前端 `npm run dev:embed`，后者内部执行 `vite build --watch`，最终由后端统一托管页面。
+
+## Build / Check
+
+```bash
+npm run lint
+npm run build
+```
+
+`npm run lint` 使用 `vue-tsc --noEmit` 做类型检查；`npm run build` 会先跑预构建检查，再生成可由后端托管的 `dist`。
