@@ -9,31 +9,29 @@
     "build": "node scripts/prebuild-check.mjs && node scripts/build.mjs",
     "preview": "vite preview --config vite.config.mjs --configLoader native",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit",
+    "lint": "vue-tsc --noEmit",
     "test:e2e": "playwright test",
     "dev:preview": "vite --mode preview --port=3000 --host=0.0.0.0 --config vite.config.mjs --configLoader native"
   },
   "dependencies": {
+    "@lucide/vue": "^1.23.0",
     "clsx": "^2.1.1",
     "d3": "^7.9.0",
-    "lucide-react": "^0.546.0",
-    "motion": "^12.23.24",
-    "react": "^19.0.1",
-    "react-dom": "^19.0.1",
-    "react-markdown": "^10.1.0",
-    "tailwind-merge": "^3.6.0"
+    "tailwind-merge": "^3.6.0",
+    "vue": "^3.5.22"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",
     "@tailwindcss/vite": "^4.1.14",
     "@types/d3": "^7.4.3",
     "@types/node": "^22.14.0",
-    "@vitejs/plugin-react": "^5.0.4",
+    "@vitejs/plugin-vue": "^5.2.4",
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.25.0",
     "tailwindcss": "^4.1.14",
     "typescript": "~5.8.2",
-    "vite": "^6.2.3"
+    "vite": "^6.2.3",
+    "vue-tsc": "^2.2.10"
   },
   "allowScripts": {
     "esbuild@0.25.12": true,
