@@ -9,9 +9,9 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(errors="replace")
 
 from app.mneme.schemas.chat import ContextItem
-from app.mneme.services.query_router_service import route_query
-from app.mneme.services.retrieval_debug_service import build_answer_debug, build_retrieval_debug_packet
-from app.mneme.services.retrieval_fusion_service import fuse_and_rerank_context_items
+from app.mneme.domains.retrieval.query_router import route_query
+from app.mneme.domains.retrieval.debug import build_answer_debug, build_retrieval_debug_packet
+from app.mneme.domains.retrieval.fusion import fuse_and_rerank_context_items
 
 
 def build_item(

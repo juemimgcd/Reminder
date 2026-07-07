@@ -7,7 +7,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.mneme.conf.config import settings
-from app.mneme.services.context_service import build_query_context
+from app.mneme.domains.retrieval.context_service import build_query_context
 from app.mneme.pipelines.document_index_pipeline import run_document_index_pipeline
 from app.mneme.pipelines.memory_extract_pipeline import run_memory_extract_pipeline
 
@@ -24,7 +24,7 @@ async def main():
     print(f"retry_max_attempts={settings.EXTERNAL_RETRY_MAX_ATTEMPTS}")
     print(f"breaker_failure_threshold={settings.CIRCUIT_BREAKER_FAILURE_THRESHOLD}")
     print("chunk_policy_source=clients/text_splitter_client.py")
-    print("context_budget_source=services/context_service.py")
+    print("context_budget_source=domains/retrieval/context_service.py")
     print()
 
     print("observability_examples")

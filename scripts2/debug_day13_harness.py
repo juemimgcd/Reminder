@@ -8,7 +8,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from app.mneme.infra.circuit_breaker import _BREAKER_STATE
 from app.mneme.infra.rate_limit import _WINDOW_COUNTERS
-from app.mneme.services.context_service import (
+from app.mneme.domains.retrieval.context_service import (
     build_similarity_search_kwargs,
     deduplicate_retrieved_documents,
     merge_adjacent_scored_documents,

@@ -8,7 +8,7 @@ from app.mneme.models.user import User
 from app.mneme.schemas.companion import CompanionAnswerResult, CompanionQueryRequest
 from app.mneme.services.companion_service import build_companion_response
 from app.mneme.services.insight_service import build_growth_for_knowledge_base
-from app.mneme.services.query_service import generate_rag_answer
+from app.mneme.domains.retrieval.query_service import generate_rag_answer
 from app.mneme.utils.auth import get_current_user
 from app.mneme.utils.exceptions import BusinessException
 from app.mneme.utils.response import success_response

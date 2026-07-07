@@ -10,10 +10,10 @@ from app.mneme.infra.circuit_breaker import before_call, record_failure, record_
 from app.mneme.infra.retry import retry_async
 from app.mneme.schemas.chat import EvidenceAnswerDraft, EvidenceCitationDraft, QueryRouteDecision
 from app.mneme.services.citation_validation_service import apply_citation_confidence_policy, validate_citation_drafts
-from app.mneme.services.context_service import build_query_context
+from app.mneme.domains.retrieval.context_service import build_query_context
+from app.mneme.domains.retrieval.debug import build_answer_debug, build_non_retrieval_debug
+from app.mneme.domains.retrieval.query_router import route_query
 from app.mneme.services.insight_service import build_growth_for_knowledge_base, build_profile_for_knowledge_base
-from app.mneme.services.query_router_service import route_query
-from app.mneme.services.retrieval_debug_service import build_answer_debug, build_non_retrieval_debug
 from app.mneme.utils.prompt_builder import get_evidence_rag_prompt, get_general_chat_prompt
 
 

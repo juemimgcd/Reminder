@@ -15,8 +15,8 @@ from app.mneme.crud.chunk import search_chunks_by_keywords
 from app.mneme.crud.memory_entry import search_memory_entries_by_keywords
 from app.mneme.models import Chunk, MemoryEntry
 from app.mneme.schemas.chat import ContextItem
-from app.mneme.services.retrieval_debug_service import build_retrieval_debug_packet
-from app.mneme.services.retrieval_fusion_service import fuse_and_rerank_context_items
+from app.mneme.domains.retrieval.debug import build_retrieval_debug_packet
+from app.mneme.domains.retrieval.fusion import fuse_and_rerank_context_items
 
 
 MetadataFilter = dict[str, int | str]

@@ -6,7 +6,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.mneme.services.context_service import build_query_context
+from app.mneme.domains.retrieval.context_service import build_query_context
 
 
 async def main():

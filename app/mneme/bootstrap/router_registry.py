@@ -8,7 +8,7 @@ ROUTER_MODULE_NAMES = [
     "app.mneme.routers.auth",
     "app.mneme.routers.users",
     "app.mneme.routers.documents",
-    "app.mneme.routers.chat",
+    "app.mneme.domains.retrieval.router",
     "app.mneme.routers.memory",
     "app.mneme.routers.advice",
     "app.mneme.routers.analysis",
