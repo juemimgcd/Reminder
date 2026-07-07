@@ -1,4 +1,5 @@
 from app.mneme.models.base import Base
+from app.mneme.models.ai_model_config import AiModelConfig
 from app.mneme.models.chat_message import ChatMessage
 from app.mneme.models.chat_session import ChatSession
 from app.mneme.models.chunk import Chunk
@@ -11,6 +12,7 @@ from app.mneme.models.user import User
 
 __all__ = [
     "Base",
+    "AiModelConfig",
     "User",
     "KnowledgeBase",
     "Document",

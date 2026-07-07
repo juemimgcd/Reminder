@@ -3,7 +3,7 @@ from typing import Any
 from langchain_core.output_parsers import PydanticOutputParser, StrOutputParser
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.mneme.clients.llm_client import get_llm
+from app.mneme.clients.llm_client import get_llm, get_llm_for_user_config
 from app.mneme.conf.config import settings
 from app.mneme.conf.logging import app_logger, log_event
 from app.mneme.infra.circuit_breaker import before_call, record_failure, record_success
@@ -91,8 +91,9 @@ async def invoke_llm_answer(
     context_text: str | None = None,
     knowledge_base_id: str | None = None,
     user_id: int | None = None,
+    llm_config: dict | None = None,
 ) -> str:
-    llm = get_llm()
+    llm = get_llm_for_user_config(llm_config) if llm_config else get_llm()
     chain = prompt | llm | StrOutputParser()
 
     async def do_invoke() -> str:
@@ -152,6 +153,7 @@ async def generate_rag_answer(
     knowledge_base_id: str,
     user_id: int | None = None,
     top_k: int = 4,
+    llm_config: dict | None = None,
 ) -> dict[str, Any]:
     route = route_query(question)
     log_event(
@@ -181,6 +183,7 @@ async def generate_rag_answer(
             question=question,
             knowledge_base_id=knowledge_base_id,
             user_id=user_id,
+            llm_config=llm_config,
         )
         return {
             "answer": answer,
@@ -320,6 +323,7 @@ async def generate_rag_answer(
         sources=context_packet["sources"],
         knowledge_base_id=knowledge_base_id,
         user_id=user_id,
+        llm_config=llm_config,
     )
     log_event(
         "query_service",
@@ -365,10 +369,11 @@ async def invoke_evidence_answer(
     sources: list[dict[str, Any]],
     knowledge_base_id: str | None = None,
     user_id: int | None = None,
+    llm_config: dict | None = None,
 ) -> dict[str, Any]:
     parser = PydanticOutputParser(pydantic_object=EvidenceAnswerDraft)
     prompt = get_evidence_rag_prompt(parser.get_format_instructions())
-    llm = get_llm()
+    llm = get_llm_for_user_config(llm_config) if llm_config else get_llm()
     chain = prompt | llm | parser
 
     async def do_invoke() -> EvidenceAnswerDraft:

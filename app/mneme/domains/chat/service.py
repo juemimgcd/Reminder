@@ -11,7 +11,9 @@ from app.mneme.crud.chat_session import (
     list_chat_sessions as list_chat_session_rows,
 )
 from app.mneme.crud.knowledge_base import get_knowledge_base_by_id
+from app.mneme.crud.ai_model_config import get_default_ai_model_config
 from app.mneme.domains.retrieval.query_service import generate_rag_answer
+from app.mneme.domains.settings.ai_models import ai_model_config_runtime_kwargs
 from app.mneme.models.chat_message import ChatMessage
 from app.mneme.models.chat_session import ChatSession
 from app.mneme.models.knowledge_base import KnowledgeBase
@@ -166,12 +168,15 @@ async def ask_in_chat_session(
     if session.archived_at is not None:
         raise BusinessException(message="chat session is archived", code=4049, status_code=400)
 
+    model_config = await get_default_ai_model_config(db, user_id=current_user.id)
+    llm_config = ai_model_config_runtime_kwargs(model_config) if model_config else None
     result = await generate_rag_answer(
         question=question,
         db=db,
         knowledge_base_id=session.knowledge_base_id,
         user_id=current_user.id,
         top_k=top_k,
+        llm_config=llm_config,
     )
     now = datetime.now(timezone.utc)
     user_message = await create_chat_message(
@@ -196,6 +201,7 @@ async def ask_in_chat_session(
         sources_json=result.get("sources") or [],
         citations_json=result.get("citations") or [],
         route_json=result.get("route"),
+        model_config_id=model_config.id if model_config else None,
     )
     if not session.title:
         session.title = question[:80]
