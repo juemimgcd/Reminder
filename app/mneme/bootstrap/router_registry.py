@@ -10,7 +10,7 @@ ROUTER_MODULE_NAMES = [
     "app.mneme.domains.documents.router",
     "app.mneme.domains.retrieval.router",
     "app.mneme.domains.memory.router",
-    "app.mneme.routers.advice",
+    "app.mneme.domains.advice.router",
     "app.mneme.routers.analysis",
     "app.mneme.domains.profile.router",
     "app.mneme.routers.companion",
