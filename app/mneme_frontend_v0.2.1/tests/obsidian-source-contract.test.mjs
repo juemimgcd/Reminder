@@ -19,8 +19,8 @@ assert.ok(
   'Expected the workbench grid to match the 256px Stitch Sanctuary sidebar',
 );
 
-for (const navLabel of ['Dashboard', 'Notes', 'Graph', 'AI Chat', 'Settings']) {
-  assert.ok(appSource.includes(`label: "${navLabel}"`), `Expected Sanctuary navigation to include ${navLabel}`);
+for (const navLabel of ['Knowledge Graph', 'Research Vault', 'Semantic Map', 'AI Laboratory', 'System Settings']) {
+  assert.ok(appSource.includes(`label: "${navLabel}"`), `Expected Stitch navigation to include ${navLabel}`);
 }
 
 for (const designToken of ['--color-surface-base: #09090b', '--color-primary-container: #7c3aed']) {
@@ -41,12 +41,16 @@ for (const stitchClass of ['premium-card', 'glass-panel', 'premium-input', 'prem
 
 for (const stitchLayoutHook of [
   'data-testid="stitch-dashboard-grid"',
-  'data-testid="stitch-notes-layout"',
-  'data-testid="stitch-ai-layout"',
+  'data-testid="stitch-research-vault-layout"',
+  'data-testid="stitch-ai-laboratory-layout"',
   'data-testid="stitch-settings-layout"',
-  'data-testid="stitch-graph-canvas"',
+  'data-testid="stitch-graph-layout"',
 ]) {
   assert.ok(appSource.includes(stitchLayoutHook), `Expected App.vue to expose ${stitchLayoutHook}`);
+}
+
+for (const stitchText of ['Mneme Intelligence', 'Cognitive Sanctuary', 'New Research']) {
+  assert.ok(appSource.includes(stitchText), `Expected Stitch shell copy: ${stitchText}`);
 }
 
 assert.ok(
@@ -76,13 +80,21 @@ assert.ok(
 
 for (const layoutHook of [
   'data-testid="graph-function-grid"',
-  'testId="graph-output-workspace"',
+  'data-testid="graph-output-workspace"',
   'data-testid="memory-function-grid"',
-  'testId="memory-output-workspace"',
+  'data-testid="memory-output-workspace"',
   'data-testid="insights-function-grid"',
-  'testId="insights-output-workspace"',
+  'data-testid="insights-output-workspace"',
 ]) {
   assert.ok(appSource.includes(layoutHook), `Expected App.vue to separate controls and outputs with ${layoutHook}`);
+}
+
+for (const invalidVueAttribute of [
+  'testId="graph-output-workspace"',
+  'testId="memory-output-workspace"',
+  'testId="insights-output-workspace"',
+]) {
+  assert.ok(!appSource.includes(invalidVueAttribute), `Expected Vue template to avoid React-style ${invalidVueAttribute}`);
 }
 
 assert.ok(
