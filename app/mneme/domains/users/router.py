@@ -14,7 +14,7 @@ from app.mneme.schemas.knowledge_base import (
     KnowledgeBaseListData,
 )
 from app.mneme.domains.graph.projection import sync_knowledge_base_projection
-from app.mneme.services.resource_service import delete_knowledge_base_resources
+from app.mneme.domains.documents.resources import delete_knowledge_base_resources
 from app.mneme.utils.auth import get_current_user
 from app.mneme.utils.exceptions import BusinessException
 from app.mneme.utils.response import success_response

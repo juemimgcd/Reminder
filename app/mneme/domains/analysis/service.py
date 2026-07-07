@@ -21,7 +21,7 @@ from app.mneme.schemas.analytics import (
     StatusCountData,
     TaskAnalyticsData,
 )
-from app.mneme.services.task_state_service import is_active_task_status
+from app.mneme.domains.tasks.state import is_active_task_status
 from app.mneme.utils.exceptions import BusinessException
 
 

@@ -6,7 +6,7 @@ from app.mneme.crud.document import get_document_by_id
 from app.mneme.crud.task_record import get_task_record_by_id
 from app.mneme.models.user import User
 from app.mneme.schemas.task_record import TaskActionData, TaskRecordData
-from app.mneme.services.task_admin_service import cancel_document_index_task, retry_document_index_task
+from app.mneme.domains.tasks.admin import cancel_document_index_task, retry_document_index_task
 from app.mneme.utils.auth import get_current_user
 from app.mneme.utils.exceptions import BusinessException
 from app.mneme.utils.response import success_response

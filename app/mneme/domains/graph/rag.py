@@ -9,7 +9,7 @@ from app.mneme.schemas.graph_rag import (
     GraphRagExpansionItem,
     GraphRagSeedItem,
 )
-from app.mneme.services.eval_service import dedupe_preserve_order, evaluate_retrieval, extract_terms
+from app.mneme.domains.eval.service import dedupe_preserve_order, evaluate_retrieval, extract_terms
 from app.mneme.domains.graph.service import _build_related_document_edges
 
 

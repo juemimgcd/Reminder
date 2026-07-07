@@ -1,7 +1,7 @@
 import asyncio
 from datetime import datetime
 
-from app.mneme.services.growth_service import build_growth_report
+from app.mneme.domains.analysis.growth import build_growth_report
 from app.mneme.domains.profile.service import build_personal_profile
 
 

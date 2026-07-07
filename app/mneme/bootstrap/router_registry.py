@@ -4,17 +4,17 @@ from fastapi import FastAPI
 
 
 ROUTER_MODULE_NAMES = [
-    "app.mneme.routers.health",
-    "app.mneme.routers.auth",
-    "app.mneme.routers.users",
+    "app.mneme.domains.health.router",
+    "app.mneme.domains.auth.router",
+    "app.mneme.domains.users.router",
     "app.mneme.domains.documents.router",
     "app.mneme.domains.retrieval.router",
     "app.mneme.domains.memory.router",
     "app.mneme.domains.advice.router",
-    "app.mneme.routers.analysis",
+    "app.mneme.domains.analysis.router",
     "app.mneme.domains.profile.router",
     "app.mneme.domains.companion.router",
-    "app.mneme.routers.tasks",
+    "app.mneme.domains.tasks.router",
     "app.mneme.domains.graph.router",
 ]
 

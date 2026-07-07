@@ -9,7 +9,7 @@ from app.mneme.conf.logging import app_logger, log_event
 from app.mneme.infra.circuit_breaker import before_call, record_failure, record_success
 from app.mneme.infra.retry import retry_async
 from app.mneme.schemas.chat import EvidenceAnswerDraft, EvidenceCitationDraft, QueryRouteDecision
-from app.mneme.services.citation_validation_service import apply_citation_confidence_policy, validate_citation_drafts
+from app.mneme.domains.retrieval.citation_validation import apply_citation_confidence_policy, validate_citation_drafts
 from app.mneme.domains.retrieval.context_service import build_query_context
 from app.mneme.domains.retrieval.debug import build_answer_debug, build_non_retrieval_debug
 from app.mneme.domains.retrieval.query_router import route_query

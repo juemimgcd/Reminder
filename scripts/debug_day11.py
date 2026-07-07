@@ -9,7 +9,7 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(errors="replace")
 
 from app.mneme.schemas.eval import EvalCase, EvalDataset, EvalPrediction
-from app.mneme.services.eval_service import build_eval_run
+from app.mneme.domains.eval.service import build_eval_run
 
 
 def build_debug_packet(*, final_chunk_ids: list[str]) -> dict:

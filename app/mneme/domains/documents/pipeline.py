@@ -10,7 +10,7 @@ from app.mneme.crud.document import update_document_status
 from app.mneme.models.document import Document
 from app.mneme.schemas.document import DocumentIndexPipelineResult
 from app.mneme.domains.memory.service import rebuild_memory_entries_for_document
-from app.mneme.services.outbox_service import (
+from app.mneme.domains.tasks.outbox import (
     enqueue_document_graph_sync_event,
     enqueue_document_vector_reindex_event,
     process_outbox_event_by_id,

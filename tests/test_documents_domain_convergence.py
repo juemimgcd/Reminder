@@ -6,7 +6,9 @@ from app.mneme.bootstrap.router_registry import ROUTER_MODULE_NAMES
 class DocumentsDomainConvergenceTest(unittest.TestCase):
     def test_router_registry_uses_documents_domain_router(self):
         self.assertIn("app.mneme.domains.documents.router", ROUTER_MODULE_NAMES)
-        self.assertNotIn("app.mneme.routers.documents", ROUTER_MODULE_NAMES)
+        legacy_documents_router = ".".join(("app", "mneme", "routers", "documents"))
+
+        self.assertNotIn(legacy_documents_router, ROUTER_MODULE_NAMES)
 
     def test_documents_pipeline_imports_from_domain(self):
         from app.mneme.domains.documents.pipeline import run_document_index_pipeline

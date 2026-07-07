@@ -3,7 +3,7 @@ from fastapi import APIRouter
 from app.mneme.schemas.graph_admin import Neo4jHealthData
 from app.mneme.schemas.production import ProductionReadinessReportData
 from app.mneme.domains.graph.admin import get_neo4j_health_status
-from app.mneme.services.production_readiness_service import build_production_readiness_report
+from app.mneme.domains.health.readiness import build_production_readiness_report
 from app.mneme.utils.response import success_response
 
 router = APIRouter(prefix="/health", tags=["health"])

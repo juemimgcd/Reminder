@@ -10,7 +10,7 @@ if str(PROJECT_ROOT) not in sys.path:
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(errors="replace")
 
-from app.mneme.services.analytics_service import build_analytics_report_from_snapshots
+from app.mneme.domains.analysis.service import build_analytics_report_from_snapshots
 
 
 def item(**kwargs):

@@ -10,7 +10,7 @@ if str(PROJECT_ROOT) not in sys.path:
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(errors="replace")
 
-from app.mneme.services.outbox_service import (
+from app.mneme.domains.tasks.outbox import (
     BACKEND_MILVUS,
     BACKEND_NEO4J,
     EVENT_DOCUMENT_GRAPH_SYNC,

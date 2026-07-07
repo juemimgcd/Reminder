@@ -7,7 +7,7 @@ from app.mneme.crud.task_record import get_task_record_by_id
 from app.mneme.infra.celery_app import celery_app
 from app.mneme.models.document import Document
 from app.mneme.domains.documents.pipeline import run_document_index_pipeline
-from app.mneme.services.task_state_service import CANCELLED, FAILED, SUCCEEDED, transition_task_status
+from app.mneme.domains.tasks.state import CANCELLED, FAILED, SUCCEEDED, transition_task_status
 from app.mneme.utils.exceptions import BusinessException
 
 

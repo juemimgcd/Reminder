@@ -15,9 +15,9 @@ from app.mneme.infra.rate_limit import enforce_fixed_window_rate_limit
 from app.mneme.infra.task_queue import enqueue_index_document_task
 from app.mneme.models.user import User
 from app.mneme.schemas.document import DocumentDeleteData, DocumentListData, DocumentListItem, DocumentIndexTaskData, DocumentUploadData
-from app.mneme.services.document_service import submit_document_index_task
+from app.mneme.domains.documents.service import submit_document_index_task
+from app.mneme.domains.documents.resources import delete_document_resources
 from app.mneme.domains.graph.projection import sync_document_projection
-from app.mneme.services.resource_service import delete_document_resources
 from app.mneme.utils.auth import get_current_user
 from app.mneme.utils.exceptions import BusinessException
 from app.mneme.utils.response import success_response
