@@ -7,7 +7,7 @@ from app.mneme.crud.knowledge_base import get_knowledge_base_by_id
 from app.mneme.models.user import User
 from app.mneme.schemas.profile_evidence import EvidenceProfileData
 from app.mneme.schemas.profile import PersonalProfileResult
-from app.mneme.services.insight_service import build_evidence_profile_for_knowledge_base, build_profile_for_knowledge_base
+from app.mneme.domains.profile.insight import build_evidence_profile_for_knowledge_base, build_profile_for_knowledge_base
 from app.mneme.utils.auth import get_current_user
 from app.mneme.utils.response import success_response
 

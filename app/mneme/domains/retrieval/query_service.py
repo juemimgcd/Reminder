@@ -13,7 +13,7 @@ from app.mneme.services.citation_validation_service import apply_citation_confid
 from app.mneme.domains.retrieval.context_service import build_query_context
 from app.mneme.domains.retrieval.debug import build_answer_debug, build_non_retrieval_debug
 from app.mneme.domains.retrieval.query_router import route_query
-from app.mneme.services.insight_service import build_growth_for_knowledge_base, build_profile_for_knowledge_base
+from app.mneme.domains.profile.insight import build_growth_for_knowledge_base, build_profile_for_knowledge_base
 from app.mneme.utils.prompt_builder import get_evidence_rag_prompt, get_general_chat_prompt
 
 

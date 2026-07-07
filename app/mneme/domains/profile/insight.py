@@ -4,8 +4,8 @@ from app.mneme.crud.memory_entry import list_memory_entries_by_knowledge_base_id
 from app.mneme.services.advice_service import build_growth_advice
 from app.mneme.services.growth_service import build_growth_report
 from app.mneme.domains.memory.service import build_memory_library, serialize_memory_entries
-from app.mneme.services.profile_service import build_personal_profile
-from app.mneme.services.profile_tool_service import build_evidence_profile_from_entries
+from app.mneme.domains.profile.service import build_personal_profile
+from app.mneme.domains.profile.tools import build_evidence_profile_from_entries
 
 
 def empty_profile_result(*, knowledge_base_id: str) -> dict:

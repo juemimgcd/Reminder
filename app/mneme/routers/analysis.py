@@ -8,7 +8,7 @@ from app.mneme.models.user import User
 from app.mneme.schemas.analytics import KnowledgeBaseAnalyticsReportData
 from app.mneme.schemas.growth_report import GrowthReportResult
 from app.mneme.services.analytics_service import build_knowledge_base_analytics_report
-from app.mneme.services.insight_service import build_growth_for_knowledge_base
+from app.mneme.domains.profile.insight import build_growth_for_knowledge_base
 from app.mneme.utils.auth import get_current_user
 from app.mneme.utils.response import success_response
 

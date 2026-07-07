@@ -1,7 +1,7 @@
 import asyncio
 from datetime import datetime
 
-from app.mneme.services.profile_service import build_personal_profile
+from app.mneme.domains.profile.service import build_personal_profile
 
 
 memory_library = {

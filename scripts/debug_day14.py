@@ -10,7 +10,7 @@ if str(PROJECT_ROOT) not in sys.path:
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(errors="replace")
 
-from app.mneme.services.profile_tool_service import build_evidence_profile_from_entries
+from app.mneme.domains.profile.tools import build_evidence_profile_from_entries
 
 
 def build_entry(
