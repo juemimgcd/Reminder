@@ -307,14 +307,13 @@ function moveGraphNodeDrag(event: PointerEvent) {
 
 function endGraphNodeDrag() {
   if (!draggingGraphNode.value) {
-    hideGraphDocumentPreview();
     return;
   }
   draggingGraphNode.value.fx = null;
   draggingGraphNode.value.fy = null;
   draggingGraphNode.value = null;
   graphPressStartPoint.value = null;
-  hideGraphDocumentPreview();
+  clearGraphDocumentPreviewTimer();
   graphSimulation?.alphaTarget(0);
 }
 </script>
