@@ -72,7 +72,7 @@ cp deploy/env/backend.production.example .env
 - Compose 内部会自动使用 `postgres`、`redis`、`milvus`、`neo4j` 这些容器名互连，不需要你手工改容器间地址。
 - 当前生产模板默认把 `MILVUS_MEMORY_LIMIT` 收敛到 `2g`，更适合中小规格机器。
 - 当前模板已经预留 `RERANKER_*` 和 `RETRIEVAL_*` 参数，可用来打开 `BAAI/bge-reranker-v2-m3` 和放大召回候选池。
-- `LLM_PROVIDER` 支持 `qwen`、`mimo`、`kimi`、`glm`、`deepseek`。可以配置对应的 provider key，也可以统一使用 `LLM_API_KEY`；`LLM_BASE_URL` 和 `LLM_MODEL_NAME` 留空时会使用 provider 默认值。
+- `LLM_PROVIDER` 支持 `qwen`、`mimo`、`kimi`、`glm`、`deepseek`，生产模板默认是 `deepseek`。可以配置对应的 provider key，也可以统一使用 `LLM_API_KEY`；`LLM_BASE_URL` 和 `LLM_MODEL_NAME` 留空时会使用 provider 默认值。
 
 ## 5. 首次启动
 
