@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { strict as assert } from 'node:assert';
 
-const appSource = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
+const appSource = readFileSync(new URL('../src/App.vue', import.meta.url), 'utf8');
 const previewApiSource = readFileSync(new URL('../src/lib/previewApi.ts', import.meta.url), 'utf8');
 
 for (const testId of [
@@ -11,12 +11,12 @@ for (const testId of [
   'data-testid="sanctuary-active-view"',
   'data-testid="obsidian-editor-pane"',
 ]) {
-  assert.ok(appSource.includes(testId), `Expected App.tsx to expose ${testId}`);
+  assert.ok(appSource.includes(testId), `Expected App.vue to expose ${testId}`);
 }
 
 assert.ok(
-  appSource.includes('lg:grid-cols-[256px_minmax(0,1fr)]'),
-  'Expected the desktop workbench grid to match the 256px Stitch Sanctuary sidebar',
+  appSource.includes('grid-cols-[256px_minmax(0,1fr)]'),
+  'Expected the workbench grid to match the 256px Stitch Sanctuary sidebar',
 );
 
 for (const navLabel of ['Dashboard', 'Notes', 'Graph', 'AI Chat', 'Settings']) {
@@ -46,16 +46,16 @@ for (const stitchLayoutHook of [
   'data-testid="stitch-settings-layout"',
   'data-testid="stitch-graph-canvas"',
 ]) {
-  assert.ok(appSource.includes(stitchLayoutHook), `Expected App.tsx to expose ${stitchLayoutHook}`);
+  assert.ok(appSource.includes(stitchLayoutHook), `Expected App.vue to expose ${stitchLayoutHook}`);
 }
 
 assert.ok(
-  appSource.includes('view === "graph" ? "p-0"'),
+  appSource.includes("workspace.view.value === 'graph'") && appSource.includes("'p-0'"),
   'Expected the Graph view to remove the ordinary page padding and behave like the Stitch full-canvas page',
 );
 
 assert.ok(
-  appSource.includes('view !== "graph" && view !== "notes" && view !== "ai"'),
+  appSource.includes("workspace.view.value !== 'graph' && workspace.view.value !== 'notes' && workspace.view.value !== 'ai'"),
   'Expected the generic page heading to be skipped for Stitch-specialized views',
 );
 
@@ -82,7 +82,7 @@ for (const layoutHook of [
   'data-testid="insights-function-grid"',
   'testId="insights-output-workspace"',
 ]) {
-  assert.ok(appSource.includes(layoutHook), `Expected App.tsx to separate controls and outputs with ${layoutHook}`);
+  assert.ok(appSource.includes(layoutHook), `Expected App.vue to separate controls and outputs with ${layoutHook}`);
 }
 
 assert.ok(
@@ -119,6 +119,7 @@ for (const sidebarHook of [
 }
 
 assert.ok(
-  appSource.includes('type WorkspaceCommandTab') && appSource.includes('setWorkspaceCommandTab'),
-  'Expected Workspace Commands to behave like shadcn Tabs instead of showing every form at once',
+  readFileSync(new URL('../src/composables/useMnemeWorkspace.ts', import.meta.url), 'utf8').includes('type WorkspaceCommandTab') &&
+    appSource.includes('workspace.workspaceCommandTab.value'),
+  'Expected Workspace Commands to behave like tabs instead of showing every form at once',
 );

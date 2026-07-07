@@ -31,12 +31,12 @@ assert.ok(!('esbuild@0.27.7' in (packageJson.allowScripts ?? {})), 'Expected sta
 assert.equal(packageJson.allowScripts?.['esbuild@0.25.12'], true, 'Expected the installed esbuild version install script to stay allowed');
 
 for (const buildScriptText of [
-  "'@tailwindcss/node'",
-  "'node_modules', '@esbuild', 'win32-x64', 'esbuild.exe'",
+  "'node_modules', 'vite', 'bin', 'vite.js'",
   "stdio: 'inherit'",
-  '--loader:.css=empty',
+  "'--configLoader'",
+  "'native'",
 ]) {
-  assert.ok(buildScriptSource.includes(buildScriptText), `Expected build script to keep the Windows-safe build path: ${buildScriptText}`);
+  assert.ok(buildScriptSource.includes(buildScriptText), `Expected build script to keep the Vue/Vite production build path: ${buildScriptText}`);
 }
 
 for (const diagnosticText of [
