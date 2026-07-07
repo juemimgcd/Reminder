@@ -7,56 +7,39 @@ SOURCE_ROOTS = [
     ROOT / "app" / "mneme",
     ROOT / "alembic",
 ]
-SOURCE_FILES = [ROOT / "main.py"]
+SOURCE_FILES = [
+    ROOT / "main.py",
+    ROOT / "README.md",
+]
 
 MOJIBAKE_FRAGMENTS = [
     "\ufffd",
     "\u951f",
-    "\u95bf",
-    "\u9435",
-    "\u6d93",
-    "\u6d60",
-    "\u6d63",
-    "\u677c",
-    "\u6753",
-    "\u934f",
-    "\u9352",
-    "\u93c2",
-    "\u7d31",
-    "\u7f02",
-    "\u95c1",
-    "\u95bb",
-    "\u942e",
-    "\u941e",
-    "\u6d34",
+    "\u920e",
+    "\u9241",
+    "\u9242",
+    "\u95b3",
     "\u6d93\u20ac",
     "\u6d63\u7280",
-    "\u7487",
-    "\u95b0",
-    "\u699b",
-    "\u9477",
-    "\u9359",
-    "\u5e47",
-    "\u6fb6",
-    "\u74d2",
-    "\u6b35",
-    "\u7a0b",
-    "\u95c6",
-    "\u95c3",
+    "\u95c1\u95c2",
+    "\u942e\u95b4",
 ]
-MOJIBAKE_PATTERN = re.compile("|".join(re.escape(fragment) for fragment in MOJIBAKE_FRAGMENTS))
+MOJIBAKE_PATTERN = re.compile(
+    "|".join(re.escape(fragment) for fragment in MOJIBAKE_FRAGMENTS)
+    + r"|[\ue000-\uf8ff]"
+)
 
 
-def iter_source_files():
+def iter_text_files():
     for root in SOURCE_ROOTS:
         yield from root.rglob("*.py")
     yield from SOURCE_FILES
 
 
-def test_python_sources_do_not_contain_common_chinese_mojibake():
+def test_text_sources_do_not_contain_common_chinese_mojibake():
     offenders: list[str] = []
 
-    for path in iter_source_files():
+    for path in iter_text_files():
         text = path.read_text(encoding="utf-8")
         for line_number, line in enumerate(text.splitlines(), start=1):
             if MOJIBAKE_PATTERN.search(line):
@@ -64,3 +47,10 @@ def test_python_sources_do_not_contain_common_chinese_mojibake():
                 offenders.append(f"{relative}:{line_number}: {line.strip()}")
 
     assert offenders == []
+
+
+def test_readme_does_not_contain_empty_fenced_code_blocks():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    empty_fence_pattern = re.compile(r"```[^\n]*\n\s*```")
+
+    assert empty_fence_pattern.search(readme) is None
