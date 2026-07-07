@@ -1,4 +1,5 @@
 from app.mneme.models.base import Base
+from app.mneme.models.chat_message import ChatMessage
 from app.mneme.models.chat_session import ChatSession
 from app.mneme.models.chunk import Chunk
 from app.mneme.models.document import Document
@@ -15,6 +16,7 @@ __all__ = [
     "Document",
     "Chunk",
     "ChatSession",
+    "ChatMessage",
     "TaskRecord",
     "MemoryEntry",
     "OutboxEvent",
