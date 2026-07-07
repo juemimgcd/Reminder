@@ -493,8 +493,8 @@ EMBEDDING_LOCAL_FILES_ONLY=true
 
 - PostgreSQL
 - Redis
-- Milvus
 - Neo4j
+- Milvus（只在需要文档向量索引和 RAG 检索时启用）
 
 如果只是在本地调试纯接口流程，也至少要确保 `DATABASE_URL` 可用。
 
@@ -572,15 +572,32 @@ Copy-Item .env-example .env
 docker compose up -d --build
 ```
 
-这套 Compose 现在会启动：
+默认 `docker compose up -d --build` 会启动轻量运行栈：
 
 - `app`：FastAPI 应用，内嵌 Vue 前端页面
 - `migrate`：数据库迁移任务
 - `worker`：Celery 文档索引 worker
 - `redis`：Celery broker / result backend
 - `postgres`：业务数据库
-- `milvus`：向量数据库
 - `neo4j`：图数据库
+
+Milvus standalone 不再默认启动，因为它会额外拉起 `milvus + etcd + minio`，磁盘和内存成本都明显更高。需要完整文档索引和向量检索时再启用：
+
+```bash
+COMPOSE_PROFILES=vector docker compose up -d --build
+```
+
+或者在 `.env` 里设置：
+
+```env
+COMPOSE_PROFILES=vector
+WAIT_FOR_HOSTS=postgres:5432,redis:6379,neo4j:7687,milvus:19530
+WAIT_FOR_URLS=http://milvus:9091/healthz
+```
+
+这时 Compose 会额外启动：
+
+- `milvus`：向量数据库
 - `etcd / minio`：Milvus standalone 依赖
 
 ### 当前 Docker 架构
@@ -612,11 +629,21 @@ docker compose up -d --build
 当前 Compose 默认只把应用端口公开到宿主机，内部基础设施端口全部绑定到 `127.0.0.1`：
 
 - `app`：`${APP_HOST_PORT:-127.0.0.1:8000}`
-- `postgres / redis / minio / milvus / neo4j`：仅宿主机本地可访问
+- `postgres / redis / neo4j`：仅宿主机本地可访问
+- `minio / milvus`：只有启用 `vector` profile 时才会启动，也仅宿主机本地可访问
 
 同时，后端现在会信任来自 `FORWARDED_ALLOW_IPS` 的代理头，并可通过 `TRUSTED_HOSTS` 限制允许访问的 Host，适合放在 Nginx 后面统一处理 HTTPS 和域名入口。
 
 这样更适合直接上云服务器，避免把数据库、Redis、Milvus、Neo4j 直接暴露到公网。
+
+如果你已经启动过旧版 Compose，旧的 Milvus/MinIO/etcd 数据卷不会因为升级自动删除。确认不再需要历史向量索引后，可以停止服务并手动清理对应卷：
+
+```bash
+docker compose down
+docker volume rm reminder_milvus_data reminder_minio_data reminder_etcd_data
+```
+
+这会删除已有向量索引数据；以后需要向量检索时要重新索引文档。
 
 ### 常用运维命令
 

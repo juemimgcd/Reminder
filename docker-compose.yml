@@ -17,7 +17,7 @@ x-app-base: &app-base
     DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-123456}@postgres:5432/${POSTGRES_DB:-agentic}
     CELERY_BROKER_URL: redis://redis:6379/0
     CELERY_RESULT_BACKEND: redis://redis:6379/1
-    MILVUS_URI: http://milvus:19530
+    MILVUS_URI: ${MILVUS_URI:-http://milvus:19530}
     MILVUS_DB_NAME: ${MILVUS_DB_NAME:-default}
     GRAPH_BACKEND: ${GRAPH_BACKEND:-neo4j}
     NEO4J_ENABLED: ${NEO4J_ENABLED:-true}
@@ -27,8 +27,8 @@ x-app-base: &app-base
     NEO4J_DATABASE: ${NEO4J_DATABASE:-neo4j}
     NEO4J_MAX_CONNECTION_POOL_SIZE: ${NEO4J_MAX_CONNECTION_POOL_SIZE:-20}
     PYTHONPATH: /app
-    WAIT_FOR_HOSTS: postgres:5432,redis:6379,milvus:19530,neo4j:7687
-    WAIT_FOR_URLS: http://milvus:9091/healthz
+    WAIT_FOR_HOSTS: ${WAIT_FOR_HOSTS:-postgres:5432,redis:6379,neo4j:7687}
+    WAIT_FOR_URLS: ${WAIT_FOR_URLS:-}
     WAIT_FOR_TIMEOUT_SECONDS: ${WAIT_FOR_TIMEOUT_SECONDS:-180}
   volumes:
     - ./storage:/app/storage
@@ -60,6 +60,7 @@ services:
       retries: 10
 
   etcd:
+    profiles: ["vector"]
     image: quay.io/coreos/etcd:v3.5.18
     container_name: reminder-etcd
     restart: unless-stopped
@@ -83,6 +84,7 @@ services:
       retries: 10
 
   minio:
+    profiles: ["vector"]
     image: minio/minio:RELEASE.2025-02-28T09-55-16Z
     container_name: reminder-minio
     restart: unless-stopped
@@ -114,6 +116,7 @@ services:
       retries: 10
 
   milvus:
+    profiles: ["vector"]
     image: milvusdb/milvus:v2.5.16
     container_name: reminder-milvus
     restart: unless-stopped
@@ -164,8 +167,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      milvus:
-        condition: service_started
       neo4j:
         condition: service_healthy
     logging: *default-logging
