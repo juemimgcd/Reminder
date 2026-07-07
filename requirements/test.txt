@@ -1,0 +1,3 @@
+# Lightweight dependencies for unit and contract tests; excludes model/vector runtimes.
+-r base.txt
+pytest==9.1.1

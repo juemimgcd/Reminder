@@ -1,12 +1,10 @@
 import asyncio
 from pathlib import Path
+from typing import Any
 
 from app.mneme.conf.config import settings
 from app.mneme.conf.logging import app_logger
 from app.mneme.infra.object_cache import get_cached_object, set_cached_object
-
-from sentence_transformers import CrossEncoder
-
 
 WEIGHT_FILE_PATTERNS = (
     "model.safetensors",
@@ -84,9 +82,11 @@ def resolve_reranker_source() -> tuple[str, bool]:
     return configured_model_name, False
 
 
-def get_reranker() -> CrossEncoder | None:
+def get_reranker() -> Any | None:
     if not settings.RERANKER_ENABLED:
         return None
+
+    from sentence_transformers import CrossEncoder
 
     cached = get_cached_object("reranker_client")
     if isinstance(cached, CrossEncoder):

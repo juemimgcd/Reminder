@@ -18,9 +18,6 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# 鍏抽敭淇锛?
-# 涓嶅啀浣跨敤 alembic.ini 閲岀殑妯℃澘榛樿鍊?driver://user:pass@localhost/dbname锛?
-# 鑰屾槸缁熶竴浣跨敤椤圭洰閰嶇疆閲岀殑鐪熷疄鏁版嵁搴撳湴鍧€銆?
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 # add your model's MetaData object here

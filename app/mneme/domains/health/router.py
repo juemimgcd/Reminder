@@ -11,8 +11,6 @@ router = APIRouter(prefix="/health", tags=["health"])
 
 @router.get("")
 def health_check():
-    # 鍋ュ悍妫€鏌ユ帴鍙ｄ竴鑸笉鍋氬鏉傞€昏緫锛屽畠鐨勪富瑕佷换鍔℃槸鍛婅瘔浣狅細
-    # 鏈嶅姟鏄惁鍚姩浜嗭紝璺敱鏄惁娉ㄥ唽鎴愬姛浜嗐€?
     return success_response(
         data={"service": "agentic-rag", "status": "running"},
         message="service is healthy",

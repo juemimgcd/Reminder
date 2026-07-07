@@ -18,11 +18,6 @@ async def run_memory_extract_pipeline(
         knowledge_base_id: str,
         document_id: str | None = None,
 ) -> MemoryExtractPipelineResult:
-    # 浣犺鍋氱殑浜嬶細
-    # 1. 鍏堜粠 chunk docs 鎶?entries
-    # 2. 鍋氱涓€鐗堝幓閲?/ 褰掑苟
-    # 3. 璋?create_memory_entries(...) 鍏ュ簱
-    # 4. 杩斿洖缁撴瀯鍖栫粺璁＄粨鏋?
     app_logger.bind(module="memory_pipeline").info(
         f"memory extract pipeline start knowledge_base_id={knowledge_base_id} "
         f"document_id={document_id} chunk_count={len(chunk_docs)}"

@@ -67,7 +67,7 @@ def resolve_task_transition(*, current_status: str, requested_status: str) -> tu
     allowed_statuses = ALLOWED_TASK_TRANSITIONS.get(normalized_current, set())
     if normalized_requested not in allowed_statuses:
         raise BusinessException(
-            message=f"闈炴硶鐘舵€佽縼绉? {normalized_current} -> {normalized_requested}",
+            message=f"illegal task status transition: {normalized_current} -> {normalized_requested}",
             code=4009,
             status_code=400,
         )

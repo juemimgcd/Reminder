@@ -1,4 +1,4 @@
-from langchain_openai import ChatOpenAI
+from typing import Any
 
 from app.mneme.conf.config import settings
 
@@ -67,5 +67,7 @@ def build_llm_kwargs(config=settings) -> dict:
     return kwargs
 
 
-def get_llm() -> ChatOpenAI:
+def get_llm() -> Any:
+    from langchain_openai import ChatOpenAI
+
     return ChatOpenAI(**build_llm_kwargs(settings))
