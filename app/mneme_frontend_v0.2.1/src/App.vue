@@ -90,7 +90,10 @@ const graphFileRailCollapsed = ref(false);
 const graphSimulationNodes = ref<ForceGraphNode[]>([]);
 const graphSimulationLinks = ref<ForceGraphLink[]>([]);
 const draggingGraphNode = ref<ForceGraphNode | null>(null);
+const graphDocumentPreviewNode = ref<ForceGraphNode | null>(null);
+const graphPressStartPoint = ref<{ x: number; y: number } | null>(null);
 let graphSimulation: Simulation<ForceGraphNode, ForceGraphLink> | null = null;
+let graphDocumentPreviewTimer: number | null = null;
 
 const currentViewItem = computed(() => VIEW_ITEMS.find((item) => item.id === workspace.view.value) ?? VIEW_ITEMS[0]);
 const graphNodePositions = computed(() => {
@@ -139,6 +142,7 @@ watch(
   () => workspace.graphData.value,
   (graph) => {
     graphSimulation?.stop();
+    hideGraphDocumentPreview();
 
     if (!graph) {
       graphSimulationNodes.value = [];
@@ -189,6 +193,7 @@ watch(
 
 onBeforeUnmount(() => {
   graphSimulation?.stop();
+  clearGraphDocumentPreviewTimer();
 });
 
 function formatDate(value?: string | null) {
@@ -248,15 +253,37 @@ function graphPointerPoint(event: PointerEvent) {
   return point.matrixTransform(matrix.inverse());
 }
 
+function clearGraphDocumentPreviewTimer() {
+  if (!graphDocumentPreviewTimer) {
+    return;
+  }
+  window.clearTimeout(graphDocumentPreviewTimer);
+  graphDocumentPreviewTimer = null;
+}
+
+function showGraphDocumentPreview(node: ForceGraphNode) {
+  graphDocumentPreviewNode.value = node;
+  graphDocumentPreviewTimer = null;
+}
+
+function hideGraphDocumentPreview() {
+  clearGraphDocumentPreviewTimer();
+  graphDocumentPreviewNode.value = null;
+}
+
 function startGraphNodeDrag(node: ForceGraphNode, event: PointerEvent) {
+  hideGraphDocumentPreview();
   draggingGraphNode.value = node;
   const point = graphPointerPoint(event);
+  graphPressStartPoint.value = { x: point.x, y: point.y };
   node.fx = point.x;
   node.fy = point.y;
   node.x = point.x;
   node.y = point.y;
+  graphDocumentPreviewTimer = window.setTimeout(() => showGraphDocumentPreview(node), 520);
   graphSimulation?.alphaTarget(0.28).restart();
   (event.currentTarget as Element).setPointerCapture?.(event.pointerId);
+  event.preventDefault();
 }
 
 function moveGraphNodeDrag(event: PointerEvent) {
@@ -264,6 +291,13 @@ function moveGraphNodeDrag(event: PointerEvent) {
     return;
   }
   const point = graphPointerPoint(event);
+  if (graphPressStartPoint.value) {
+    const deltaX = point.x - graphPressStartPoint.value.x;
+    const deltaY = point.y - graphPressStartPoint.value.y;
+    if (Math.hypot(deltaX, deltaY) > 8 && graphDocumentPreviewTimer) {
+      clearGraphDocumentPreviewTimer();
+    }
+  }
   draggingGraphNode.value.fx = point.x;
   draggingGraphNode.value.fy = point.y;
   draggingGraphNode.value.x = point.x;
@@ -273,11 +307,14 @@ function moveGraphNodeDrag(event: PointerEvent) {
 
 function endGraphNodeDrag() {
   if (!draggingGraphNode.value) {
+    hideGraphDocumentPreview();
     return;
   }
   draggingGraphNode.value.fx = null;
   draggingGraphNode.value.fy = null;
   draggingGraphNode.value = null;
+  graphPressStartPoint.value = null;
+  hideGraphDocumentPreview();
   graphSimulation?.alphaTarget(0);
 }
 </script>
@@ -596,7 +633,7 @@ function endGraphNodeDrag() {
               <div
                 data-testid="graph-function-grid"
                 class="grid h-screen min-h-screen grid-cols-1 transition-[grid-template-columns] duration-200"
-                :class="graphFileRailCollapsed ? 'xl:grid-cols-[0_minmax(0,1fr)_376px]' : 'xl:grid-cols-[320px_minmax(0,1fr)_376px]'"
+                :class="graphFileRailCollapsed ? 'xl:grid-cols-[0_minmax(0,1fr)]' : 'xl:grid-cols-[320px_minmax(0,1fr)]'"
               >
                 <aside
                   data-testid="graph-file-rail"
@@ -721,6 +758,52 @@ function endGraphNodeDrag() {
                     <span>Long press to preview</span>
                   </div>
 
+                  <aside
+                    v-if="graphDocumentPreviewNode"
+                    data-testid="graph-document-preview-panel"
+                    class="stitch-panel absolute right-5 top-20 z-40 max-h-[calc(100%-112px)] w-[376px] max-w-[calc(100%-40px)] overflow-auto border-l border-outline-variant/30 shadow-2xl"
+                  >
+                    <div class="flex h-[68px] items-center justify-between border-b border-outline-variant/20 px-5">
+                      <p class="font-semibold">Properties</p>
+                      <div class="flex gap-5 text-text-muted">
+                        <Pencil class="size-5" />
+                        <button class="grid size-5 place-items-center" title="Close preview" @click="hideGraphDocumentPreview">
+                          <X class="size-5" />
+                        </button>
+                      </div>
+                    </div>
+                    <div class="p-5">
+                      <h2 class="text-3xl font-semibold">{{ graphDocumentPreviewNode.label }}</h2>
+                      <div class="mt-4 flex flex-wrap gap-2">
+                        <span class="premium-tag rounded px-2 py-1 font-mono text-xs text-on-surface-variant">#{{ graphDocumentPreviewNode.nodeType }}</span>
+                        <span class="premium-tag rounded px-2 py-1 font-mono text-xs text-on-surface-variant">#graph</span>
+                        <span v-if="graphDocumentPreviewNode.depth === 0" class="premium-tag rounded px-2 py-1 font-mono text-xs text-on-surface-variant">#core</span>
+                        <span class="premium-tag rounded border-dashed px-2 py-1 font-mono text-xs text-on-surface-variant">+ Add tag</span>
+                      </div>
+                      <div class="mt-8">
+                        <p class="mb-4 font-mono text-xs uppercase tracking-wide text-text-muted">Summary</p>
+                        <p class="text-base leading-7 text-on-surface-variant">
+                          {{ graphDocumentPreviewNode.label }} is linked inside the active knowledge graph. Hold the node to preview its source document and release to return to graph navigation.
+                        </p>
+                        <a class="mt-4 inline-flex items-center gap-2 text-primary" href="#">Read full note <ChevronDown class="size-4 -rotate-90" /></a>
+                      </div>
+                      <div class="mt-9 grid gap-4 text-sm">
+                        <p class="font-mono text-xs uppercase tracking-wide text-text-muted">Metadata</p>
+                        <div class="flex justify-between"><span class="text-text-muted">Depth</span><span>{{ graphDocumentPreviewNode.depth }}</span></div>
+                        <div class="flex justify-between"><span class="text-text-muted">Type</span><span>{{ graphDocumentPreviewNode.nodeType }}</span></div>
+                        <div class="flex justify-between"><span class="text-text-muted">Connections</span><span>{{ workspace.graphData.value?.edges.length ?? 0 }} nodes</span></div>
+                        <div class="flex justify-between"><span class="text-text-muted">Status</span><span class="text-emerald-300">Evergreen</span></div>
+                      </div>
+                      <div class="mt-9">
+                        <p class="mb-4 font-mono text-xs uppercase tracking-wide text-text-muted">Backlinks (5)</p>
+                        <article class="border border-outline-variant/30 bg-surface-container-low p-3">
+                          <p class="font-semibold">Deep Learning</p>
+                          <p class="mt-1 text-sm text-text-muted">...subset of machine learning based on artificial neural networks.</p>
+                        </article>
+                      </div>
+                    </div>
+                  </aside>
+
                   <button
                     data-testid="graph-file-rail-toggle"
                     class="glass-panel absolute top-1/2 z-50 grid size-12 place-items-center rounded-full text-text-muted"
@@ -738,44 +821,6 @@ function endGraphNodeDrag() {
                     <button class="premium-action-btn grid size-12 place-items-center rounded-md"><Play class="size-5" /></button>
                   </div>
                 </section>
-
-                <aside class="stitch-panel border-l border-outline-variant/30">
-                  <div class="flex h-[68px] items-center justify-between border-b border-outline-variant/20 px-5">
-                    <p class="font-semibold">Properties</p>
-                    <div class="flex gap-5 text-text-muted">
-                      <Pencil class="size-5" />
-                      <X class="size-5" />
-                    </div>
-                  </div>
-                  <div class="p-5">
-                    <h2 class="text-3xl font-semibold">Neural Networks</h2>
-                    <div class="mt-4 flex flex-wrap gap-2">
-                      <span class="premium-tag rounded px-2 py-1 font-mono text-xs text-on-surface-variant">#ai</span>
-                      <span class="premium-tag rounded px-2 py-1 font-mono text-xs text-on-surface-variant">#machine-learning</span>
-                      <span class="premium-tag rounded px-2 py-1 font-mono text-xs text-on-surface-variant">#core</span>
-                      <span class="premium-tag rounded border-dashed px-2 py-1 font-mono text-xs text-on-surface-variant">+ Add tag</span>
-                    </div>
-                    <div class="mt-8">
-                      <p class="mb-4 font-mono text-xs uppercase tracking-wide text-text-muted">Summary</p>
-                      <p class="text-base leading-7 text-on-surface-variant">A computing system inspired by the biological neural networks that constitute animal brains. Neural networks are composed of node layers, containing an input layer, one or more hidden layers, and an output layer.</p>
-                      <a class="mt-4 inline-flex items-center gap-2 text-primary" href="#">Read full note <ChevronDown class="size-4 -rotate-90" /></a>
-                    </div>
-                    <div class="mt-9 grid gap-4 text-sm">
-                      <p class="font-mono text-xs uppercase tracking-wide text-text-muted">Metadata</p>
-                      <div class="flex justify-between"><span class="text-text-muted">Created</span><span>Oct 12, 2023</span></div>
-                      <div class="flex justify-between"><span class="text-text-muted">Modified</span><span>2 days ago</span></div>
-                      <div class="flex justify-between"><span class="text-text-muted">Connections</span><span>{{ workspace.graphData.value?.edges.length ?? 8 }} nodes</span></div>
-                      <div class="flex justify-between"><span class="text-text-muted">Status</span><span class="text-emerald-300">Evergreen</span></div>
-                    </div>
-                    <div class="mt-9">
-                      <p class="mb-4 font-mono text-xs uppercase tracking-wide text-text-muted">Backlinks (5)</p>
-                      <article class="border border-outline-variant/30 bg-surface-container-low p-3">
-                        <p class="font-semibold">Deep Learning</p>
-                        <p class="mt-1 text-sm text-text-muted">...subset of machine learning based on artificial neural networks.</p>
-                      </article>
-                    </div>
-                  </div>
-                </aside>
               </div>
             </div>
 

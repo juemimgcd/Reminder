@@ -124,8 +124,8 @@ for (const graphReferenceText of [
 }
 
 assert.ok(
-  appSource.includes('xl:grid-cols-[320px_minmax(0,1fr)_376px]'),
-  'Expected Knowledge Graph to use the wider Stitch graph properties panel',
+  !appSource.includes('xl:grid-cols-[320px_minmax(0,1fr)_376px]'),
+  'Expected Knowledge Graph document preview to be summoned from the canvas, not pinned as a permanent third column',
 );
 
 for (const graphInteractionText of [
@@ -133,8 +133,12 @@ for (const graphInteractionText of [
   'forceManyBody',
   'forceLink',
   'graphFileRailCollapsed',
+  'graphDocumentPreviewNode',
+  'showGraphDocumentPreview',
+  'hideGraphDocumentPreview',
   'data-testid="graph-file-rail"',
   'data-testid="graph-file-rail-toggle"',
+  'data-testid="graph-document-preview-panel"',
   'data-testid="force-node"',
   '@pointerdown="startGraphNodeDrag',
   '@pointermove="moveGraphNodeDrag"',

@@ -61,3 +61,26 @@ test('knowledge graph file rail can collapse and expand from the canvas handle',
   await expect(rail).toBeVisible();
   await expect(toggle).toHaveAttribute('title', 'Collapse file list');
 });
+
+test('knowledge graph document panel appears only while long-pressing a node', async ({ page }) => {
+  await page.goto('/?preview=1');
+
+  await expect(page.getByText('Properties', { exact: true })).toBeHidden();
+
+  const node = page.getByTestId('force-node').first();
+  await expect(node).toBeVisible();
+  await node.scrollIntoViewIfNeeded();
+  const box = await node.boundingBox();
+  expect(box).not.toBeNull();
+
+  await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+  await page.mouse.down();
+  await page.waitForTimeout(650);
+
+  const panel = page.getByTestId('graph-document-preview-panel');
+  await expect(panel).toBeVisible();
+  await expect(panel).toContainText('Properties');
+
+  await page.mouse.up();
+  await expect(panel).toBeHidden();
+});
