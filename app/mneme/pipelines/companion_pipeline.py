@@ -2,7 +2,7 @@ from app.mneme.crud.memory_entry import list_memory_entries_by_user_id
 from app.mneme.conf.logging import app_logger
 from app.mneme.services.companion_service import build_companion_response
 from app.mneme.services.growth_service import build_growth_report
-from app.mneme.services.memory_service import build_memory_library
+from app.mneme.domains.memory.service import build_memory_library
 from app.mneme.services.profile_service import build_personal_profile
 from app.mneme.domains.retrieval.query_service import generate_rag_answer
 

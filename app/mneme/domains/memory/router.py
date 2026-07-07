@@ -12,8 +12,8 @@ from app.mneme.crud.memory_entry import (
 from app.mneme.models.user import User
 from app.mneme.schemas.memory_library import MemoryLibraryData, MemoryRebuildData
 from app.mneme.schemas.memory_governance import MemoryGovernanceData
-from app.mneme.services.memory_governance_service import build_memory_governance_view
-from app.mneme.services.memory_service import build_memory_library, rebuild_memory_entries_for_knowledge_base
+from app.mneme.domains.memory.governance import build_memory_governance_view
+from app.mneme.domains.memory.service import build_memory_library, rebuild_memory_entries_for_knowledge_base
 from app.mneme.utils.auth import get_current_user
 from app.mneme.utils.exceptions import BusinessException
 from app.mneme.utils.response import success_response

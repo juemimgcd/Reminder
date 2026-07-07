@@ -8,7 +8,7 @@ from app.mneme.crud.user import get_user_by_id
 from app.mneme.crud.memory_entry import create_memory_entries
 from app.mneme.schemas.memory_entry import MemoryExtractPipelineResult, MemoryEntryPayload
 from app.mneme.domains.graph.projection import sync_document_memory_projection
-from app.mneme.services.memory_service import extract_entries_from_chunks
+from app.mneme.domains.memory.service import extract_entries_from_chunks
 
 
 async def run_memory_extract_pipeline(

@@ -11,7 +11,7 @@ from app.mneme.schemas.profile_evidence import (
     ProfileToolCallItem,
     TopicTimelineItem,
 )
-from app.mneme.services.memory_governance_service import build_memory_governance_view
+from app.mneme.domains.memory.governance import build_memory_governance_view
 
 
 GOAL_MARKERS = (
