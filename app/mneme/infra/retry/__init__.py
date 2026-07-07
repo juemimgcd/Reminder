@@ -8,7 +8,6 @@ from app.mneme.conf.logging import log_event
 T = TypeVar("T")
 
 
-# 瀵瑰紓姝ヨ皟鐢ㄦ墽琛屽甫鍙仮澶嶉敊璇垽鏂殑鎸囨暟閫€閬块噸璇曘€?
 async def retry_async(
         func: Callable[[], Awaitable[T]],
         *,

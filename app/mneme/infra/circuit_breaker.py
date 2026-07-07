@@ -3,8 +3,6 @@ from time import time
 from app.mneme.conf.logging import log_event
 from app.mneme.utils.exceptions import BusinessException
 
-# 杩涚▼鍐呯啍鏂櫒鐘舵€佽〃锛屾寜渚濊禆鍚嶄繚瀛樺綋鍓?breaker 鐘舵€併€?
-# 缁撴瀯绀轰緥锛?
 # {
 #     "milvus": {
 #         "state": "open",
@@ -20,12 +18,7 @@ from app.mneme.utils.exceptions import BusinessException
 _BREAKER_STATE: dict[str, dict[str, float | int | str]] = {}
 
 
-# 鍦ㄧ湡姝ｈ皟鐢ㄥ閮ㄤ緷璧栧墠妫€鏌?breaker 鏄惁鍏佽鏀捐銆?
 def before_call(*, name: str, recovery_timeout_seconds: int) -> None:
-    # 浣犺鍋氱殑浜嬶細
-    # 1. 璇诲彇 breaker 鐘舵€?
-    # 2. 濡傛灉鏄?open 涓旇繕娌″埌鎭㈠鏃堕棿锛岀洿鎺ユ嫆缁?
-    # 3. 濡傛灉宸插埌鎭㈠鏃堕棿锛屽垏鎴?half_open
     curr = _BREAKER_STATE.get(name)
     if not curr:
         return
@@ -52,11 +45,7 @@ def before_call(*, name: str, recovery_timeout_seconds: int) -> None:
         log_event("circuit_breaker", "info", "breaker.half_open", name=name)
 
 
-# 鍦ㄥ閮ㄤ緷璧栬皟鐢ㄦ垚鍔熷悗閲嶇疆瀵瑰簲 breaker 鐘舵€併€?
 def record_success(*, name: str) -> None:
-    # 浣犺鍋氱殑浜嬶細
-    # 1. 鎴愬姛鍚庢竻闆跺け璐ヨ鏁?
-    # 2. 鐘舵€佸垏鍥?closed
     _BREAKER_STATE[name] = {
         "state": "closed",
         "failure_count": 0,
@@ -65,17 +54,12 @@ def record_success(*, name: str) -> None:
     log_event("circuit_breaker", "info", "breaker.closed", name=name)
 
 
-# 鍦ㄥ閮ㄤ緷璧栬皟鐢ㄥけ璐ュ悗绱澶辫触娆℃暟锛屽苟鍦ㄨ揪鍒伴槇鍊兼椂鎵撳紑 breaker銆?
 def record_failure(
         *,
         name: str,
         failure_threshold: int,
         recovery_timeout_seconds: int,
 ) -> None:
-    # 浣犺鍋氱殑浜嬶細
-    # 1. 澶辫触璁℃暟 +1
-    # 2. 杈惧埌闃堝€兼椂鍒囨垚 open
-    # 3. 璁板綍 reopen 鏃堕棿
     state = _BREAKER_STATE.setdefault(
         name,
         {

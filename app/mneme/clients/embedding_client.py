@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import Any
 
 from app.mneme.conf.config import settings
 from app.mneme.conf.logging import app_logger
@@ -9,9 +10,6 @@ if settings.HF_ENDPOINT:
     os.environ["HF_ENDPOINT"] = settings.HF_ENDPOINT
 os.environ["HF_HUB_ETAG_TIMEOUT"] = str(settings.HF_HUB_ETAG_TIMEOUT)
 os.environ["HF_HUB_DOWNLOAD_TIMEOUT"] = str(settings.HF_HUB_DOWNLOAD_TIMEOUT)
-
-from langchain_huggingface import HuggingFaceEmbeddings
-
 
 WEIGHT_FILE_PATTERNS = (
     "model.safetensors",
@@ -94,7 +92,9 @@ def resolve_embedding_source() -> tuple[str, bool]:
     return configured_model_name, False
 
 
-def get_embeddings() -> HuggingFaceEmbeddings:
+def get_embeddings() -> Any:
+    from langchain_huggingface import HuggingFaceEmbeddings
+
     cached = get_cached_object("embedding_client")
     if isinstance(cached, HuggingFaceEmbeddings):
         return cached

@@ -68,28 +68,34 @@ fi
 
 if [[ -x "${REPO_ROOT}/.venv/bin/python" ]]; then
   PYTHON_BIN="${REPO_ROOT}/.venv/bin/python"
+elif [[ -x "${REPO_ROOT}/.venv/Scripts/python.exe" ]]; then
+  PYTHON_BIN="${REPO_ROOT}/.venv/Scripts/python.exe"
 else
   PYTHON_BIN="${PYTHON_BIN:-python3}"
 fi
 
-if [[ "${PYTHON_BIN}" != */* ]]; then
-  if ! command -v "${PYTHON_BIN}" >/dev/null 2>&1; then
+if [[ "${FRONTEND_ONLY}" -eq 0 ]]; then
+  if [[ "${PYTHON_BIN}" != */* ]]; then
+    if ! command -v "${PYTHON_BIN}" >/dev/null 2>&1; then
+      echo "Python executable not found: ${PYTHON_BIN}" >&2
+      exit 1
+    fi
+  elif [[ ! -x "${PYTHON_BIN}" ]]; then
     echo "Python executable not found: ${PYTHON_BIN}" >&2
     exit 1
   fi
-elif [[ ! -x "${PYTHON_BIN}" ]]; then
-  echo "Python executable not found: ${PYTHON_BIN}" >&2
-  exit 1
 fi
 
-if [[ ! -d "${FRONTEND_DIR}" ]]; then
-  echo "Frontend directory not found: ${FRONTEND_DIR}" >&2
-  exit 1
-fi
+if [[ "${BACKEND_ONLY}" -eq 0 ]]; then
+  if [[ ! -d "${FRONTEND_DIR}" ]]; then
+    echo "Frontend directory not found: ${FRONTEND_DIR}" >&2
+    exit 1
+  fi
 
-if ! command -v npm >/dev/null 2>&1; then
-  echo "npm was not found in PATH. Please install Node.js first." >&2
-  exit 1
+  if ! command -v npm >/dev/null 2>&1; then
+    echo "npm was not found in PATH. Please install Node.js first." >&2
+    exit 1
+  fi
 fi
 
 quote_cmd() {

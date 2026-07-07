@@ -3,7 +3,6 @@ import json
 from typing import Any
 
 from langchain_core.documents import Document as LCDocument
-from langchain_milvus import Milvus
 
 from app.mneme.conf.config import settings
 from app.mneme.conf.logging import log_event, app_logger
@@ -34,7 +33,6 @@ def _sanitize_documents_for_milvus(chunk_docs: list[LCDocument]) -> list[LCDocum
     return sanitized_docs
 
 
-# 缁勮 Milvus 杩炴帴鍙傛暟锛屽吋瀹规棤 token 鍜屽甫 token 涓ょ閰嶇疆銆?
 def _build_connection_args() -> dict[str, str]:
     connection_args: dict[str, str] = {
         "uri": settings.MILVUS_URI,
@@ -45,7 +43,6 @@ def _build_connection_args() -> dict[str, str]:
     return connection_args
 
 
-# 浠庨厤缃腑瑙ｆ瀽 Milvus 妫€绱㈠弬鏁?JSON銆?
 def _build_search_params() -> dict[str, Any]:
     try:
         parsed = json.loads(settings.MILVUS_SEARCH_PARAMS)
@@ -57,7 +54,6 @@ def _build_search_params() -> dict[str, Any]:
     return {}
 
 
-# 鍩轰簬褰撳墠閰嶇疆鐢熸垚 Milvus 绱㈠紩鍙傛暟銆?
 def _build_index_params() -> dict[str, Any]:
     search_params = _build_search_params()
     metric_type = search_params.get("metric_type", settings.MILVUS_METRIC_TYPE)
@@ -67,8 +63,9 @@ def _build_index_params() -> dict[str, Any]:
     }
 
 
-# 鍒涘缓褰撳墠椤圭洰浣跨敤鐨?Milvus vector store 瀹㈡埛绔€?
-def get_vector_store() -> Milvus:
+def get_vector_store() -> Any:
+    from langchain_milvus import Milvus
+
     cached = get_cached_object("vector_store_client")
     if isinstance(cached, Milvus):
         return cached
@@ -96,7 +93,6 @@ def get_vector_store() -> Milvus:
     return set_cached_object("vector_store_client", vector_store)
 
 
-# 灏嗕竴鎵?chunk 鐩存帴鍐欏叆鍚戦噺搴撱€?
 async def add_documents_to_vector_store(chunk_docs: list[LCDocument]) -> None:
     if not chunk_docs:
         return
@@ -109,7 +105,6 @@ async def add_documents_to_vector_store(chunk_docs: list[LCDocument]) -> None:
     log_event("vector_store", "info", "vector_store.add.completed", chunk_count=len(chunk_docs))
 
 
-# 鎸?chunk id 浠庡悜閲忓簱涓垹闄ゆ寚瀹氭枃妗ｅ潡銆?
 async def delete_documents_from_vector_store(*, ids: list[str] | None = None) -> None:
     if not ids:
         return
@@ -120,7 +115,6 @@ async def delete_documents_from_vector_store(*, ids: list[str] | None = None) ->
     log_event("vector_store", "info", "vector_store.delete.completed", id_count=len(ids))
 
 
-# 鍒犻櫎褰撳墠椤圭洰浣跨敤鐨勬暣涓悜閲忛泦鍚堛€?
 async def drop_vector_collection() -> None:
     vector_store = get_vector_store()
     log_event(
@@ -132,16 +126,11 @@ async def drop_vector_collection() -> None:
     vector_store.drop()
 
 
-# 鎸?batch_size 灏?chunk 鍒楄〃鍒囨垚澶氭壒锛屼緵鎵归噺鍐欏叆浣跨敤銆?
 def build_document_batches(
         chunk_docs: list[LCDocument],
         *,
         batch_size: int,
 ) -> list[list[LCDocument]]:
-    # 浣犺鍋氱殑浜嬶細
-    # 1. 鏍￠獙 batch_size > 0
-    # 2. 鎸?batch_size 鍒囩墖
-    # 3. 杩斿洖浜岀淮鍒楄〃
     if batch_size <= 0:
         raise ValueError("batch_size must be greater than 0")
 
@@ -151,7 +140,6 @@ def build_document_batches(
     ]
 
 
-# 灏?chunk 鍒嗘壒鍐欏叆鍚戦噺搴擄紝骞惰繑鍥炴壒澶勭悊缁熻淇℃伅銆?
 async def add_documents_to_vector_store_in_batches(
         *,
         chunk_docs: list[LCDocument],
@@ -200,12 +188,10 @@ async def add_documents_to_vector_store_in_batches(
     }
 
 
-# 鍒ゆ柇 Milvus 妫€绱㈠紓甯告槸鍚﹀睘浜?Day10 绗竴鐗堝彲閲嶈瘯閿欒銆?
 def is_retryable_vector_error(exc: Exception) -> bool:
     return isinstance(exc, (TimeoutError, ConnectionError, OSError))
 
 
-# 鐢?breaker + retry 鍖呬綇 Milvus similarity_search_with_score 璋冪敤銆?
 async def similarity_search_with_score_resilient(**search_kwargs):
     vector_store = get_vector_store()
     log_event(
@@ -216,7 +202,6 @@ async def similarity_search_with_score_resilient(**search_kwargs):
         has_expr="expr" in search_kwargs,
     )
 
-    # 鐪熸鎵ц涓€娆℃绱㈣皟鐢紝骞跺湪鎴愬姛/澶辫触鏃舵洿鏂?breaker 鐘舵€併€?
     async def do_search():
         before_call(
             name="milvus",

@@ -84,7 +84,6 @@ async def delete_knowledge_base_resources(
         total_deleted_task_count += int(result["deleted_task_count"])
         total_deleted_vector_count += int(result["deleted_vector_count"])
 
-    # 娓呮帀鍙兘瀛樺湪鐨勫鍎?memory entry銆?
     total_deleted_memory_entry_count += await delete_memory_entries_by_knowledge_base_id(
         db,
         knowledge_base_id=knowledge_base_id,

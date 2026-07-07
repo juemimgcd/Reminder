@@ -1,0 +1,23 @@
+# LLM, embedding, reranking, and local model runtime dependencies.
+filelock==3.25.2
+fsspec==2026.3.0
+hf-xet==1.4.3
+huggingface_hub==1.9.0
+joblib==1.5.3
+langchain-community==0.4.1
+langchain-huggingface==1.2.1
+langchain-openai==1.1.12
+numpy==2.4.4
+openai==2.30.0
+regex==2026.4.4
+safetensors==0.7.0
+scikit-learn==1.8.0
+scipy==1.17.1
+sentence-transformers==5.3.0
+sympy==1.14.0
+threadpoolctl==3.6.0
+tiktoken==0.12.0
+tokenizers==0.22.2
+torch==2.11.0
+tqdm==4.67.3
+transformers==5.5.0

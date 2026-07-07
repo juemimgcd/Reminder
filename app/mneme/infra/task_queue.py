@@ -10,19 +10,11 @@ def enqueue_index_document_task(
         task_id: str,
         document_id: str,
 ) -> str:
-    # 浣犺鍋氱殑浜嬶細
-    # 1. 璋冪敤 tasks.index_tasks.index_document_task
-    # 2. 鎶?task_id 鍜?document_id 浼犺繘鍘?
-    # 3. Day 3 鍙互鍏堝仛鍗犱綅锛孌ay 4 鍐嶆帴 Celery
     app_logger.bind(module="task_queue").info(
         f"enqueue index task start task_id={task_id} document_id={document_id} "
         f"queue={settings.CELERY_INDEX_QUEUE}"
     )
 
-    # 浣犺鍋氱殑浜嬶細
-    # 1. 瀵煎叆 Celery task
-    # 2. 璋冪敤 delay 鎴?apply_async
-    # 3. 浼犲叆 task_id 鍜?document_id
     async_result = index_document_task.apply_async(
         task_id=task_id,
         queue=settings.CELERY_INDEX_QUEUE,

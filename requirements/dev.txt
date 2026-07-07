@@ -1,0 +1,3 @@
+# Developer tooling for local checks.
+-r test.txt
+ruff

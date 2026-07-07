@@ -3,11 +3,6 @@ from app.mneme.conf.config import settings
 
 
 def build_celery_app() -> Celery:
-    # 你要做的事：
-    # 1. 读取 broker / backend
-    # 2. 创建 Celery app
-    # 3. 配置默认队列
-    # 4. 自动发现 tasks
     app = Celery(
         broker=settings.CELERY_BROKER_URL,
         backend=settings.CELERY_RESULT_BACKEND

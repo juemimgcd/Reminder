@@ -4,7 +4,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.mneme.models.task_record import TaskRecord
 
 
-# 鍒涘缓涓€鏉℃柊鐨勪换鍔¤褰曞苟鍐欏叆褰撳墠 session銆?
 async def create_task_record(
         db: AsyncSession,
         *,
@@ -18,12 +17,8 @@ async def create_task_record(
         attempt_count: int = 0,
         max_attempts: int = 3,
 ) -> TaskRecord:
-    # 浣犺鍋氱殑浜嬶細
-    # 1. 鏋勯€?TaskRecord
-    # 2. add 鍒?session
     # 3. flush
     # 4. refresh
-    # 5. 杩斿洖 task
     task_record = TaskRecord(
         id=task_id,
         task_type=task_type,
@@ -44,7 +39,6 @@ async def create_task_record(
 
 
 
-# 鎸?task_id 鏌ヨ鍗曟潯浠诲姟璁板綍銆?
 async def get_task_record_by_id(
         db: AsyncSession,
         *,
@@ -58,7 +52,6 @@ async def get_task_record_by_id(
 
 
 
-# 鏇存柊浠诲姟璁板綍鐘舵€侊紝骞跺湪闇€瑕佹椂琛ュ厖閿欒淇℃伅銆?
 async def update_task_record_status(
         db: AsyncSession,
         *,

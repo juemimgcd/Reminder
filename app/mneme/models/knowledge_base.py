@@ -17,14 +17,14 @@ class KnowledgeBase(Base):
         BigInteger,
         Identity(always=False),
         primary_key=True,
-        comment="鍐呴儴涓婚敭",
+        comment="internal primary key",
     )
-    id: Mapped[str] = mapped_column(String(64), nullable=False, comment="鐭ヨ瘑搴撳叕寮€ID")
+    id: Mapped[str] = mapped_column(String(64), nullable=False, comment="public knowledge base id")
     user_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey("users.id"),
         nullable=False,
-        comment="鎵€灞炵敤鎴稩D",
+        comment="owner user id",
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False, comment="knowledge base name")
     description: Mapped[str | None] = mapped_column(Text, nullable=True, comment="knowledge base description")

@@ -13,12 +13,6 @@ async def run_analysis_pipeline(
         knowledge_base_id: str,
         recent_days: int = 30,
 ) -> dict:
-    # 浣犺鍋氱殑浜嬶細
-    # 1. 璇诲彇 memory entries
-    # 2. 缁勭粐 memory_library
-    # 3. 鐢熸垚 profile
-    # 4. 鐢熸垚 growth_report
-    # 5. 杩斿洖鏈€缁?report
     entries = await list_memory_entries_by_user_id(db,user_id=user_id)
     entry_dict = [u.__dict__ for u in entries]
     library = build_memory_library(entry_dict)

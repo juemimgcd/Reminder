@@ -1,0 +1,8 @@
+# Milvus vector-store integration and its client transport dependencies.
+googleapis-common-protos==1.74.0
+grpcio==1.80.0
+langchain-milvus==0.3.0
+mmh3==5.2.1
+protobuf==6.33.6
+pybase64==1.4.3
+pymilvus==2.6.3
