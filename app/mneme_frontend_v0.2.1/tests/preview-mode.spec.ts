@@ -117,3 +117,22 @@ test('ai chat history rail can collapse and expand from the chat handle', async 
   await expect(rail).toBeVisible();
   await expect(toggle).toHaveAttribute('title', 'Collapse chat history');
 });
+
+test('ai laboratory renders API-backed sessions and appends sent messages', async ({ page }) => {
+  await page.goto('/?preview=1');
+  await page.getByRole('button', { name: 'AI Laboratory', exact: true }).click();
+
+  await expect(page.getByTestId('ai-history-rail')).toContainText('Preview Vault Review');
+  await expect(page.getByTestId('chat-function-grid')).toContainText('How should I review this vault?');
+  await expect(page.getByTestId('chat-function-grid')).toContainText('Start with the indexed documents');
+
+  const composer = page.getByPlaceholder('Message Cognitive Sanctuary... (/ for commands, @ for nodes)');
+  await composer.fill('Summarize the graph contradictions');
+  await page.getByTestId('workspace-chat-command').getByRole('button').click();
+
+  await expect(page.getByTestId('chat-function-grid')).toContainText('Summarize the graph contradictions');
+  await expect(page.getByTestId('chat-function-grid')).toContainText('Preview answer for: Summarize the graph contradictions');
+
+  await page.getByRole('button', { name: 'System Settings', exact: true }).click();
+  await expect(page.getByTestId('stitch-settings-layout')).toContainText('Preview DeepSeek');
+});

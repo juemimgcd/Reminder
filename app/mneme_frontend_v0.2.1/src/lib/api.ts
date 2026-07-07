@@ -1,7 +1,11 @@
 import previewApi, { isPreviewMode, PREVIEW_API_BASE_URL, PREVIEW_TOKEN } from "./previewApi";
 import type {
+  AiModelConfigData,
+  AiModelConfigListData,
   ApiResponse,
   AuthTokenData,
+  ChatSessionDetailData,
+  ChatSessionListData,
   ChatQueryData,
   CompanionAnswerResult,
   DocumentDeleteData,
@@ -302,6 +306,86 @@ const realApi = {
         top_k: payload.top_k ?? 4,
         session_id: payload.session_id ?? null,
       },
+    });
+  },
+  listChatSessions(token: string, knowledgeBaseId: string) {
+    return request<ChatSessionListData>(`/kb/chat/sessions${buildQuery({ knowledge_base_id: knowledgeBaseId })}`, { token });
+  },
+  createChatSession(token: string, payload: { knowledge_base_id: string; title?: string | null }) {
+    return request<ChatSessionDetailData["session"]>("/kb/chat/sessions", {
+      method: "POST",
+      token,
+      body: {
+        knowledge_base_id: payload.knowledge_base_id,
+        title: payload.title ?? null,
+      },
+    });
+  },
+  getChatSession(token: string, sessionId: string) {
+    return request<ChatSessionDetailData>(`/kb/chat/sessions/${sessionId}`, { token });
+  },
+  deleteChatSession(token: string, sessionId: string) {
+    return request<{ session_id: string; deleted_count: number }>(`/kb/chat/sessions/${sessionId}`, {
+      method: "DELETE",
+      token,
+    });
+  },
+  sendChatSessionMessage(token: string, sessionId: string, payload: { question: string; top_k?: number }) {
+    return request<ChatSessionDetailData>(`/kb/chat/sessions/${sessionId}/messages`, {
+      method: "POST",
+      token,
+      body: {
+        question: payload.question,
+        top_k: payload.top_k ?? 4,
+      },
+    });
+  },
+  listAiModelConfigs(token: string) {
+    return request<AiModelConfigListData>("/settings/ai-models", { token });
+  },
+  createAiModelConfig(
+    token: string,
+    payload: {
+      label: string;
+      provider: string;
+      base_url: string;
+      model_name: string;
+      api_key?: string | null;
+      temperature?: number;
+      context_window?: number;
+      is_default?: boolean;
+      enabled?: boolean;
+    },
+  ) {
+    return request<AiModelConfigData>("/settings/ai-models", {
+      method: "POST",
+      token,
+      body: payload,
+    });
+  },
+  updateAiModelConfig(token: string, configId: string, payload: Partial<{ label: string; provider: string; base_url: string; model_name: string; api_key: string | null; temperature: number; context_window: number; enabled: boolean }>) {
+    return request<AiModelConfigData>(`/settings/ai-models/${configId}`, {
+      method: "PATCH",
+      token,
+      body: payload,
+    });
+  },
+  testAiModelConfig(token: string, configId: string) {
+    return request<{ config_id: string; ok: boolean; message: string }>(`/settings/ai-models/${configId}/test`, {
+      method: "POST",
+      token,
+    });
+  },
+  setDefaultAiModelConfig(token: string, configId: string) {
+    return request<AiModelConfigData>(`/settings/ai-models/${configId}/default`, {
+      method: "POST",
+      token,
+    });
+  },
+  deleteAiModelConfig(token: string, configId: string) {
+    return request<{ config_id: string; deleted_count: number }>(`/settings/ai-models/${configId}`, {
+      method: "DELETE",
+      token,
     });
   },
   companionReply(

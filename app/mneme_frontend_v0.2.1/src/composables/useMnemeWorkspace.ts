@@ -1,7 +1,11 @@
 import { computed, onMounted, ref } from "vue";
 import { api, API_BASE_URL, IS_PREVIEW_MODE, PREVIEW_TOKEN } from "../lib/api";
 import type {
+  AiModelConfigData,
+  AiModelProviderPreset,
   ChatQueryData,
+  ChatMessageData,
+  ChatSessionData,
   CompanionAnswerResult,
   DocumentListItem,
   EvidenceProfileData,
@@ -70,6 +74,12 @@ export function useMnemeWorkspace() {
   const advice = ref<GrowthAdviceResult | null>(null);
   const chatResult = ref<ChatQueryData | null>(null);
   const companionResult = ref<CompanionAnswerResult | null>(null);
+  const chatSessions = ref<ChatSessionData[]>([]);
+  const activeChatSessionId = ref("");
+  const chatMessages = ref<ChatMessageData[]>([]);
+  const aiModelConfigs = ref<AiModelConfigData[]>([]);
+  const aiModelProviderPresets = ref<AiModelProviderPreset[]>([]);
+  const activeAiModelConfigId = ref("");
 
   const loginForm = ref({ username: "", password: "" });
   const knowledgeBaseForm = ref({ name: "", description: "" });
@@ -115,6 +125,7 @@ export function useMnemeWorkspace() {
       }
 
       await loadKnowledgeBasePanels();
+      await loadAiModelConfigs();
     } catch (error) {
       banner.value = errorMessage(error, "Unable to load workspace.");
     } finally {
@@ -150,6 +161,7 @@ export function useMnemeWorkspace() {
     growth.value = growthData;
     analytics.value = analyticsData;
     advice.value = adviceData;
+    await loadChatSessions();
   }
 
   async function authenticateWithToken() {
@@ -213,6 +225,78 @@ export function useMnemeWorkspace() {
     });
   }
 
+  async function loadChatSessions() {
+    if (!token.value || !activeKnowledgeBaseId.value) {
+      chatSessions.value = [];
+      chatMessages.value = [];
+      activeChatSessionId.value = "";
+      return;
+    }
+    const data = await api.listChatSessions(token.value, activeKnowledgeBaseId.value);
+    chatSessions.value = data.items;
+    if (!data.items.length) {
+      chatMessages.value = [];
+      activeChatSessionId.value = "";
+      return;
+    }
+    if (!activeChatSessionId.value || !data.items.some((item) => item.id === activeChatSessionId.value)) {
+      activeChatSessionId.value = data.items[0].id;
+    }
+    await selectChatSession(activeChatSessionId.value);
+  }
+
+  async function selectChatSession(sessionId: string) {
+    if (!token.value || !sessionId) {
+      return;
+    }
+    activeChatSessionId.value = sessionId;
+    const detail = await api.getChatSession(token.value, sessionId);
+    chatMessages.value = detail.messages;
+  }
+
+  async function createChatSession() {
+    if (!token.value || !activeKnowledgeBaseId.value) {
+      return;
+    }
+    const session = await api.createChatSession(token.value, {
+      knowledge_base_id: activeKnowledgeBaseId.value,
+      title: "New Chat",
+    });
+    chatSessions.value = [session, ...chatSessions.value];
+    activeChatSessionId.value = session.id;
+    chatMessages.value = [];
+  }
+
+  async function sendChatMessage() {
+    if (!token.value || !activeKnowledgeBaseId.value || !chatQuestion.value.trim()) {
+      return;
+    }
+    if (!activeChatSessionId.value) {
+      await createChatSession();
+    }
+    if (!activeChatSessionId.value) {
+      return;
+    }
+    const question = chatQuestion.value.trim();
+    chatQuestion.value = "";
+    const detail = await api.sendChatSessionMessage(token.value, activeChatSessionId.value, {
+      question,
+      top_k: 4,
+    });
+    chatMessages.value = [...chatMessages.value, ...detail.messages];
+    chatSessions.value = chatSessions.value.map((session) => (session.id === detail.session.id ? detail.session : session));
+  }
+
+  async function loadAiModelConfigs() {
+    if (!token.value) {
+      return;
+    }
+    const data = await api.listAiModelConfigs(token.value);
+    aiModelProviderPresets.value = data.provider_presets;
+    aiModelConfigs.value = data.items;
+    activeAiModelConfigId.value = data.default_config_id ?? data.items[0]?.id ?? "";
+  }
+
   async function askCompanion() {
     if (!token.value || !activeKnowledgeBaseId.value || !companionQuestion.value.trim()) {
       return;
@@ -254,9 +338,13 @@ export function useMnemeWorkspace() {
     API_BASE_URL,
     IS_PREVIEW_MODE,
     activeKnowledgeBaseId,
+    activeAiModelConfigId,
+    activeChatSessionId,
     advice,
     adviceGoal,
     analytics,
+    aiModelConfigs,
+    aiModelProviderPresets,
     askCompanion,
     askVault,
     authError,
@@ -264,8 +352,11 @@ export function useMnemeWorkspace() {
     banner,
     chatQuestion,
     chatResult,
+    chatMessages,
+    chatSessions,
     companionQuestion,
     companionResult,
+    createChatSession,
     createKnowledgeBase,
     documents,
     graphData,
@@ -275,6 +366,8 @@ export function useMnemeWorkspace() {
     knowledgeBaseForm,
     knowledgeBases,
     loadKnowledgeBasePanels,
+    loadAiModelConfigs,
+    loadChatSessions,
     login,
     loginForm,
     logout,
@@ -289,6 +382,8 @@ export function useMnemeWorkspace() {
     selectedKnowledgeBase,
     selectedKnowledgeBaseId,
     selectKnowledgeBase,
+    selectChatSession,
+    sendChatMessage,
     serviceHealth,
     user,
     view,

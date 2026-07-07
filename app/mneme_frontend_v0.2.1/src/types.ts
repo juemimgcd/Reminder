@@ -179,6 +179,42 @@ export interface ChatQueryData {
   debug: RetrievalDebugData | null;
 }
 
+export interface ChatMessageData {
+  id: string;
+  session_id: string;
+  user_id: number;
+  knowledge_base_id: string;
+  role: "user" | "assistant" | string;
+  content: string;
+  sources: ChatSourceItem[];
+  citations: ChatCitationItem[];
+  route: QueryRouteDecision | null;
+  model_config_id: string | null;
+  created_at: string;
+}
+
+export interface ChatSessionData {
+  id: string;
+  user_id: number;
+  knowledge_base_id: string;
+  title: string | null;
+  message_count: number;
+  last_message_at: string | null;
+  archived_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChatSessionListData {
+  items: ChatSessionData[];
+  total: number;
+}
+
+export interface ChatSessionDetailData {
+  session: ChatSessionData;
+  messages: ChatMessageData[];
+}
+
 export interface GraphNodeData {
   id: string;
   entity_id: string;
@@ -485,6 +521,35 @@ export interface CompanionAnswerResult {
   next_step_hint: string;
   follow_up_questions: string[];
   companion_message: string;
+}
+
+export interface AiModelProviderPreset {
+  provider: string;
+  label: string;
+  base_url: string;
+  model_name: string;
+}
+
+export interface AiModelConfigData {
+  id: string;
+  user_id: number;
+  label: string;
+  provider: string;
+  base_url: string;
+  model_name: string;
+  temperature: number;
+  context_window: number;
+  is_default: boolean;
+  enabled: boolean;
+  has_api_key: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AiModelConfigListData {
+  provider_presets: AiModelProviderPreset[];
+  items: AiModelConfigData[];
+  default_config_id: string | null;
 }
 
 export interface ServiceHealthData {

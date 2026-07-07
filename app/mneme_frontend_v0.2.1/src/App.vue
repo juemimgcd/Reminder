@@ -38,6 +38,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Tag,
+  Target,
   Upload,
   UserRound,
   Workflow,
@@ -125,19 +126,12 @@ const memoryGovernanceSummary = computed(() => {
   return `${governance.canonical_memory_count} canonical memories consolidated from ${governance.raw_entry_count} raw entries.`;
 });
 const activeHealthLabel = computed(() => workspace.serviceHealth.value?.status ?? "loading");
-const chatTranscript = computed(() => [
-  {
-    role: "user",
-    text: workspace.chatQuestion.value || "Ask this vault about its strongest evidence.",
-  },
-  {
-    role: "assistant",
-    text:
-      workspace.chatResult.value?.answer ??
-      workspace.companionResult.value?.direct_answer ??
-      "Ask a question to generate an evidence-backed response from the active vault.",
-  },
-]);
+const activeChatSession = computed(
+  () => workspace.chatSessions.value.find((session) => session.id === workspace.activeChatSessionId.value) ?? null,
+);
+const activeAiModelConfig = computed(
+  () => workspace.aiModelConfigs.value.find((config) => config.id === workspace.activeAiModelConfigId.value) ?? workspace.aiModelConfigs.value[0] ?? null,
+);
 
 watch(
   () => workspace.graphData.value,
@@ -840,26 +834,20 @@ function endGraphNodeDrag() {
                   <Search class="size-4" />
                   Search history...
                 </div>
-                <button class="mb-6 flex h-12 w-full items-center justify-center gap-3 rounded bg-surface-container-high text-base font-semibold">
+                <button class="mb-6 flex h-12 w-full items-center justify-center gap-3 rounded bg-surface-container-high text-base font-semibold" @click="workspace.createChatSession">
                   <MessageSquare class="size-5" />
                   New Chat
                 </button>
                 <div class="grid gap-2">
-                  <button class="rounded border border-primary/40 bg-surface-container-high px-4 py-3 text-left">
-                    <span class="block truncate text-sm font-semibold text-primary">Project Mnemosyne: Synthesis</span>
-                    <span class="text-xs text-text-muted">Today, 14:03</span>
-                  </button>
-                  <button class="rounded px-4 py-3 text-left text-on-surface-variant hover:bg-surface-container">
-                    <span class="block truncate text-sm font-semibold">Quantum Entanglement Analysis</span>
-                    <span class="text-xs text-text-muted">Yesterday, 09:45</span>
-                  </button>
-                  <button class="rounded px-4 py-3 text-left text-on-surface-variant hover:bg-surface-container">
-                    <span class="block truncate text-sm font-semibold">Neural Network Synthesis</span>
-                    <span class="text-xs text-text-muted">Oct 24, 2023</span>
-                  </button>
-                  <button class="rounded px-4 py-3 text-left text-on-surface-variant hover:bg-surface-container">
-                    <span class="block truncate text-sm font-semibold">Project Mnemosyne Plan</span>
-                    <span class="text-xs text-text-muted">Oct 22, 2023</span>
+                  <button
+                    v-for="session in workspace.chatSessions.value"
+                    :key="session.id"
+                    class="rounded px-4 py-3 text-left"
+                    :class="workspace.activeChatSessionId.value === session.id ? 'border border-primary/40 bg-surface-container-high text-primary' : 'text-on-surface-variant hover:bg-surface-container'"
+                    @click="workspace.selectChatSession(session.id)"
+                  >
+                    <span class="block truncate text-sm font-semibold">{{ session.title || "Untitled Chat" }}</span>
+                    <span class="text-xs text-text-muted">{{ session.last_message_at ? formatDate(session.last_message_at) : "No messages" }}</span>
                   </button>
                 </div>
               </aside>
@@ -877,9 +865,11 @@ function endGraphNodeDrag() {
 
                 <header class="flex h-20 items-center justify-between border-b border-outline-variant/10 px-8">
                   <div>
-                    <h2 class="text-3xl font-semibold leading-none">Project Mnemosyne: Synthesis</h2>
+                    <h2 class="text-3xl font-semibold leading-none">{{ activeChatSession?.title || "New Chat" }}</h2>
                     <p class="mt-2 font-mono text-xs text-text-muted">
-                      <span class="text-primary">●</span> Model: M-Cognitive v4.2 - Context: 128k Tokens
+                      <span class="text-primary">Model:</span>
+                      {{ activeAiModelConfig?.label || "Default backend model" }} -
+                      Context: {{ activeAiModelConfig ? activeAiModelConfig.context_window.toLocaleString() : "backend" }} Tokens
                     </p>
                   </div>
                   <div class="flex gap-6 text-on-surface-variant">
@@ -894,48 +884,37 @@ function endGraphNodeDrag() {
                       <span class="rounded-full bg-surface-container-high px-4 py-1 font-mono text-xs text-on-surface-variant">Today, 14:03</span>
                     </div>
 
-                    <div class="mb-8 flex justify-end">
-                      <div class="max-w-[675px] rounded bg-surface-container-high px-6 py-5 text-base leading-7">
-                        Analyze the latest research nodes connected to "Quantum Entanglement in Biological Systems". Summarize the core contradictions in the recent methodologies.
-                      </div>
-                    </div>
-
-                    <div class="mb-8 grid grid-cols-[44px_minmax(0,1fr)] gap-5">
-                      <div class="grid size-10 place-items-center rounded-lg border border-primary/40 bg-primary/10 text-primary">
-                        <Bot class="size-5" />
-                      </div>
-                      <article class="rounded border border-outline-variant/30 border-l-4 border-l-primary bg-[#0c0c0e] p-6 text-base leading-8">
-                        <p>Based on the current knowledge graph traversal, there are 3 primary nodes referencing "Quantum Entanglement in Biological Systems" updated in the last 72 hours.</p>
-                        <p class="mt-5">The core contradictions arise from the environmental decoherence models used:</p>
-                        <ul class="mt-4 list-disc space-y-3 pl-6">
-                          <li><span class="text-primary">Node A (Dr. Chen, 2024):</span> Posits that macromolecular shielding extends coherence times up to 100fs.</li>
-                          <li><span class="text-primary">Node B (Symposium proceedings):</span> Argues thermal noise disrupts entanglement within 10fs, challenging the shielding hypothesis entirely.</li>
-                        </ul>
-                        <div class="mt-8 flex flex-wrap gap-3 border-t border-outline-variant/20 pt-4">
-                          <span class="premium-tag rounded px-3 py-1 font-mono text-xs text-on-surface-variant">doc_ref_492.pdf</span>
-                          <span class="premium-tag rounded px-3 py-1 font-mono text-xs text-on-surface-variant">Graph Node: Bio-Q</span>
+                    <template v-if="workspace.chatMessages.value.length">
+                      <template v-for="message in workspace.chatMessages.value" :key="message.id">
+                        <div v-if="message.role === 'user'" class="mb-8 flex justify-end">
+                          <div class="max-w-[675px] rounded bg-surface-container-high px-6 py-5 text-base leading-7">
+                            {{ message.content }}
+                          </div>
                         </div>
-                      </article>
-                    </div>
 
-                    <div class="mb-8 flex justify-end">
-                      <div class="max-w-[520px] rounded bg-surface-container-high px-6 py-4 text-base">Can you generate a visual map of these contradictions?</div>
-                    </div>
+                        <div v-else class="mb-8 grid grid-cols-[44px_minmax(0,1fr)] gap-5">
+                          <div class="grid size-10 place-items-center rounded-lg border border-primary/40 bg-primary/10 text-primary">
+                            <Bot class="size-5" />
+                          </div>
+                          <article class="rounded border border-outline-variant/30 border-l-4 border-l-primary bg-[#0c0c0e] p-6 text-base leading-8">
+                            <p>{{ message.content }}</p>
+                            <div v-if="message.sources.length" class="mt-8 flex flex-wrap gap-3 border-t border-outline-variant/20 pt-4">
+                              <span v-for="source in message.sources" :key="source.source_id" class="premium-tag rounded px-3 py-1 font-mono text-xs text-on-surface-variant">
+                                {{ source.document_id }}
+                              </span>
+                            </div>
+                          </article>
+                        </div>
+                      </template>
+                    </template>
 
-                    <div class="mb-24 grid grid-cols-[44px_minmax(0,1fr)] gap-5">
-                      <div class="grid size-10 place-items-center rounded-lg border border-primary/40 bg-primary/10 text-primary">
-                        <Bot class="size-5" />
-                      </div>
-                      <div class="inline-flex w-fit items-center gap-2 rounded border border-outline-variant/30 border-l-4 border-l-primary bg-[#0c0c0e] px-5 py-4">
-                        <span class="size-2 rounded-full bg-primary"></span>
-                        <span class="size-2 rounded-full bg-primary"></span>
-                        <span class="size-2 rounded-full bg-primary"></span>
-                      </div>
+                    <div v-else class="rounded border border-outline-variant/30 bg-[#0c0c0e] p-6 text-base leading-7 text-on-surface-variant">
+                      Start a chat to generate an evidence-backed response from the active vault.
                     </div>
                   </div>
                 </div>
 
-                <form data-testid="workspace-chat-command" class="sticky bottom-0 border-t border-outline-variant/10 bg-[#070708]/95 px-8 pb-7 pt-4 backdrop-blur" @submit.prevent="workspace.askVault">
+                <form data-testid="workspace-chat-command" class="sticky bottom-0 border-t border-outline-variant/10 bg-[#070708]/95 px-8 pb-7 pt-4 backdrop-blur" @submit.prevent="workspace.sendChatMessage">
                   <div class="mx-auto max-w-[900px]">
                     <div class="rounded-lg border border-outline-variant/30 bg-surface-container-low p-4">
                       <div class="mb-3 flex w-fit items-center gap-2 rounded-full bg-surface-container-high px-3 py-1 font-mono text-xs text-on-surface-variant">
@@ -972,21 +951,30 @@ function endGraphNodeDrag() {
                     <h2 class="text-2xl font-semibold">Cognitive Engine Selection</h2>
                   </div>
                   <div class="grid gap-4 md:grid-cols-2">
-                    <div class="rounded-lg border border-primary/60 bg-surface-container/60 p-5">
-                      <h3 class="font-mono text-base font-semibold">M-Cognitive v4.2</h3>
-                      <p class="mt-3 text-sm leading-6 text-on-surface-variant">Local semantic mapping engine tuned for graph queries and vault synthesis.</p>
+                    <div
+                      v-for="config in workspace.aiModelConfigs.value"
+                      :key="config.id"
+                      class="rounded-lg border bg-surface-container/60 p-5"
+                      :class="config.is_default ? 'border-primary/60' : 'border-outline-variant/20'"
+                    >
+                      <div class="flex items-start justify-between gap-3">
+                        <h3 class="font-mono text-base font-semibold">{{ config.label }}</h3>
+                        <span v-if="config.is_default" class="premium-tag rounded px-2 py-1 font-mono text-[11px] text-primary">Default</span>
+                      </div>
+                      <p class="mt-3 text-sm leading-6 text-on-surface-variant">{{ config.provider }} / {{ config.model_name }}</p>
+                      <p class="mt-2 text-xs text-text-muted">{{ config.base_url }}</p>
                     </div>
-                    <div class="rounded-lg border border-outline-variant/20 bg-surface-container-low p-5">
-                      <h3 class="font-mono text-base font-semibold">Configured Provider</h3>
+                    <div v-if="!workspace.aiModelConfigs.value.length" class="rounded-lg border border-outline-variant/20 bg-surface-container-low p-5">
+                      <h3 class="font-mono text-base font-semibold">Backend Default</h3>
                       <p class="mt-3 text-sm leading-6 text-on-surface-variant">{{ workspace.neo4jHealth.value?.backend ?? "Backend configuration pending" }}</p>
                     </div>
                   </div>
                   <div class="mt-6">
                     <div class="mb-2 flex justify-between font-mono text-sm">
                       <span>Context Window Size</span>
-                      <span class="text-primary">64,000</span>
+                      <span class="text-primary">{{ activeAiModelConfig ? activeAiModelConfig.context_window.toLocaleString() : "64,000" }}</span>
                     </div>
-                    <input class="premium-range w-full" type="range" min="8" max="128" value="64" />
+                    <input class="premium-range w-full" type="range" min="8" max="128" :value="activeAiModelConfig ? Math.round(activeAiModelConfig.context_window / 1000) : 64" readonly />
                   </div>
                 </article>
 
