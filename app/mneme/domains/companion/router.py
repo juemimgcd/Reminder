@@ -6,7 +6,7 @@ from app.mneme.conf.logging import app_logger
 from app.mneme.crud.knowledge_base import get_knowledge_base_by_id
 from app.mneme.models.user import User
 from app.mneme.schemas.companion import CompanionAnswerResult, CompanionQueryRequest
-from app.mneme.services.companion_service import build_companion_response
+from app.mneme.domains.companion.service import build_companion_response
 from app.mneme.domains.profile.insight import build_growth_for_knowledge_base
 from app.mneme.domains.retrieval.query_service import generate_rag_answer
 from app.mneme.utils.auth import get_current_user
