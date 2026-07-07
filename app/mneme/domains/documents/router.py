@@ -16,7 +16,7 @@ from app.mneme.infra.task_queue import enqueue_index_document_task
 from app.mneme.models.user import User
 from app.mneme.schemas.document import DocumentDeleteData, DocumentListData, DocumentListItem, DocumentIndexTaskData, DocumentUploadData
 from app.mneme.services.document_service import submit_document_index_task
-from app.mneme.services.graph_projection_service import sync_document_projection
+from app.mneme.domains.graph.projection import sync_document_projection
 from app.mneme.services.resource_service import delete_document_resources
 from app.mneme.utils.auth import get_current_user
 from app.mneme.utils.exceptions import BusinessException

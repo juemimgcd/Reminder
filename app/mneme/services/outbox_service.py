@@ -26,7 +26,7 @@ from app.mneme.crud.user import get_user_by_id
 from app.mneme.models.chunk import Chunk
 from app.mneme.models.document import Document
 from app.mneme.models.outbox_event import OutboxEvent
-from app.mneme.services.graph_projection_service import sync_document_memory_projection
+from app.mneme.domains.graph.projection import sync_document_memory_projection
 from app.mneme.utils.exceptions import BusinessException
 
 

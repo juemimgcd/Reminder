@@ -6,7 +6,7 @@ from app.mneme.crud.task_record import get_task_record_by_id
 from app.mneme.infra.rate_limit import enforce_fixed_window_rate_limit
 from app.mneme.infra.task_queue import cancel_index_document_task, enqueue_index_document_task
 from app.mneme.models.user import User
-from app.mneme.services.graph_projection_service import sync_document_projection_from_db
+from app.mneme.domains.graph.projection import sync_document_projection_from_db
 from app.mneme.services.task_state_service import CANCELLED, FAILED, PENDING, RETRYING, transition_task_status
 from app.mneme.utils.exceptions import BusinessException
 

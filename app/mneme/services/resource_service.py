@@ -9,7 +9,7 @@ from app.mneme.crud.knowledge_base import delete_knowledge_base_by_id
 from app.mneme.crud.memory_entry import delete_memory_entries_by_document_id, delete_memory_entries_by_knowledge_base_id
 from app.mneme.crud.task_record import delete_task_records_by_target_id
 from app.mneme.models.document import Document
-from app.mneme.services.graph_projection_service import delete_document_projection, delete_knowledge_base_projection
+from app.mneme.domains.graph.projection import delete_document_projection, delete_knowledge_base_projection
 
 
 async def delete_document_resources(

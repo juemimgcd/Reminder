@@ -8,7 +8,7 @@ from app.mneme.crud.knowledge_base import get_or_create_default_knowledge_base
 from app.mneme.crud.user import get_user_by_username
 from app.mneme.models.user import User
 from app.mneme.schemas.auth import LoginRequest, RegisterRequest, UserAuthResponse
-from app.mneme.services.graph_projection_service import sync_knowledge_base_projection, sync_user_projection
+from app.mneme.domains.graph.projection import sync_knowledge_base_projection, sync_user_projection
 from app.mneme.schemas.users import UserPublic
 from app.mneme.utils.auth import get_current_user
 from app.mneme.utils.response import success_response

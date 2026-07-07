@@ -4,7 +4,7 @@ from typing import Any
 
 from app.mneme.clients.neo4j_client import fetch_neo4j_records, should_use_neo4j_graph_backend
 from app.mneme.conf.logging import app_logger
-from app.mneme.services.graph_service import (
+from app.mneme.domains.graph.service import (
     _build_graph_type_counts,
     build_document_node,
     build_edge,

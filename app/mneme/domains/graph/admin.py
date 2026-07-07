@@ -5,7 +5,7 @@ from app.mneme.crud.document import list_documents
 from app.mneme.crud.knowledge_base import get_knowledge_base_by_id, list_knowledge_bases_by_user_id
 from app.mneme.crud.memory_entry import list_memory_entries_by_document_id
 from app.mneme.models.user import User
-from app.mneme.services.graph_projection_service import (
+from app.mneme.domains.graph.projection import (
     rebuild_user_related_projection,
     reset_user_projection,
     sync_document_memory_projection,

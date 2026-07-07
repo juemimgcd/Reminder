@@ -13,7 +13,7 @@ from app.mneme.schemas.knowledge_base import (
     KnowledgeBaseDeleteData,
     KnowledgeBaseListData,
 )
-from app.mneme.services.graph_projection_service import sync_knowledge_base_projection
+from app.mneme.domains.graph.projection import sync_knowledge_base_projection
 from app.mneme.services.resource_service import delete_knowledge_base_resources
 from app.mneme.utils.auth import get_current_user
 from app.mneme.utils.exceptions import BusinessException

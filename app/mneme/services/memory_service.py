@@ -14,7 +14,7 @@ from app.mneme.crud.memory_entry import create_memory_entries, delete_memory_ent
 from app.mneme.crud.user import get_user_by_id
 from app.mneme.models.document import Document
 from app.mneme.schemas.memory_entry import MemoryEntryExtractionResult
-from app.mneme.services.graph_projection_service import sync_document_memory_projection
+from app.mneme.domains.graph.projection import sync_document_memory_projection
 from app.mneme.utils.entry_prompt import get_entry_extraction_prompt
 
 
