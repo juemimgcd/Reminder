@@ -153,6 +153,11 @@ for (const aiReferenceText of [
   'Today, 14:03',
   'Context: Node B',
   'AI responses may be structurally imperfect',
+  'aiHistoryRailCollapsed',
+  'data-testid="ai-history-rail"',
+  'data-testid="ai-history-rail-toggle"',
+  'Collapse chat history',
+  'Expand chat history',
 ]) {
   assert.ok(appSource.includes(aiReferenceText), `Expected AI Laboratory to mirror Stitch chat reference text: ${aiReferenceText}`);
 }

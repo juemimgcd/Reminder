@@ -87,6 +87,7 @@ type ForceGraphLink = {
 };
 
 const graphFileRailCollapsed = ref(false);
+const aiHistoryRailCollapsed = ref(false);
 const graphSimulationNodes = ref<ForceGraphNode[]>([]);
 const graphSimulationLinks = ref<ForceGraphLink[]>([]);
 const draggingGraphNode = ref<ForceGraphNode | null>(null);
@@ -823,8 +824,18 @@ function endGraphNodeDrag() {
               </div>
             </div>
 
-            <div v-else-if="workspace.view.value === 'ai'" data-testid="stitch-ai-laboratory-layout" class="grid h-screen min-h-0 grid-cols-1 bg-[#070708] lg:grid-cols-[320px_minmax(0,1fr)]">
-              <aside class="stitch-panel border-r border-outline-variant/30 p-5">
+            <div
+              v-else-if="workspace.view.value === 'ai'"
+              data-testid="stitch-ai-laboratory-layout"
+              class="grid h-screen min-h-0 grid-cols-1 bg-[#070708] transition-[grid-template-columns] duration-200"
+              :class="aiHistoryRailCollapsed ? 'lg:grid-cols-[0_minmax(0,1fr)]' : 'lg:grid-cols-[320px_minmax(0,1fr)]'"
+            >
+              <aside
+                data-testid="ai-history-rail"
+                class="stitch-panel min-w-0 border-r border-outline-variant/30"
+                :class="aiHistoryRailCollapsed ? 'invisible pointer-events-none overflow-hidden border-r-0 p-0' : 'p-5'"
+                :aria-hidden="aiHistoryRailCollapsed"
+              >
                 <div class="premium-input mb-5 flex h-10 items-center gap-3 rounded px-3 text-text-muted">
                   <Search class="size-4" />
                   Search history...
@@ -851,12 +862,19 @@ function endGraphNodeDrag() {
                     <span class="text-xs text-text-muted">Oct 22, 2023</span>
                   </button>
                 </div>
-                <button class="glass-panel absolute right-[-18px] top-1/2 hidden size-12 place-items-center rounded-full text-text-muted lg:grid">
-                  <ChevronDown class="size-5 rotate-90" />
-                </button>
               </aside>
 
               <section data-testid="chat-function-grid" class="relative flex min-w-0 flex-col">
+                <button
+                  data-testid="ai-history-rail-toggle"
+                  class="glass-panel absolute top-1/2 z-50 grid size-12 place-items-center rounded-full text-text-muted"
+                  :class="aiHistoryRailCollapsed ? 'left-4' : 'left-[-18px]'"
+                  :title="aiHistoryRailCollapsed ? 'Expand chat history' : 'Collapse chat history'"
+                  @click="aiHistoryRailCollapsed = !aiHistoryRailCollapsed"
+                >
+                  <ChevronDown class="size-5" :class="aiHistoryRailCollapsed ? '-rotate-90' : 'rotate-90'" />
+                </button>
+
                 <header class="flex h-20 items-center justify-between border-b border-outline-variant/10 px-8">
                   <div>
                     <h2 class="text-3xl font-semibold leading-none">Project Mnemosyne: Synthesis</h2>

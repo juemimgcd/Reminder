@@ -88,3 +88,32 @@ test('knowledge graph document panel stays open after long-pressing a node', asy
   await panel.getByRole('button', { name: 'Close preview' }).click();
   await expect(panel).toBeHidden();
 });
+
+test('ai chat history rail can collapse and expand from the chat handle', async ({ page }) => {
+  await page.goto('/?preview=1');
+  await page.getByRole('button', { name: 'AI Laboratory', exact: true }).click();
+  const viewport = page.viewportSize();
+
+  const layout = page.getByTestId('stitch-ai-laboratory-layout');
+  const rail = page.getByTestId('ai-history-rail');
+  const chat = page.getByTestId('chat-function-grid');
+  const toggle = page.getByTestId('ai-history-rail-toggle');
+
+  await expect(layout).toBeVisible();
+  await expect(rail).toBeVisible();
+  const expandedChatBox = await chat.boundingBox();
+  expect(expandedChatBox).not.toBeNull();
+
+  await toggle.click();
+  await expect(rail).toBeHidden();
+  await expect(toggle).toHaveAttribute('title', 'Expand chat history');
+  const collapsedChatBox = await chat.boundingBox();
+  expect(collapsedChatBox).not.toBeNull();
+  if ((viewport?.width ?? 0) >= 1024) {
+    expect(collapsedChatBox!.width).toBeGreaterThan(expandedChatBox!.width);
+  }
+
+  await toggle.click();
+  await expect(rail).toBeVisible();
+  await expect(toggle).toHaveAttribute('title', 'Collapse chat history');
+});
