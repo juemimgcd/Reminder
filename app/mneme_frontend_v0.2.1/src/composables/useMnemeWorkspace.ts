@@ -84,6 +84,12 @@ export function useMnemeWorkspace() {
   const documentPreview = ref<DocumentPreviewData | null>(null);
   const syncStatus = ref("");
   const syncBusyTarget = ref<"graph" | "memory" | "">("");
+  const uploadInputKey = ref(0);
+  const documentActionStatus = ref("");
+  const graphRagQuestion = ref("");
+  const graphRagStatus = ref("");
+  const aiModelActionStatus = ref("");
+  const chatSessionFilter = ref("");
 
   const loginForm = ref({ username: "", password: "" });
   const knowledgeBaseForm = ref({ name: "", description: "" });
@@ -100,6 +106,13 @@ export function useMnemeWorkspace() {
   const indexedDocumentCount = computed(() => selectedDocuments.value.filter((item) => item.status === "indexed").length);
   const activeKnowledgeBaseId = computed(() => selectedKnowledgeBase.value?.id ?? "");
   const isAuthenticated = computed(() => authStatus.value === "authenticated");
+  const filteredChatSessions = computed(() => {
+    const query = chatSessionFilter.value.trim().toLowerCase();
+    if (!query) {
+      return chatSessions.value;
+    }
+    return chatSessions.value.filter((session) => (session.title || "Untitled Chat").toLowerCase().includes(query));
+  });
 
   async function loadWorkspace() {
     if (!token.value || !user.value) {
@@ -217,6 +230,51 @@ export function useMnemeWorkspace() {
     await loadKnowledgeBasePanels();
   }
 
+  async function showDocumentationStatus() {
+    const result = await api.documentationStatus();
+    banner.value = result.message;
+  }
+
+  async function showSupportStatus() {
+    const result = await api.supportStatus();
+    banner.value = result.message;
+  }
+
+  async function uploadFile(file: File | null | undefined) {
+    if (!file || !token.value || !activeKnowledgeBaseId.value) {
+      return;
+    }
+
+    const result = await api.uploadDocument(token.value, {
+      file,
+      userId: user.value?.id ?? null,
+      knowledgeBaseId: activeKnowledgeBaseId.value,
+    });
+    banner.value = `Uploaded ${result.file_name}`;
+    uploadInputKey.value += 1;
+    await loadKnowledgeBasePanels();
+  }
+
+  async function indexDocument(documentId: string) {
+    if (!token.value) {
+      return;
+    }
+
+    const result = await api.indexDocument(documentId, token.value);
+    documentActionStatus.value = result.message;
+    await loadKnowledgeBasePanels();
+  }
+
+  async function deleteDocument(documentId: string) {
+    if (!token.value) {
+      return;
+    }
+
+    const result = await api.deleteDocument(documentId, token.value);
+    documentActionStatus.value = `Deleted ${result.document_id}`;
+    await loadKnowledgeBasePanels();
+  }
+
   async function askVault() {
     if (!token.value || !activeKnowledgeBaseId.value || !chatQuestion.value.trim()) {
       return;
@@ -227,6 +285,19 @@ export function useMnemeWorkspace() {
       knowledge_base_id: activeKnowledgeBaseId.value,
       top_k: 4,
     });
+  }
+
+  async function runGraphRag() {
+    if (!token.value || !activeKnowledgeBaseId.value || !graphRagQuestion.value.trim()) {
+      return;
+    }
+
+    const result = await api.graphRag(token.value, activeKnowledgeBaseId.value, {
+      query: graphRagQuestion.value.trim(),
+      top_k: 6,
+      max_expansions: 8,
+    });
+    graphRagStatus.value = result.summary;
   }
 
   async function loadChatSessions() {
@@ -271,6 +342,16 @@ export function useMnemeWorkspace() {
     chatMessages.value = [];
   }
 
+  async function deleteActiveChatSession() {
+    if (!token.value || !activeChatSessionId.value) {
+      return;
+    }
+
+    await api.deleteChatSession(token.value, activeChatSessionId.value);
+    banner.value = "Chat session deleted";
+    await loadChatSessions();
+  }
+
   async function sendChatMessage() {
     if (!token.value || !activeKnowledgeBaseId.value || !chatQuestion.value.trim()) {
       return;
@@ -299,6 +380,38 @@ export function useMnemeWorkspace() {
     aiModelProviderPresets.value = data.provider_presets;
     aiModelConfigs.value = data.items;
     activeAiModelConfigId.value = data.default_config_id ?? data.items[0]?.id ?? "";
+  }
+
+  async function testAiModelConfig(configId: string) {
+    if (!token.value) {
+      return;
+    }
+
+    const result = await api.testAiModelConfig(token.value, configId);
+    aiModelActionStatus.value = result.message;
+  }
+
+  async function setDefaultAiModelConfig(configId: string) {
+    if (!token.value) {
+      return;
+    }
+
+    const updated = await api.setDefaultAiModelConfig(token.value, configId);
+    aiModelConfigs.value = aiModelConfigs.value.map((config) => ({ ...config, is_default: config.id === updated.id }));
+    activeAiModelConfigId.value = updated.id;
+    aiModelActionStatus.value = `${updated.label} is now default`;
+  }
+
+  async function updateActiveModelContextWindow(value: number) {
+    if (!token.value || !activeAiModelConfigId.value) {
+      return;
+    }
+
+    const updated = await api.updateAiModelConfig(token.value, activeAiModelConfigId.value, {
+      context_window: value,
+    });
+    aiModelConfigs.value = aiModelConfigs.value.map((config) => (config.id === updated.id ? updated : config));
+    aiModelActionStatus.value = `Context window updated to ${updated.context_window.toLocaleString()}`;
   }
 
   async function loadDocumentPreview(documentId: string) {
@@ -392,6 +505,7 @@ export function useMnemeWorkspace() {
     adviceGoal,
     analytics,
     aiModelConfigs,
+    aiModelActionStatus,
     aiModelProviderPresets,
     askCompanion,
     askVault,
@@ -401,16 +515,24 @@ export function useMnemeWorkspace() {
     chatQuestion,
     chatResult,
     chatMessages,
+    chatSessionFilter,
     chatSessions,
     companionQuestion,
     companionResult,
     createChatSession,
     createKnowledgeBase,
     clearDocumentPreview,
+    deleteActiveChatSession,
+    deleteDocument,
+    documentActionStatus,
     documentPreview,
     documents,
+    filteredChatSessions,
     graphData,
+    graphRagQuestion,
+    graphRagStatus,
     indexedDocumentCount,
+    indexDocument,
     isAuthenticated,
     isLoading,
     knowledgeBaseForm,
@@ -431,6 +553,7 @@ export function useMnemeWorkspace() {
     rebuildActiveGraph,
     rebuildActiveMemory,
     refreshAdvice,
+    runGraphRag,
     selectedDocuments,
     selectedKnowledgeBase,
     selectedKnowledgeBaseId,
@@ -438,8 +561,15 @@ export function useMnemeWorkspace() {
     selectChatSession,
     sendChatMessage,
     serviceHealth,
+    setDefaultAiModelConfig,
+    showDocumentationStatus,
+    showSupportStatus,
     syncBusyTarget,
     syncStatus,
+    testAiModelConfig,
+    updateActiveModelContextWindow,
+    uploadFile,
+    uploadInputKey,
     user,
     view,
     workspaceCommandTab,

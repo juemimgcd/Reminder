@@ -90,6 +90,10 @@ type ForceGraphLink = {
 
 const graphFileRailCollapsed = ref(false);
 const aiHistoryRailCollapsed = ref(false);
+const researchStatusFilter = ref<"all" | "indexed">("all");
+const researchGridCompact = ref(false);
+const graphViewBox = ref("0 0 760 680");
+const graphZoom = ref(1);
 const graphSimulationNodes = ref<ForceGraphNode[]>([]);
 const graphSimulationLinks = ref<ForceGraphLink[]>([]);
 const draggingGraphNode = ref<ForceGraphNode | null>(null);
@@ -119,6 +123,30 @@ const graphSummary = computed(() => {
   }
   return `${graph.scope} graph with ${graph.nodes.length} nodes, ${graph.edges.length} edges, and ${graph.relationship_scope ?? "local"} relationships.`;
 });
+const displayedResearchDocuments = computed(() => {
+  if (researchStatusFilter.value === "indexed") {
+    return workspace.selectedDocuments.value.filter((doc) => doc.status === "indexed");
+  }
+  return workspace.selectedDocuments.value;
+});
+
+function setGraphZoom(nextZoom: number) {
+  graphZoom.value = Math.min(1.6, Math.max(0.7, nextZoom));
+  const width = 760 / graphZoom.value;
+  const height = 680 / graphZoom.value;
+  graphViewBox.value = `${(760 - width) / 2} ${(680 - height) / 2} ${width} ${height}`;
+}
+
+function centerGraph() {
+  graphZoom.value = 1;
+  graphViewBox.value = "0 0 760 680";
+  graphSimulation?.alpha(0.6).restart();
+}
+
+function restartGraphLayout() {
+  graphSimulation?.alpha(0.8).restart();
+}
+
 const memoryGovernanceSummary = computed(() => {
   const governance = workspace.memoryGovernance.value;
   if (!governance) {
@@ -133,6 +161,14 @@ const activeChatSession = computed(
 const activeAiModelConfig = computed(
   () => workspace.aiModelConfigs.value.find((config) => config.id === workspace.activeAiModelConfigId.value) ?? workspace.aiModelConfigs.value[0] ?? null,
 );
+const settingsContextWindow = computed({
+  get: () => (activeAiModelConfig.value ? Math.round(activeAiModelConfig.value.context_window / 1000) : 64),
+  set: (value: number) => {
+    if (activeAiModelConfig.value) {
+      activeAiModelConfig.value.context_window = Number(value) * 1000;
+    }
+  },
+});
 
 watch(
   () => workspace.graphData.value,
@@ -368,7 +404,7 @@ function endGraphNodeDrag() {
 
           <button class="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-primary-container px-4 font-mono text-sm font-semibold text-on-primary-container transition hover:brightness-110" @click="openCreateCommand">
             <Plus class="size-4" />
-            {{ workspace.view.value === "ai" ? "New Memory" : "New Research" }}
+            New Research Space
           </button>
         </div>
 
@@ -417,14 +453,14 @@ function endGraphNodeDrag() {
 
         <footer class="border-t border-outline-variant/20 p-4">
           <div class="mb-3 grid gap-1">
-            <a class="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-on-surface-variant hover:text-primary" href="#">
+            <button class="flex items-center gap-3 rounded-md px-3 py-2 text-left text-sm text-on-surface-variant hover:text-primary" @click="workspace.showDocumentationStatus">
               <BookOpen class="size-4" />
               Documentation
-            </a>
-            <a class="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-on-surface-variant hover:text-primary" href="#">
+            </button>
+            <button class="flex items-center gap-3 rounded-md px-3 py-2 text-left text-sm text-on-surface-variant hover:text-primary" @click="workspace.showSupportStatus">
               <LifeBuoy class="size-4" />
               Support
-            </a>
+            </button>
           </div>
           <div class="flex items-center gap-3 rounded-md bg-surface-container-low p-3">
             <div class="grid size-8 place-items-center rounded-full bg-primary-container/30 text-primary">
@@ -454,6 +490,9 @@ function endGraphNodeDrag() {
             </button>
           </div>
         </header>
+        <p v-if="workspace.banner.value" class="mx-5 mt-4 rounded-md border border-outline-variant/30 bg-surface-container-low px-4 py-3 text-sm text-on-surface-variant lg:mx-8">
+          {{ workspace.banner.value }}
+        </p>
 
         <section
           data-testid="obsidian-editor-pane"
@@ -485,9 +524,17 @@ function endGraphNodeDrag() {
                 </section>
                 <section class="stitch-card rounded-lg p-5">
                   <Network class="mb-4 size-5 text-primary" />
-                  <p class="text-sm text-text-muted">Graph Nodes</p>
-                  <p class="mt-2 text-3xl font-semibold">{{ workspace.graphData.value?.nodes.length ?? 0 }}</p>
-                  <p class="mt-2 text-xs text-text-muted">{{ workspace.graphData.value?.edges.length ?? 0 }} relations</p>
+                  <p class="text-sm text-text-muted">Graph Topology</p>
+                  <div class="mt-4 grid gap-3">
+                    <div class="flex items-end justify-between border-b border-outline-variant/20 pb-2">
+                      <span class="text-sm text-text-muted">Nodes</span>
+                      <span class="text-lg font-semibold">{{ workspace.graphData.value?.nodes.length ?? 0 }}</span>
+                    </div>
+                    <div class="flex items-end justify-between">
+                      <span class="text-sm text-text-muted">Edges</span>
+                      <span class="text-lg font-semibold">{{ workspace.graphData.value?.edges.length ?? 0 }}</span>
+                    </div>
+                  </div>
                 </section>
                 <section class="stitch-card rounded-lg p-5">
                   <CheckCircle2 class="mb-4 size-5 text-primary" />
@@ -527,7 +574,13 @@ function endGraphNodeDrag() {
                       <div v-else-if="workspace.workspaceCommandTab.value === 'upload'" data-testid="workspace-upload-command" class="mx-auto grid max-w-3xl gap-3">
                         <div class="rounded-lg border border-dashed border-outline-variant/40 p-6 text-sm text-text-muted">
                           <FilePlus2 class="mb-3 size-5 text-primary" />
-                          Upload is connected to the backend API surface; preview mode keeps files local for layout review.
+                          <p>Attach a document to the active research space.</p>
+                          <input
+                            :key="`command-${workspace.uploadInputKey.value}`"
+                            class="premium-input mt-4 w-full rounded-md p-3 text-sm"
+                            type="file"
+                            @change="workspace.uploadFile(($event.target as HTMLInputElement).files?.[0])"
+                          />
                         </div>
                       </div>
 
@@ -559,7 +612,7 @@ function endGraphNodeDrag() {
             </div>
 
             <div v-else-if="workspace.view.value === 'notes'" data-testid="stitch-research-vault-layout" class="grid h-[calc(100vh-64px)] min-h-0 grid-cols-1 bg-surface-base lg:grid-cols-[360px_minmax(0,1fr)]">
-              <aside class="stitch-panel border-r border-outline-variant/30 p-5">
+              <aside class="stitch-panel min-w-0 overflow-hidden border-r border-outline-variant/30 p-5">
                 <div class="mb-5 flex items-center justify-between">
                   <div>
                     <p class="font-mono text-xs uppercase text-text-muted">Directories</p>
@@ -573,12 +626,12 @@ function endGraphNodeDrag() {
                   <button
                     v-for="vault in workspace.knowledgeBases.value"
                     :key="vault.id"
-                    class="flex items-start gap-3 rounded-md px-3 py-3 text-left"
+                    class="flex w-full min-w-0 items-start gap-3 rounded-md px-3 py-3 text-left"
                     :class="workspace.selectedKnowledgeBaseId.value === vault.id ? 'bg-surface-container-high text-primary ring-1 ring-primary/30' : 'text-on-surface-variant hover:bg-surface-container'"
                     @click="workspace.selectKnowledgeBase(vault.id)"
                   >
                     <FolderOpen class="mt-0.5 size-4 shrink-0" />
-                    <span class="min-w-0">
+                    <span class="min-w-0 flex-1">
                       <span class="block truncate text-sm font-semibold">{{ vault.name }}</span>
                       <span class="block truncate text-xs text-text-muted">{{ vault.description || "No description" }}</span>
                     </span>
@@ -601,14 +654,33 @@ function endGraphNodeDrag() {
                     <h2 class="mt-2 text-3xl font-semibold">{{ workspace.selectedKnowledgeBase.value?.name ?? "No vault selected" }}</h2>
                   </div>
                   <div class="hidden items-center gap-2 sm:flex">
-                    <button class="premium-action-btn grid size-9 place-items-center rounded-md"><ListFilter class="size-4" /></button>
-                    <button class="premium-action-btn grid size-9 place-items-center rounded-md"><Grid3X3 class="size-4" /></button>
+                    <input
+                      :key="`vault-${workspace.uploadInputKey.value}`"
+                      data-testid="workspace-upload-input"
+                      class="sr-only"
+                      type="file"
+                      @change="workspace.uploadFile(($event.target as HTMLInputElement).files?.[0])"
+                    />
+                    <button
+                      class="premium-action-btn grid size-9 place-items-center rounded-md"
+                      :title="researchStatusFilter === 'all' ? 'Show indexed files' : 'Show all files'"
+                      @click="researchStatusFilter = researchStatusFilter === 'all' ? 'indexed' : 'all'"
+                    >
+                      <ListFilter class="size-4" />
+                    </button>
+                    <button
+                      class="premium-action-btn grid size-9 place-items-center rounded-md"
+                      :title="researchGridCompact ? 'Comfortable grid' : 'Compact grid'"
+                      @click="researchGridCompact = !researchGridCompact"
+                    >
+                      <Grid3X3 class="size-4" />
+                    </button>
                   </div>
                 </div>
 
-                <div v-if="workspace.selectedDocuments.value.length" data-testid="memory-function-grid" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                  <article v-for="doc in workspace.selectedDocuments.value" :key="doc.id" class="stitch-card rounded-lg p-4">
-                    <div class="mb-14 flex items-center justify-between">
+                <div v-if="displayedResearchDocuments.length" data-testid="memory-function-grid" class="grid gap-4 sm:grid-cols-2" :class="researchGridCompact ? 'xl:grid-cols-4' : 'xl:grid-cols-3'">
+                  <article v-for="doc in displayedResearchDocuments" :key="doc.id" data-testid="document-card" class="stitch-card rounded-lg p-4">
+                    <div class="flex items-center justify-between" :class="researchGridCompact ? 'mb-8' : 'mb-14'">
                       <File class="size-8 text-primary/80" />
                       <span class="rounded-full border px-2 py-0.5 text-[11px]" :class="statusClass(doc.status)">{{ doc.status }}</span>
                     </div>
@@ -618,15 +690,29 @@ function endGraphNodeDrag() {
                       <span class="inline-flex items-center gap-1"><Clock3 class="size-3.5" /> {{ formatDate(doc.created_at) }}</span>
                       <span>{{ doc.file_type }}</span>
                     </div>
+                    <div class="mt-4 grid grid-cols-2 gap-2">
+                      <button class="premium-action-btn rounded-md px-3 py-2 text-xs" @click="workspace.indexDocument(doc.id)">Index</button>
+                      <button class="premium-action-btn rounded-md px-3 py-2 text-xs text-rose-200" @click="workspace.deleteDocument(doc.id)">Delete</button>
+                    </div>
                   </article>
                 </div>
                 <div v-else class="stitch-panel rounded-lg p-8 text-sm text-text-muted">No documents in this vault yet.</div>
 
-                <section data-testid="memory-output-workspace" class="mt-6 grid gap-3">
-                  <article v-for="entry in workspace.memoryLibrary.value?.timeline ?? []" :key="entry.entry_id" class="rounded-lg border border-outline-variant/30 bg-surface-container-low/40 p-4">
-                    <p class="text-sm font-semibold">{{ entry.entry_name }}</p>
-                    <p class="mt-1 text-sm leading-6 text-text-muted">{{ entry.summary }}</p>
-                  </article>
+                <section data-testid="memory-output-workspace" class="mt-6 overflow-hidden rounded-lg border border-outline-variant/30 bg-surface-container-low/30">
+                  <div class="flex items-center justify-between border-b border-outline-variant/20 px-5 py-3">
+                    <h3 class="flex items-center gap-2 font-mono text-sm font-semibold text-primary">
+                      <Database class="size-4" />
+                      Memory Output Workspace
+                    </h3>
+                    <ChevronDown class="size-4 rotate-180 text-text-muted" />
+                  </div>
+                  <div class="grid gap-3 p-5">
+                    <article v-for="entry in workspace.memoryLibrary.value?.timeline ?? []" :key="entry.entry_id" class="border-l-2 border-primary/50 pl-4">
+                      <p class="text-sm font-semibold">{{ entry.entry_name }}</p>
+                      <p class="mt-1 text-sm leading-6 text-text-muted">{{ entry.summary }}</p>
+                    </article>
+                    <p v-if="!(workspace.memoryLibrary.value?.timeline ?? []).length" class="text-sm text-text-muted">No synthesized memory events yet.</p>
+                  </div>
                 </section>
               </section>
             </div>
@@ -694,10 +780,13 @@ function endGraphNodeDrag() {
                       Graph View
                     </button>
                     <div class="grid gap-3">
-                      <div class="glass-panel flex h-12 w-[328px] items-center gap-3 rounded-lg px-5 text-text-muted">
+                      <form class="glass-panel flex h-12 w-[328px] items-center gap-3 rounded-lg px-5 text-text-muted" @submit.prevent="workspace.runGraphRag">
                         <Search class="size-5" />
-                        Search knowledge base...
-                      </div>
+                        <input v-model="workspace.graphRagQuestion.value" class="min-w-0 flex-1 bg-transparent text-sm text-on-surface outline-none" placeholder="Search knowledge base..." />
+                        <button aria-label="Run GraphRAG" class="grid size-7 place-items-center rounded-md text-primary hover:bg-primary/10" type="submit">
+                          <Send class="size-4" />
+                        </button>
+                      </form>
                       <div class="glass-panel flex h-16 items-center gap-5 rounded-lg px-3">
                         <button class="rounded border border-primary/40 bg-primary/10 px-3 py-2 text-sm text-primary">All Nodes</button>
                         <button class="px-3 py-2 text-sm text-on-surface-variant">Tags</button>
@@ -706,10 +795,13 @@ function endGraphNodeDrag() {
                       </div>
                     </div>
                   </div>
+                  <p v-if="workspace.graphRagStatus.value" class="glass-panel absolute left-5 top-40 z-10 max-w-md rounded-md px-4 py-3 text-sm leading-6 text-on-surface-variant">
+                    {{ workspace.graphRagStatus.value }}
+                  </p>
 
                   <svg
                     class="h-full min-h-[640px] w-full touch-none select-none"
-                    viewBox="0 0 760 680"
+                    :viewBox="graphViewBox"
                     role="img"
                     aria-label="Knowledge graph"
                     @pointermove="moveGraphNodeDrag"
@@ -826,11 +918,11 @@ function endGraphNodeDrag() {
                     <ChevronDown class="size-5" :class="graphFileRailCollapsed ? '-rotate-90' : 'rotate-90'" />
                   </button>
 
-                  <div class="glass-panel absolute bottom-7 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-lg p-2">
-                    <button class="premium-action-btn grid size-12 place-items-center rounded-md"><ZoomIn class="size-5" /></button>
-                    <button class="premium-action-btn grid size-12 place-items-center rounded-md"><ZoomOut class="size-5" /></button>
-                    <button class="premium-action-btn grid size-12 place-items-center rounded-md"><Target class="size-5" /></button>
-                    <button class="premium-action-btn grid size-12 place-items-center rounded-md"><Play class="size-5" /></button>
+                  <div class="glass-panel absolute bottom-7 right-4 flex flex-col items-center gap-2 rounded-lg p-2 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:flex-row">
+                    <button aria-label="Zoom in graph" class="premium-action-btn grid size-12 place-items-center rounded-md" @click="setGraphZoom(graphZoom + 0.15)"><ZoomIn class="size-5" /></button>
+                    <button aria-label="Zoom out graph" class="premium-action-btn grid size-12 place-items-center rounded-md" @click="setGraphZoom(graphZoom - 0.15)"><ZoomOut class="size-5" /></button>
+                    <button aria-label="Center graph" class="premium-action-btn grid size-12 place-items-center rounded-md" @click="centerGraph"><Target class="size-5" /></button>
+                    <button aria-label="Restart graph layout" class="premium-action-btn grid size-12 place-items-center rounded-md" @click="restartGraphLayout"><Play class="size-5" /></button>
                   </div>
                 </section>
               </div>
@@ -848,17 +940,21 @@ function endGraphNodeDrag() {
                 :class="aiHistoryRailCollapsed ? 'invisible pointer-events-none overflow-hidden border-r-0 p-0' : 'p-5'"
                 :aria-hidden="aiHistoryRailCollapsed"
               >
-                <div class="premium-input mb-5 flex h-10 items-center gap-3 rounded px-3 text-text-muted">
-                  <Search class="size-4" />
-                  Search history...
+                <div v-if="!aiHistoryRailCollapsed" class="mb-4 flex items-center justify-between border-b border-outline-variant/20 pb-4">
+                  <h2 class="font-mono text-xs font-semibold uppercase text-on-surface">Laboratory Sessions</h2>
+                  <ListFilter class="size-4 text-text-muted" />
                 </div>
+                <label class="premium-input mb-5 flex h-10 items-center gap-3 rounded px-3 text-text-muted">
+                  <Search class="size-4" />
+                  <input v-model="workspace.chatSessionFilter.value" class="min-w-0 flex-1 bg-transparent text-sm text-on-surface outline-none" placeholder="Search history..." />
+                </label>
                 <button class="mb-6 flex h-12 w-full items-center justify-center gap-3 rounded bg-surface-container-high text-base font-semibold" @click="workspace.createChatSession">
                   <MessageSquare class="size-5" />
                   New Chat
                 </button>
                 <div class="grid gap-2">
                   <button
-                    v-for="session in workspace.chatSessions.value"
+                    v-for="session in workspace.filteredChatSessions.value"
                     :key="session.id"
                     class="rounded px-4 py-3 text-left"
                     :class="workspace.activeChatSessionId.value === session.id ? 'border border-primary/40 bg-surface-container-high text-primary' : 'text-on-surface-variant hover:bg-surface-container'"
@@ -892,6 +988,9 @@ function endGraphNodeDrag() {
                   </div>
                   <div class="flex gap-6 text-on-surface-variant">
                     <Search class="size-5" />
+                    <button class="premium-action-btn rounded-md px-3 py-2 text-sm text-rose-200" @click="workspace.deleteActiveChatSession">
+                      Delete active chat
+                    </button>
                     <MoreVertical class="size-5" />
                   </div>
                 </header>
@@ -915,8 +1014,13 @@ function endGraphNodeDrag() {
                             <Bot class="size-5" />
                           </div>
                           <article class="rounded border border-outline-variant/30 border-l-4 border-l-primary bg-[#0c0c0e] p-6 text-base leading-8">
+                            <div class="mb-4 flex items-center gap-2 font-mono text-sm font-semibold uppercase text-primary">
+                              <FlaskConical class="size-4" />
+                              Analysis Complete
+                            </div>
                             <p>{{ message.content }}</p>
                             <div v-if="message.sources.length" class="mt-8 flex flex-wrap gap-3 border-t border-outline-variant/20 pt-4">
+                              <p class="basis-full font-mono text-xs uppercase text-text-muted">Referenced Context Nodes</p>
                               <span v-for="source in message.sources" :key="source.source_id" class="premium-tag rounded px-3 py-1 font-mono text-xs text-on-surface-variant">
                                 {{ source.document_id }}
                               </span>
@@ -966,7 +1070,10 @@ function endGraphNodeDrag() {
                 <article class="stitch-card rounded-lg p-6">
                   <div class="mb-6 flex items-center gap-3">
                     <BrainCircuit class="size-6 text-primary" />
-                    <h2 class="text-2xl font-semibold">Cognitive Engine Selection</h2>
+                    <div>
+                      <h2 class="text-2xl font-semibold">AI Models Configuration</h2>
+                      <p class="mt-1 text-sm text-text-muted">Cognitive Engine selection, connection parameters, and context limits.</p>
+                    </div>
                   </div>
                   <div class="grid gap-4 md:grid-cols-2">
                     <div
@@ -981,18 +1088,28 @@ function endGraphNodeDrag() {
                       </div>
                       <p class="mt-3 text-sm leading-6 text-on-surface-variant">{{ config.provider }} / {{ config.model_name }}</p>
                       <p class="mt-2 text-xs text-text-muted">{{ config.base_url }}</p>
+                      <div class="mt-4 flex flex-wrap gap-2">
+                        <button class="premium-action-btn rounded-md px-3 py-2 text-xs" :aria-label="`Test ${config.label}`" @click="workspace.testAiModelConfig(config.id)">Test</button>
+                        <button v-if="!config.is_default" class="premium-action-btn rounded-md px-3 py-2 text-xs" :aria-label="`Set ${config.label} default`" @click="workspace.setDefaultAiModelConfig(config.id)">Set Default</button>
+                      </div>
                     </div>
                     <div v-if="!workspace.aiModelConfigs.value.length" class="rounded-lg border border-outline-variant/20 bg-surface-container-low p-5">
                       <h3 class="font-mono text-base font-semibold">Backend Default</h3>
                       <p class="mt-3 text-sm leading-6 text-on-surface-variant">{{ workspace.neo4jHealth.value?.backend ?? "Backend configuration pending" }}</p>
                     </div>
                   </div>
+                  <p v-if="workspace.aiModelActionStatus.value" class="mt-4 rounded-md border border-outline-variant/30 bg-surface-container-low px-4 py-3 text-sm text-on-surface-variant">
+                    {{ workspace.aiModelActionStatus.value }}
+                  </p>
                   <div class="mt-6">
                     <div class="mb-2 flex justify-between font-mono text-sm">
                       <span>Context Window Size</span>
-                      <span class="text-primary">{{ activeAiModelConfig ? activeAiModelConfig.context_window.toLocaleString() : "64,000" }}</span>
+                      <span class="text-primary">{{ (settingsContextWindow * 1000).toLocaleString() }}</span>
                     </div>
-                    <input class="premium-range w-full" type="range" min="8" max="128" :value="activeAiModelConfig ? Math.round(activeAiModelConfig.context_window / 1000) : 64" readonly />
+                    <input v-model.number="settingsContextWindow" class="premium-range w-full" type="range" min="8" max="128" />
+                    <button class="premium-action-btn mt-3 rounded-md px-3 py-2 text-xs" @click="workspace.updateActiveModelContextWindow(settingsContextWindow * 1000)">
+                      Save context window
+                    </button>
                   </div>
                 </article>
 
@@ -1004,7 +1121,7 @@ function endGraphNodeDrag() {
                   <label class="grid gap-2">
                     <span class="font-mono text-sm">Primary Access Token</span>
                     <span class="flex items-center gap-3">
-                      <input class="premium-input h-11 flex-1 px-3 font-mono" value="••••••••••••••••••••••••••••••••" readonly />
+                      <input class="premium-input h-11 flex-1 px-3 font-mono" value="********************************" readonly />
                       <button class="premium-action-btn inline-flex h-11 items-center gap-2 rounded-md px-4 font-mono text-sm">
                         <Copy class="size-4" />
                         Copy
@@ -1041,6 +1158,36 @@ function endGraphNodeDrag() {
                   <p v-if="workspace.syncStatus.value" class="mt-4 rounded-md border border-outline-variant/30 bg-surface-container-low px-4 py-3 text-sm text-on-surface-variant">
                     {{ workspace.syncStatus.value }}
                   </p>
+                </article>
+
+                <article class="stitch-card rounded-lg p-6">
+                  <div class="mb-6 flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-3">
+                      <Network class="size-6 text-primary" />
+                      <h2 class="text-2xl font-semibold">Knowledge Graph Health</h2>
+                    </div>
+                    <span class="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 font-mono text-xs text-emerald-200">
+                      {{ activeHealthLabel }}
+                    </span>
+                  </div>
+                  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <section class="rounded-lg border border-outline-variant/30 bg-surface-container-low/40 p-4">
+                      <p class="font-mono text-xs uppercase text-text-muted">Nodes</p>
+                      <p class="mt-2 text-2xl font-semibold">{{ workspace.graphData.value?.nodes.length ?? 0 }}</p>
+                    </section>
+                    <section class="rounded-lg border border-outline-variant/30 bg-surface-container-low/40 p-4">
+                      <p class="font-mono text-xs uppercase text-text-muted">Edges</p>
+                      <p class="mt-2 text-2xl font-semibold">{{ workspace.graphData.value?.edges.length ?? 0 }}</p>
+                    </section>
+                    <section class="rounded-lg border border-outline-variant/30 bg-surface-container-low/40 p-4">
+                      <p class="font-mono text-xs uppercase text-text-muted">Backend</p>
+                      <p class="mt-2 truncate text-sm font-semibold">{{ workspace.neo4jHealth.value?.backend ?? "pending" }}</p>
+                    </section>
+                    <section class="rounded-lg border border-outline-variant/30 bg-surface-container-low/40 p-4">
+                      <p class="font-mono text-xs uppercase text-text-muted">Scope</p>
+                      <p class="mt-2 truncate text-sm font-semibold">{{ workspace.graphData.value?.relationship_scope ?? "local" }}</p>
+                    </section>
+                  </div>
                 </article>
 
                 <article data-testid="insights-function-grid" class="glass-panel rounded-lg p-6">
