@@ -2,7 +2,9 @@ import { readFileSync } from 'node:fs';
 import { strict as assert } from 'node:assert';
 
 const appSource = readFileSync(new URL('../src/App.vue', import.meta.url), 'utf8');
+const apiSource = readFileSync(new URL('../src/lib/api.ts', import.meta.url), 'utf8');
 const previewApiSource = readFileSync(new URL('../src/lib/previewApi.ts', import.meta.url), 'utf8');
+const workspaceSource = readFileSync(new URL('../src/composables/useMnemeWorkspace.ts', import.meta.url), 'utf8');
 
 for (const testId of [
   'data-testid="obsidian-shell"',
@@ -34,7 +36,7 @@ assert.ok(
 );
 
 assert.ok(
-  readFileSync(new URL('../src/composables/useMnemeWorkspace.ts', import.meta.url), 'utf8').includes('ref<WorkspaceView>("graph")'),
+  workspaceSource.includes('ref<WorkspaceView>("graph")'),
   'Expected preview/default workspace to open the node graph module first',
 );
 
@@ -66,6 +68,23 @@ for (const stitchLayoutHook of [
 
 for (const stitchText of ['Mneme Intelligence', 'Cognitive Sanctuary', 'New Research']) {
   assert.ok(appSource.includes(stitchText), `Expected Stitch shell copy: ${stitchText}`);
+}
+
+for (const darkAdaptedStitchText of [
+  'New Research Space',
+  'Graph Topology',
+  'Memory Output Workspace',
+  'Laboratory Sessions',
+  'Analysis Complete',
+  'Referenced Context Nodes',
+  'AI Models Configuration',
+  'Knowledge Graph Health',
+]) {
+  assert.ok(appSource.includes(darkAdaptedStitchText), `Expected dark-adapted Stitch optimization text: ${darkAdaptedStitchText}`);
+}
+
+for (const lightThemeOnlyToken of ['#f8f9ff', 'bg-background', 'text-on-background']) {
+  assert.ok(!appSource.includes(lightThemeOnlyToken), `Expected dark theme to avoid light Stitch token ${lightThemeOnlyToken}`);
 }
 
 assert.ok(
@@ -148,7 +167,7 @@ for (const graphInteractionText of [
 
 for (const aiReferenceText of [
   'Deep Thought Mode',
-  'New Memory',
+  'New Research Space',
   'Search history...',
   'Today, 14:03',
   'Context: Node B',
@@ -201,7 +220,39 @@ for (const sidebarHook of [
 }
 
 assert.ok(
-  readFileSync(new URL('../src/composables/useMnemeWorkspace.ts', import.meta.url), 'utf8').includes('type WorkspaceCommandTab') &&
-    appSource.includes('workspace.workspaceCommandTab.value'),
+  workspaceSource.includes('type WorkspaceCommandTab') && appSource.includes('workspace.workspaceCommandTab.value'),
   'Expected Workspace Commands to behave like tabs instead of showing every form at once',
 );
+
+for (const apiMethod of [
+  'documentationStatus',
+  'supportStatus',
+  'uploadDocument',
+  'indexDocument',
+  'deleteDocument',
+  'testAiModelConfig',
+  'setDefaultAiModelConfig',
+  'updateAiModelConfig',
+  'deleteChatSession',
+  'graphRag',
+]) {
+  assert.ok(
+    appSource.includes(apiMethod) || apiSource.includes(apiMethod) || previewApiSource.includes(apiMethod),
+    `Expected client API/workspace method ${apiMethod}`,
+  );
+}
+
+for (const workspaceMethod of [
+  'showDocumentationStatus',
+  'showSupportStatus',
+  'uploadFile',
+  'indexDocument',
+  'deleteDocument',
+  'runGraphRag',
+  'deleteActiveChatSession',
+  'testAiModelConfig',
+  'setDefaultAiModelConfig',
+  'updateActiveModelContextWindow',
+]) {
+  assert.ok(workspaceSource.includes(workspaceMethod), `Expected workspace method ${workspaceMethod}`);
+}

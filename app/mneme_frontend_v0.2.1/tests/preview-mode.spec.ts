@@ -6,8 +6,12 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
+async function openPreview(page: { goto: (url: string, options: { waitUntil: 'domcontentloaded' }) => Promise<unknown> }) {
+  await page.goto('/?preview=1', { waitUntil: 'domcontentloaded' });
+}
+
 test('preview mode opens the populated workbench without a backend login', async ({ page }) => {
-  await page.goto('/?preview=1');
+  await openPreview(page);
 
   const sidebar = page.locator('aside');
 
@@ -17,7 +21,7 @@ test('preview mode opens the populated workbench without a backend login', async
 });
 
 test('preview workbench uses the Sanctuary wide layout instead of a rail dashboard', async ({ page }) => {
-  await page.goto('/?preview=1');
+  await openPreview(page);
 
   const shell = page.getByTestId('obsidian-shell');
   const sidebar = page.getByTestId('sanctuary-sidebar');
@@ -45,7 +49,7 @@ test('preview workbench uses the Sanctuary wide layout instead of a rail dashboa
 });
 
 test('knowledge graph file rail can collapse and expand from the canvas handle', async ({ page }) => {
-  await page.goto('/?preview=1');
+  await openPreview(page);
 
   const rail = page.getByTestId('graph-file-rail');
   const toggle = page.getByTestId('graph-file-rail-toggle');
@@ -62,8 +66,58 @@ test('knowledge graph file rail can collapse and expand from the canvas handle',
   await expect(toggle).toHaveAttribute('title', 'Collapse file list');
 });
 
+test('research vault directory rail clips long folder labels inside the rail', async ({ page }) => {
+  await openPreview(page);
+  await page.getByRole('button', { name: 'Research Vault', exact: true }).click();
+
+  const layout = page.getByTestId('stitch-research-vault-layout');
+  const directoryRail = layout.locator('aside').first();
+  const directoryButton = directoryRail.getByRole('button', { name: /Demo Research Vault/ });
+
+  await expect(layout).toBeVisible();
+  await expect(directoryButton).toBeVisible();
+
+  const railBox = await directoryRail.boundingBox();
+  const buttonBox = await directoryButton.boundingBox();
+  expect(railBox).not.toBeNull();
+  expect(buttonBox).not.toBeNull();
+  expect(buttonBox!.x + buttonBox!.width).toBeLessThanOrEqual(railBox!.x + railBox!.width + 1);
+
+  const hasHorizontalOverflow = await directoryRail.evaluate((element) => element.scrollWidth > element.clientWidth + 1);
+  expect(hasHorizontalOverflow).toBe(false);
+});
+
+test('documentation and support show planned backend feedback', async ({ page }) => {
+  await openPreview(page);
+
+  await page.getByRole('button', { name: 'Documentation' }).click();
+  await expect(page.getByText('Documentation workspace is reserved for a future release.')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Support' }).click();
+  await expect(page.getByText('Support contact workflow is reserved for a future release.')).toBeVisible();
+});
+
+test('research vault upload and document actions are wired', async ({ page }) => {
+  await openPreview(page);
+  await page.getByRole('button', { name: 'Research Vault', exact: true }).click();
+
+  await page.getByTestId('workspace-upload-input').setInputFiles({
+    name: 'closure-notes.md',
+    mimeType: 'text/markdown',
+    buffer: Buffer.from('# Closure notes'),
+  });
+  await expect(page.getByTestId('stitch-research-vault-layout')).toContainText('closure-notes.md');
+
+  const card = page.getByTestId('document-card').filter({ hasText: 'closure-notes.md' });
+  await card.getByRole('button', { name: 'Index' }).click();
+  await expect(card).toContainText('indexed');
+
+  await card.getByRole('button', { name: 'Delete' }).click();
+  await expect(page.getByTestId('stitch-research-vault-layout')).not.toContainText('closure-notes.md');
+});
+
 test('knowledge graph document panel stays open after long-pressing a node', async ({ page }) => {
-  await page.goto('/?preview=1');
+  await openPreview(page);
 
   await expect(page.getByText('Properties', { exact: true })).toBeHidden();
 
@@ -91,8 +145,23 @@ test('knowledge graph document panel stays open after long-pressing a node', asy
   await expect(panel).toBeHidden();
 });
 
+test('graph search and toolbar produce visible behavior', async ({ page }) => {
+  await openPreview(page);
+
+  await page.getByPlaceholder('Search knowledge base...').fill('memory graph');
+  await page.getByRole('button', { name: 'Run GraphRAG' }).click();
+  await expect(page.getByTestId('graph-output-workspace')).toContainText('Preview GraphRAG found');
+
+  const graph = page.locator('svg[aria-label="Knowledge graph"]');
+  const before = await graph.getAttribute('viewBox');
+  await page.getByRole('button', { name: 'Zoom in graph' }).click();
+  await expect(graph).not.toHaveAttribute('viewBox', before ?? '');
+  await page.getByRole('button', { name: 'Center graph' }).click();
+  await expect(graph).toHaveAttribute('viewBox', '0 0 760 680');
+});
+
 test('ai chat history rail can collapse and expand from the chat handle', async ({ page }) => {
-  await page.goto('/?preview=1');
+  await openPreview(page);
   await page.getByRole('button', { name: 'AI Laboratory', exact: true }).click();
   const viewport = page.viewportSize();
 
@@ -120,8 +189,18 @@ test('ai chat history rail can collapse and expand from the chat handle', async 
   await expect(toggle).toHaveAttribute('title', 'Collapse chat history');
 });
 
+test('ai laboratory filters and deletes chat sessions', async ({ page }) => {
+  await openPreview(page);
+  await page.getByRole('button', { name: 'AI Laboratory', exact: true }).click();
+
+  await page.getByPlaceholder('Search history...').fill('Preview Vault');
+  await expect(page.getByTestId('ai-history-rail')).toContainText('Preview Vault Review');
+  await page.getByRole('button', { name: 'Delete active chat' }).click();
+  await expect(page.getByTestId('ai-history-rail')).not.toContainText('Preview Vault Review');
+});
+
 test('ai laboratory renders API-backed sessions and appends sent messages', async ({ page }) => {
-  await page.goto('/?preview=1');
+  await openPreview(page);
   await page.getByRole('button', { name: 'AI Laboratory', exact: true }).click();
 
   await expect(page.getByTestId('ai-history-rail')).toContainText('Preview Vault Review');
@@ -140,7 +219,7 @@ test('ai laboratory renders API-backed sessions and appends sent messages', asyn
 });
 
 test('settings can trigger graph and memory sync actions', async ({ page }) => {
-  await page.goto('/?preview=1');
+  await openPreview(page);
   await page.getByRole('button', { name: 'System Settings', exact: true }).click();
 
   const settings = page.getByTestId('stitch-settings-layout');
@@ -149,4 +228,17 @@ test('settings can trigger graph and memory sync actions', async ({ page }) => {
 
   await settings.getByRole('button', { name: 'Rebuild Memory' }).click();
   await expect(settings).toContainText('Memory rebuild processed 2 documents');
+});
+
+test('settings model controls call preview API actions', async ({ page }) => {
+  await openPreview(page);
+  await page.getByRole('button', { name: 'System Settings', exact: true }).click();
+
+  const settings = page.getByTestId('stitch-settings-layout');
+  await settings.getByRole('button', { name: /Test Preview DeepSeek/ }).click();
+  await expect(settings).toContainText('Preview model config is ready.');
+
+  await settings.getByRole('slider').fill('32');
+  await settings.getByRole('button', { name: 'Save context window' }).click();
+  await expect(settings).toContainText('Context window updated to 32,000');
 });

@@ -28,6 +28,7 @@ import type {
   MemoryRebuildData,
   Neo4jHealthData,
   PersonalProfileResult,
+  PlannedSupportData,
   ProductionReadinessReportData,
   ServiceHealthData,
   TaskActionData,
@@ -185,6 +186,12 @@ const realApi = {
   },
   readiness() {
     return request<ProductionReadinessReportData>("/health/readiness");
+  },
+  documentationStatus() {
+    return request<PlannedSupportData>("/support/documentation");
+  },
+  supportStatus() {
+    return request<PlannedSupportData>("/support/contact");
   },
   register(payload: { username: string; password: string; display_name?: string | null }) {
     return request<UserPublic>("/auth/register", {

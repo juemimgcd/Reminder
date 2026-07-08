@@ -25,6 +25,7 @@
   MemoryRebuildData,
   Neo4jHealthData,
   PersonalProfileResult,
+  PlannedSupportData,
   ProductionReadinessReportData,
   ServiceHealthData,
   TaskActionData,
@@ -374,6 +375,18 @@ const previewApi = {
       optional_stack: [],
       avoid_by_default: ["Network calls in preview mode"],
       markdown: "## Preview Readiness\n\nThe frontend is running against local demo data.",
+    });
+  },
+  documentationStatus(): Promise<PlannedSupportData> {
+    return delay({
+      status: "planned",
+      message: "Documentation workspace is reserved for a future release.",
+    });
+  },
+  supportStatus(): Promise<PlannedSupportData> {
+    return delay({
+      status: "planned",
+      message: "Support contact workflow is reserved for a future release.",
     });
   },
   register(): Promise<UserPublic> {

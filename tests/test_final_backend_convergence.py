@@ -30,6 +30,8 @@ class FinalBackendConvergenceTest(unittest.TestCase):
             "/tasks/{task_id}",
             "/tasks/{task_id}/cancel",
             "/tasks/{task_id}/retry",
+            "/support/documentation",
+            "/support/contact",
         }
         self.assertTrue(expected_paths.issubset(paths), expected_paths - paths)
 

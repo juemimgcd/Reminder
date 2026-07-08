@@ -21,6 +21,11 @@ export interface GraphLink {
 
 export type WorkspaceView = "dashboard" | "notes" | "graph" | "ai" | "settings";
 
+export interface PlannedSupportData {
+  status: "planned";
+  message: string;
+}
+
 export interface ApiResponse<T> {
   code: number;
   message: string;
