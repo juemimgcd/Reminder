@@ -38,6 +38,9 @@ coverage/
 .vscode/
 *.iml
 
+# Local Git worktrees
+.worktrees/
+
 # Local data and generated archives
 storage/
 company_target/
