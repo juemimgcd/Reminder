@@ -48,13 +48,19 @@ import {
 } from "@lucide/vue";
 import { forceCenter, forceCollide, forceLink, forceManyBody, forceSimulation, type Simulation } from "d3";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
+import ActivityBar from "./components/shell/ActivityBar.vue";
+import MobileNavigation from "./components/shell/MobileNavigation.vue";
+import ResourceSidebar from "./components/shell/ResourceSidebar.vue";
+import StatusBar from "./components/shell/StatusBar.vue";
 import { useI18n } from "./composables/useI18n";
 import { useMnemeWorkspace, type WorkspaceCommandTab } from "./composables/useMnemeWorkspace";
 import { usePreferences, type Locale, type ThemeMode } from "./composables/usePreferences";
+import { useResponsiveShell } from "./composables/useResponsiveShell";
 import type { WorkspaceView } from "./types";
 
 const workspace = useMnemeWorkspace();
 const preferences = usePreferences();
+const shell = useResponsiveShell();
 const { t } = useI18n();
 
 const THEME_OPTIONS: ThemeMode[] = ["system", "light", "dark"];
@@ -98,8 +104,9 @@ type ForceGraphLink = {
   target: string | ForceGraphNode;
 };
 
-const graphFileRailCollapsed = ref(false);
-const aiHistoryRailCollapsed = ref(false);
+const compactWorkspace = window.matchMedia("(max-width: 1023px)").matches;
+const graphFileRailCollapsed = ref(compactWorkspace);
+const aiHistoryRailCollapsed = ref(compactWorkspace);
 const researchStatusFilter = ref<"all" | "indexed">("all");
 const researchGridCompact = ref(false);
 const graphViewBox = ref("0 0 760 680");
@@ -398,9 +405,17 @@ function endGraphNodeDrag() {
     </section>
   </main>
 
-  <main v-else data-testid="obsidian-shell" class="mneme-workbench min-h-screen text-on-surface" style="background-color: #09090b">
-    <div class="grid min-h-screen grid-cols-[256px_minmax(0,1fr)]">
-      <aside data-testid="sanctuary-sidebar" class="stitch-sidebar flex w-64 flex-col" style="width: 256px">
+  <main v-else data-testid="obsidian-shell" class="mneme-workbench min-h-screen text-on-surface">
+    <div class="mneme-shell" :class="{ 'mneme-shell--resource-closed': !shell.resourceOpen.value }">
+      <ActivityBar
+        :items="VIEW_ITEMS"
+        :active-id="workspace.view.value"
+        @create="openCreateCommand"
+        @toggle-resource="shell.toggleResource"
+        @navigate="workspace.view.value = $event as WorkspaceView; shell.closeOverlays()"
+      />
+      <ResourceSidebar :open="shell.resourceOpen.value" @close="shell.closeOverlays">
+        <aside data-testid="sanctuary-sidebar" class="flex min-h-0 flex-1 flex-col">
         <div class="px-5 pb-5 pt-7">
           <div class="mb-7 flex items-center gap-3">
             <div class="grid size-10 place-items-center rounded-lg border border-primary/30 bg-primary-container/20 text-primary">
@@ -419,21 +434,7 @@ function endGraphNodeDrag() {
         </div>
 
         <nav class="flex-1 overflow-y-auto px-4 py-2">
-          <div class="grid gap-1 border-b border-outline-variant/20 pb-4">
-            <button
-              v-for="item in VIEW_ITEMS"
-              :key="item.id"
-              class="flex h-11 items-center gap-3 rounded-md px-3 text-left text-sm transition"
-              :class="workspace.view.value === item.id ? 'bg-primary/10 text-primary ring-1 ring-primary/20' : 'text-on-surface-variant hover:bg-surface-container-high/50 hover:text-on-surface'"
-              :aria-pressed="workspace.view.value === item.id"
-              @click="workspace.view.value = item.id"
-            >
-              <component :is="item.icon" class="size-4 shrink-0" />
-              <span class="font-medium">{{ item.label }}</span>
-            </button>
-          </div>
-
-          <section data-testid="sidebar-group-vaults" class="mt-5 grid gap-2">
+          <section data-testid="sidebar-group-vaults" class="grid gap-2">
             <div class="flex items-center justify-between px-2 font-mono text-[11px] uppercase text-text-muted">
               <span>Research Spaces</span>
               <button class="premium-action-btn grid size-7 place-items-center rounded-md" title="Create vault" @click="openCreateCommand">
@@ -482,9 +483,10 @@ function endGraphNodeDrag() {
             </div>
           </div>
         </footer>
-      </aside>
+        </aside>
+      </ResourceSidebar>
 
-      <section class="flex min-w-0 flex-col">
+      <section class="mneme-shell__main flex min-w-0 flex-col">
         <header v-if="workspace.view.value !== 'graph' && workspace.view.value !== 'ai'" data-testid="sanctuary-topbar" class="flex h-16 items-center justify-between border-b border-white/5 bg-surface/65 px-5 backdrop-blur-xl lg:px-8">
           <div data-testid="sanctuary-active-view" class="min-w-0">
             <p class="truncate font-mono text-xs text-primary">{{ currentViewItem.hint }}</p>
@@ -727,7 +729,7 @@ function endGraphNodeDrag() {
               </section>
             </div>
 
-            <div v-else-if="workspace.view.value === 'graph'" data-testid="stitch-graph-layout" class="relative min-h-screen overflow-hidden bg-[#08080a]" title="Graph Workspace">
+            <div v-else-if="workspace.view.value === 'graph'" data-testid="stitch-graph-layout" class="relative min-h-screen overflow-hidden bg-surface-base" title="Graph Workspace">
               <div
                 data-testid="graph-function-grid"
                 class="grid h-screen min-h-screen grid-cols-1 transition-[grid-template-columns] duration-200"
@@ -735,7 +737,7 @@ function endGraphNodeDrag() {
               >
                 <aside
                   data-testid="graph-file-rail"
-                  class="stitch-panel border-r border-outline-variant/30"
+                  class="graph-file-panel stitch-panel border-r border-outline-variant/30"
                   :class="graphFileRailCollapsed ? 'invisible pointer-events-none overflow-hidden border-r-0' : ''"
                   :aria-hidden="graphFileRailCollapsed"
                 >
@@ -783,21 +785,21 @@ function endGraphNodeDrag() {
                   </div>
                 </aside>
 
-                <section data-testid="graph-output-workspace" class="relative min-h-[640px] overflow-hidden bg-[#070708]">
-                  <div class="absolute left-5 top-5 z-10 flex gap-10">
+                <section data-testid="graph-output-workspace" class="relative min-h-[640px] overflow-hidden bg-surface-base">
+                  <div class="graph-toolbar absolute left-5 top-5 z-10 flex gap-10">
                     <button class="glass-panel flex h-16 items-center gap-3 rounded-md px-5 text-base text-on-surface">
                       <Network class="size-7 text-primary" />
                       Graph View
                     </button>
-                    <div class="grid gap-3">
-                      <form class="glass-panel flex h-12 w-[328px] items-center gap-3 rounded-lg px-5 text-text-muted" @submit.prevent="workspace.runGraphRag">
+                    <div class="graph-toolbar-controls grid gap-3">
+                      <form class="graph-search-form glass-panel flex h-12 w-[328px] items-center gap-3 rounded-lg px-5 text-text-muted" @submit.prevent="workspace.runGraphRag">
                         <Search class="size-5" />
                         <input v-model="workspace.graphRagQuestion.value" class="min-w-0 flex-1 bg-transparent text-sm text-on-surface outline-none" placeholder="Search knowledge base..." />
                         <button aria-label="Run GraphRAG" class="grid size-7 place-items-center rounded-md text-primary hover:bg-primary/10" type="submit">
                           <Send class="size-4" />
                         </button>
                       </form>
-                      <div class="glass-panel flex h-16 items-center gap-5 rounded-lg px-3">
+                      <div class="graph-tabs glass-panel flex h-16 items-center gap-5 rounded-lg px-3">
                         <button class="rounded border border-primary/40 bg-primary/10 px-3 py-2 text-sm text-primary">All Nodes</button>
                         <button class="px-3 py-2 text-sm text-on-surface-variant">Tags</button>
                         <button class="px-3 py-2 text-sm text-on-surface-variant">Orphans</button>
@@ -818,7 +820,7 @@ function endGraphNodeDrag() {
                     @pointerup="endGraphNodeDrag"
                     @pointerleave="endGraphNodeDrag"
                   >
-                    <g stroke="#3f3f46" stroke-width="2">
+                    <g stroke="var(--border-strong)" stroke-width="2">
                       <line
                         v-for="edge in graphSimulationLinks"
                         :key="edge.id"
@@ -847,7 +849,7 @@ function endGraphNodeDrag() {
                       <text
                         :x="node.x ?? 380"
                         :y="(node.y ?? 340) + graphNodeRadius(node) + 24"
-                        fill="#fafafa"
+                        fill="var(--text-primary)"
                         :font-size="node.depth === 0 ? 20 : 15"
                         :font-weight="node.depth === 0 ? 700 : 500"
                         text-anchor="middle"
@@ -941,12 +943,12 @@ function endGraphNodeDrag() {
             <div
               v-else-if="workspace.view.value === 'ai'"
               data-testid="stitch-ai-laboratory-layout"
-              class="grid h-screen min-h-0 grid-cols-1 bg-[#070708] transition-[grid-template-columns] duration-200"
+              class="grid h-screen min-h-0 grid-cols-1 bg-surface-base transition-[grid-template-columns] duration-200"
               :class="aiHistoryRailCollapsed ? 'lg:grid-cols-[0_minmax(0,1fr)]' : 'lg:grid-cols-[320px_minmax(0,1fr)]'"
             >
               <aside
                 data-testid="ai-history-rail"
-                class="stitch-panel min-w-0 border-r border-outline-variant/30"
+                class="ai-history-panel stitch-panel min-w-0 border-r border-outline-variant/30"
                 :class="aiHistoryRailCollapsed ? 'invisible pointer-events-none overflow-hidden border-r-0 p-0' : 'p-5'"
                 :aria-hidden="aiHistoryRailCollapsed"
               >
@@ -1023,7 +1025,7 @@ function endGraphNodeDrag() {
                           <div class="grid size-10 place-items-center rounded-lg border border-primary/40 bg-primary/10 text-primary">
                             <Bot class="size-5" />
                           </div>
-                          <article class="rounded border border-outline-variant/30 border-l-4 border-l-primary bg-[#0c0c0e] p-6 text-base leading-8">
+                          <article class="rounded border border-outline-variant/30 border-l-4 border-l-primary bg-surface-container-low p-6 text-base leading-8">
                             <div class="mb-4 flex items-center gap-2 font-mono text-sm font-semibold uppercase text-primary">
                               <FlaskConical class="size-4" />
                               Analysis Complete
@@ -1040,13 +1042,13 @@ function endGraphNodeDrag() {
                       </template>
                     </template>
 
-                    <div v-else class="rounded border border-outline-variant/30 bg-[#0c0c0e] p-6 text-base leading-7 text-on-surface-variant">
+                    <div v-else class="rounded border border-outline-variant/30 bg-surface-container-low p-6 text-base leading-7 text-on-surface-variant">
                       Start a chat to generate an evidence-backed response from the active vault.
                     </div>
                   </div>
                 </div>
 
-                <form data-testid="workspace-chat-command" class="sticky bottom-0 border-t border-outline-variant/10 bg-[#070708]/95 px-8 pb-7 pt-4 backdrop-blur" @submit.prevent="workspace.sendChatMessage">
+                <form data-testid="workspace-chat-command" class="sticky bottom-0 border-t border-outline-variant/10 bg-surface-base/95 px-8 pb-7 pt-4 backdrop-blur" @submit.prevent="workspace.sendChatMessage">
                   <div class="mx-auto max-w-[900px]">
                     <div class="rounded-lg border border-outline-variant/30 bg-surface-container-low p-4">
                       <div class="mb-3 flex w-fit items-center gap-2 rounded-full bg-surface-container-high px-3 py-1 font-mono text-xs text-on-surface-variant">
@@ -1272,7 +1274,14 @@ function endGraphNodeDrag() {
             </div>
           </div>
         </section>
+        <StatusBar :status="activeHealthLabel" :detail="workspace.selectedKnowledgeBase.value?.name" />
       </section>
+      <MobileNavigation
+        :items="VIEW_ITEMS"
+        :active-id="workspace.view.value"
+        @toggle-resources="shell.toggleResource"
+        @navigate="workspace.view.value = $event as WorkspaceView; shell.closeOverlays()"
+      />
     </div>
   </main>
 </template>
