@@ -11,6 +11,7 @@ from app.mneme.conf.config import settings
 from app.mneme.conf.database import get_database, get_write_database
 from app.mneme.conf.logging import app_logger
 from app.mneme.crud.document import create_document, get_document_by_id, list_documents
+from app.mneme.crud.document_folder import ensure_root_folder
 from app.mneme.crud.knowledge_base import get_knowledge_base_by_id, get_or_create_default_knowledge_base
 from app.mneme.infra.rate_limit import enforce_fixed_window_rate_limit
 from app.mneme.infra.task_queue import enqueue_index_document_task
@@ -95,6 +96,13 @@ async def upload_document(
     else:
         knowledge_base = await get_or_create_default_knowledge_base(db, user_id=resolved_user_id)
 
+    root = await ensure_root_folder(
+        db,
+        user_id=resolved_user_id,
+        knowledge_base_id=knowledge_base.id,
+        knowledge_base_pk=knowledge_base.pk,
+    )
+
     if not file.filename:
         raise BusinessException(message="uploaded file name cannot be empty", code=4001)
 
@@ -132,6 +140,7 @@ async def upload_document(
             user_id=resolved_user_id,
             knowledge_base_id=knowledge_base.id,
             knowledge_base_pk=knowledge_base.pk,
+            folder_pk=root.pk,
             file_name=file_name,
             file_path=str(save_path),
             file_type=file_ext.lstrip("."),

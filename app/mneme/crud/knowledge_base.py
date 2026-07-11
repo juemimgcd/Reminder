@@ -3,6 +3,7 @@ import uuid
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.mneme.crud.document_folder import ensure_root_folder
 from app.mneme.models.knowledge_base import KnowledgeBase
 
 
@@ -25,6 +26,12 @@ async def create_knowledge_base(
     db.add(knowledge_base)
     await db.flush()
     await db.refresh(knowledge_base)
+    await ensure_root_folder(
+        db,
+        user_id=user_id,
+        knowledge_base_id=knowledge_base.id,
+        knowledge_base_pk=knowledge_base.pk,
+    )
     return knowledge_base
 
 
@@ -74,17 +81,23 @@ async def get_or_create_default_knowledge_base(
         db,
         user_id=user_id,
     )
-    if knowledge_base:
-        return knowledge_base
+    if knowledge_base is None:
+        knowledge_base = await create_knowledge_base(
+            db,
+            knowledge_base_id=f"kb_{uuid.uuid4().hex[:12]}",
+            user_id=user_id,
+            name="Default Knowledge Base",
+            description="Default personal knowledge base",
+            is_default=True,
+        )
 
-    return await create_knowledge_base(
+    await ensure_root_folder(
         db,
-        knowledge_base_id=f"kb_{uuid.uuid4().hex[:12]}",
         user_id=user_id,
-        name="Default Knowledge Base",
-        description="Default personal knowledge base",
-        is_default=True,
+        knowledge_base_id=knowledge_base.id,
+        knowledge_base_pk=knowledge_base.pk,
     )
+    return knowledge_base
 
 
 async def delete_knowledge_base_by_id(
