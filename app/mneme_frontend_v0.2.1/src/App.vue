@@ -48,10 +48,20 @@ import {
 } from "@lucide/vue";
 import { forceCenter, forceCollide, forceLink, forceManyBody, forceSimulation, type Simulation } from "d3";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { useI18n } from "./composables/useI18n";
 import { useMnemeWorkspace, type WorkspaceCommandTab } from "./composables/useMnemeWorkspace";
+import { usePreferences, type Locale, type ThemeMode } from "./composables/usePreferences";
 import type { WorkspaceView } from "./types";
 
 const workspace = useMnemeWorkspace();
+const preferences = usePreferences();
+const { t } = useI18n();
+
+const THEME_OPTIONS: ThemeMode[] = ["system", "light", "dark"];
+const LOCALE_OPTIONS: Array<{ value: Locale; labelKey: string }> = [
+  { value: "en-US", labelKey: "settings.language.english" },
+  { value: "zh-CN", labelKey: "settings.language.chinese" },
+];
 
 const VIEW_ITEMS: Array<{ id: WorkspaceView; label: string; icon: unknown; hint: string }> = [
   { id: "dashboard", label: "Semantic Map", icon: Network, hint: "Workspace overview and semantic health" },
@@ -1067,6 +1077,48 @@ function endGraphNodeDrag() {
               </aside>
 
               <section class="grid gap-6">
+                <article class="stitch-card rounded-lg p-6">
+                  <div>
+                    <h2 class="text-2xl font-semibold">{{ t("settings.appearance") }}</h2>
+                    <p class="mt-1 text-sm text-text-muted">{{ t("settings.appearanceDescription") }}</p>
+                  </div>
+                  <div class="mt-6 grid gap-6 sm:grid-cols-2">
+                    <fieldset>
+                      <legend class="mb-3 font-mono text-xs uppercase tracking-wider text-text-muted">{{ t("settings.theme") }}</legend>
+                      <div class="flex flex-wrap gap-2">
+                        <button
+                          v-for="theme in THEME_OPTIONS"
+                          :key="theme"
+                          type="button"
+                          class="premium-action-btn rounded-md px-3 py-2 text-sm"
+                          :class="preferences.themeMode.value === theme ? 'border-primary/60 bg-primary/10 text-primary' : ''"
+                          :aria-label="t(`settings.theme.${theme}Label`)"
+                          :aria-pressed="preferences.themeMode.value === theme"
+                          @click="preferences.setThemeMode(theme)"
+                        >
+                          {{ t(`settings.theme.${theme}`) }}
+                        </button>
+                      </div>
+                    </fieldset>
+                    <fieldset>
+                      <legend class="mb-3 font-mono text-xs uppercase tracking-wider text-text-muted">{{ t("settings.language") }}</legend>
+                      <div class="flex flex-wrap gap-2">
+                        <button
+                          v-for="option in LOCALE_OPTIONS"
+                          :key="option.value"
+                          type="button"
+                          class="premium-action-btn rounded-md px-3 py-2 text-sm"
+                          :class="preferences.locale.value === option.value ? 'border-primary/60 bg-primary/10 text-primary' : ''"
+                          :aria-pressed="preferences.locale.value === option.value"
+                          @click="preferences.setLocale(option.value)"
+                        >
+                          {{ t(option.labelKey) }}
+                        </button>
+                      </div>
+                    </fieldset>
+                  </div>
+                </article>
+
                 <article class="stitch-card rounded-lg p-6">
                   <div class="mb-6 flex items-center gap-3">
                     <BrainCircuit class="size-6 text-primary" />
