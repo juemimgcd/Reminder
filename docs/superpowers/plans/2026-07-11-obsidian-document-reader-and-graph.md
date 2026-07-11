@@ -65,8 +65,13 @@
 - Create: `app/mneme/models/document_folder.py`
 - Modify: `app/mneme/models/document.py`
 - Modify: `app/mneme/models/__init__.py`
+- Create: `app/mneme/crud/document_folder.py`
+- Modify: `app/mneme/crud/document.py`
+- Modify: `app/mneme/crud/knowledge_base.py`
+- Modify: `app/mneme/domains/documents/router.py`
 - Create: `alembic/versions/20260711_01_add_document_workspace.py`
 - Create: `tests/test_document_workspace_schema.py`
+- Modify: `tests/test_documents_domain_convergence.py`
 
 **Interfaces:**
 - Produces: `DocumentFolder`, `Document.folder_pk`, `content_sha256`, `normalized_file_name`, `version_group_id`, `version_number`, `previous_document_id`, and `duplicate_of_document_id`.
@@ -131,7 +136,11 @@ class DocumentFolder(Base):
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
     knowledge_base_id: Mapped[str] = mapped_column(String(64), nullable=False)
     knowledge_base_pk: Mapped[int] = mapped_column(BigInteger, ForeignKey("knowledge_bases.pk"), nullable=False)
-    parent_pk: Mapped[int] = mapped_column(BigInteger, ForeignKey("document_folders.pk"), nullable=False)
+    parent_pk: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("document_folders.pk", deferrable=True, initially="DEFERRED"),
+        nullable=False,
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     normalized_name: Mapped[str] = mapped_column(String(255), nullable=False)
     is_root: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -161,6 +170,56 @@ Index(
 ),
 ```
 
+Create the compatibility helper before making `folder_pk` mandatory:
+
+```python
+# app/mneme/crud/document_folder.py
+async def ensure_root_folder(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    knowledge_base_id: str,
+    knowledge_base_pk: int,
+) -> DocumentFolder:
+    existing = await db.scalar(
+        select(DocumentFolder).where(
+            DocumentFolder.knowledge_base_pk == knowledge_base_pk,
+            DocumentFolder.is_root.is_(True),
+        )
+    )
+    if existing is not None:
+        return existing
+    try:
+        async with db.begin_nested():
+            root = DocumentFolder(
+                id=f"fld_root_{uuid.uuid4().hex[:24]}",
+                user_id=user_id,
+                knowledge_base_id=knowledge_base_id,
+                knowledge_base_pk=knowledge_base_pk,
+                parent_pk=0,
+                name="/",
+                normalized_name="/",
+                is_root=True,
+            )
+            db.add(root)
+            await db.flush()
+            root.parent_pk = root.pk
+            await db.flush()
+            return root
+    except IntegrityError:
+        winner = await db.scalar(
+            select(DocumentFolder).where(
+                DocumentFolder.knowledge_base_pk == knowledge_base_pk,
+                DocumentFolder.is_root.is_(True),
+            )
+        )
+        if winner is None:
+            raise
+        return winner
+```
+
+The self-reference foreign key is deferrable, so the temporary `parent_pk=0` is corrected before transaction commit. Call `ensure_root_folder` from both `create_knowledge_base` and `get_or_create_default_knowledge_base`. Update the existing upload route to resolve the requested knowledge base's root folder and pass `folder_pk=root.pk` into the extended `create_document` function. This keeps all pre-folder upload tests working immediately after Task 1.
+
 - [ ] **Step 4: Create the merge-head migration**
 
 The migration must:
@@ -177,7 +236,12 @@ def upgrade():
         sa.Column("user_id", sa.BigInteger(), sa.ForeignKey("users.id"), nullable=False),
         sa.Column("knowledge_base_id", sa.String(64), nullable=False),
         sa.Column("knowledge_base_pk", sa.BigInteger(), sa.ForeignKey("knowledge_bases.pk"), nullable=False),
-        sa.Column("parent_pk", sa.BigInteger(), sa.ForeignKey("document_folders.pk"), nullable=True),
+        sa.Column(
+            "parent_pk",
+            sa.BigInteger(),
+            sa.ForeignKey("document_folders.pk", deferrable=True, initially="DEFERRED"),
+            nullable=True,
+        ),
         sa.Column("name", sa.String(255), nullable=False),
         sa.Column("normalized_name", sa.String(255), nullable=False),
         sa.Column("is_root", sa.Boolean(), nullable=False, server_default=sa.false()),
@@ -241,7 +305,7 @@ The root row uses `parent_pk = pk` after its generated primary key is known. Dow
 - [ ] **Step 5: Verify schema contracts and migration heads**
 
 ```powershell
-python -m pytest tests/test_document_workspace_schema.py -q -p no:cacheprovider
+python -m pytest tests/test_document_workspace_schema.py tests/test_documents_domain_convergence.py -q -p no:cacheprovider
 python -m alembic heads
 ```
 
@@ -250,7 +314,7 @@ Expected: 2 tests pass and Alembic reports only `20260711_01 (head)`.
 - [ ] **Step 6: Commit persistence**
 
 ```powershell
-git add app/mneme/models/document_folder.py app/mneme/models/document.py app/mneme/models/__init__.py alembic/versions/20260711_01_add_document_workspace.py tests/test_document_workspace_schema.py
+git add app/mneme/models/document_folder.py app/mneme/models/document.py app/mneme/models/__init__.py app/mneme/crud/document_folder.py app/mneme/crud/document.py app/mneme/crud/knowledge_base.py app/mneme/domains/documents/router.py alembic/versions/20260711_01_add_document_workspace.py tests/test_document_workspace_schema.py tests/test_documents_domain_convergence.py
 git commit -m "feat(documents): add folder and version persistence"
 ```
 
@@ -259,7 +323,7 @@ git commit -m "feat(documents): add folder and version persistence"
 ### Task 2: Implement authenticated folder tree and move APIs
 
 **Files:**
-- Create: `app/mneme/crud/document_folder.py`
+- Modify: `app/mneme/crud/document_folder.py`
 - Create: `app/mneme/domains/documents/folders.py`
 - Modify: `app/mneme/bootstrap/router_registry.py`
 - Modify: `app/mneme/schemas/document.py`
