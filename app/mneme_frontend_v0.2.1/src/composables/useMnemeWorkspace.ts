@@ -576,3 +576,5 @@ export function useMnemeWorkspace() {
     growth,
   };
 }
+
+export type MnemeWorkspace = ReturnType<typeof useMnemeWorkspace>;

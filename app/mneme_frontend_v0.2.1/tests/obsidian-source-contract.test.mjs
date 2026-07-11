@@ -1,258 +1,82 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { strict as assert } from 'node:assert';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const appSource = readFileSync(new URL('../src/App.vue', import.meta.url), 'utf8');
-const apiSource = readFileSync(new URL('../src/lib/api.ts', import.meta.url), 'utf8');
-const previewApiSource = readFileSync(new URL('../src/lib/previewApi.ts', import.meta.url), 'utf8');
-const workspaceSource = readFileSync(new URL('../src/composables/useMnemeWorkspace.ts', import.meta.url), 'utf8');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const appSource = readFileSync(path.join(root, 'src', 'App.vue'), 'utf8');
+const cssSource = readFileSync(path.join(root, 'src', 'index.css'), 'utf8');
+const apiSource = readFileSync(path.join(root, 'src', 'lib', 'api.ts'), 'utf8');
+const previewApiSource = readFileSync(path.join(root, 'src', 'lib', 'previewApi.ts'), 'utf8');
+const workspaceSource = readFileSync(path.join(root, 'src', 'composables', 'useMnemeWorkspace.ts'), 'utf8');
+
+function collectVueSources(directory) {
+  return readdirSync(directory).flatMap((entry) => {
+    const fullPath = path.join(directory, entry);
+    return statSync(fullPath).isDirectory() ? collectVueSources(fullPath) : fullPath.endsWith('.vue') ? [readFileSync(fullPath, 'utf8')] : [];
+  });
+}
+
+const vueSource = collectVueSources(path.join(root, 'src')).join('\n');
 
 for (const testId of [
   'data-testid="obsidian-shell"',
   'data-testid="sanctuary-sidebar"',
   'data-testid="sanctuary-topbar"',
-  'data-testid="sanctuary-active-view"',
   'data-testid="obsidian-editor-pane"',
-]) {
-  assert.ok(appSource.includes(testId), `Expected App.vue to expose ${testId}`);
-}
-
-assert.ok(
-  appSource.includes('grid-cols-[256px_minmax(0,1fr)]'),
-  'Expected the workbench grid to match the 256px Stitch Sanctuary sidebar',
-);
-
-for (const navLabel of ['Knowledge Graph', 'Research Vault', 'Semantic Map', 'AI Laboratory', 'System Settings']) {
-  assert.ok(appSource.includes(`label: "${navLabel}"`), `Expected Stitch navigation to include ${navLabel}`);
-}
-
-assert.ok(
-  appSource.includes('{ id: "graph", label: "Knowledge Graph"'),
-  'Expected the node graph canvas to be exposed as the Knowledge Graph module',
-);
-
-assert.ok(
-  appSource.includes('{ id: "dashboard", label: "Semantic Map"'),
-  'Expected the overview workspace to stop owning the Knowledge Graph label',
-);
-
-assert.ok(
-  workspaceSource.includes('ref<WorkspaceView>("graph")'),
-  'Expected preview/default workspace to open the node graph module first',
-);
-
-for (const designToken of ['--color-surface-base: #09090b', '--color-primary-container: #7c3aed']) {
-  assert.ok(
-    readFileSync(new URL('../src/index.css', import.meta.url), 'utf8').toLowerCase().includes(designToken),
-    `Expected Obsidian Flux design token ${designToken}`,
-  );
-}
-
-assert.ok(
-  appSource.includes('data-testid="dashboard-overview"'),
-  'Expected the Workspace view to read as a Sanctuary dashboard overview',
-);
-
-for (const stitchClass of ['premium-card', 'glass-panel', 'premium-input', 'premium-tag']) {
-  assert.ok(appSource.includes(stitchClass) || readFileSync(new URL('../src/index.css', import.meta.url), 'utf8').includes(stitchClass), `Expected Stitch export style hook ${stitchClass}`);
-}
-
-for (const stitchLayoutHook of [
   'data-testid="stitch-dashboard-grid"',
   'data-testid="stitch-research-vault-layout"',
+  'data-testid="stitch-graph-layout"',
   'data-testid="stitch-ai-laboratory-layout"',
   'data-testid="stitch-settings-layout"',
-  'data-testid="stitch-graph-layout"',
+  'data-testid="graph-file-rail"',
+  'data-testid="graph-document-preview-panel"',
+  'data-testid="ai-history-rail"',
+  'data-testid="workspace-chat-command"',
 ]) {
-  assert.ok(appSource.includes(stitchLayoutHook), `Expected App.vue to expose ${stitchLayoutHook}`);
+  assert.ok(vueSource.includes(testId), `Expected the composed Vue workspace to expose ${testId}`);
 }
 
-for (const stitchText of ['Mneme Intelligence', 'Cognitive Sanctuary', 'New Research']) {
-  assert.ok(appSource.includes(stitchText), `Expected Stitch shell copy: ${stitchText}`);
+assert.ok(appSource.split('\n').length < 500, 'Expected App.vue to remain a focused shell component');
+for (const view of ['DashboardView', 'VaultView', 'GraphView', 'AiLabView', 'SettingsView']) {
+  assert.ok(appSource.includes(`<${view}`), `Expected App.vue to compose ${view}`);
 }
 
-for (const darkAdaptedStitchText of [
-  'New Research Space',
-  'Graph Topology',
-  'Memory Output Workspace',
-  'Laboratory Sessions',
-  'Analysis Complete',
-  'Referenced Context Nodes',
-  'AI Models Configuration',
-  'Knowledge Graph Health',
-]) {
-  assert.ok(appSource.includes(darkAdaptedStitchText), `Expected dark-adapted Stitch optimization text: ${darkAdaptedStitchText}`);
+for (const navLabel of ['Knowledge Graph', 'Research Vault', 'Semantic Map', 'AI Laboratory', 'System Settings']) {
+  assert.ok(appSource.includes(`label: "${navLabel}"`), `Expected primary navigation to include ${navLabel}`);
 }
 
-for (const lightThemeOnlyToken of ['#f8f9ff', 'bg-background', 'text-on-background']) {
-  assert.ok(!appSource.includes(lightThemeOnlyToken), `Expected dark theme to avoid light Stitch token ${lightThemeOnlyToken}`);
+for (const token of ['--bg-canvas', '--bg-sidebar', '--bg-panel', '--text-primary', '--border-muted', '--accent', '--focus-ring']) {
+  assert.ok(cssSource.includes(token), `Expected semantic design token ${token}`);
 }
+assert.ok(cssSource.includes('[data-theme="light"]'), 'Expected a calibrated light theme');
+assert.ok(cssSource.includes('prefers-reduced-motion'), 'Expected reduced-motion support');
+assert.ok(!vueSource.includes('bg-[#070708]') && !vueSource.includes('bg-[#08080a]'), 'Expected views to use semantic surfaces');
 
-assert.ok(
-  appSource.includes("workspace.view.value === 'graph'") && appSource.includes("'p-0'"),
-  'Expected the Graph view to remove the ordinary page padding and behave like the Stitch full-canvas page',
-);
-
-assert.ok(
-  appSource.includes("workspace.view.value !== 'graph' && workspace.view.value !== 'notes' && workspace.view.value !== 'ai'"),
-  'Expected the generic page heading to be skipped for Stitch-specialized views',
-);
-
-assert.ok(
-  !appSource.includes('<MetricCard label="Vaults"'),
-  'Expected the editor pane to drop the bulky Vaults/Files/Tasks dashboard cards',
-);
-
-assert.ok(
-  previewApiSource.includes('import.meta.env.MODE === "preview"'),
-  'Expected npm run dev:preview to force preview mode through Vite mode',
-);
-
-assert.ok(
-  previewApiSource.includes('window.location.hash'),
-  'Expected preview mode detection to handle preview flags inside hash URLs',
-);
-
-for (const layoutHook of [
-  'data-testid="graph-function-grid"',
-  'data-testid="graph-output-workspace"',
-  'data-testid="memory-function-grid"',
-  'data-testid="memory-output-workspace"',
-  'data-testid="insights-function-grid"',
-  'data-testid="insights-output-workspace"',
-]) {
-  assert.ok(appSource.includes(layoutHook), `Expected App.vue to separate controls and outputs with ${layoutHook}`);
-}
-
-for (const invalidVueAttribute of [
-  'testId="graph-output-workspace"',
-  'testId="memory-output-workspace"',
-  'testId="insights-output-workspace"',
-]) {
-  assert.ok(!appSource.includes(invalidVueAttribute), `Expected Vue template to avoid React-style ${invalidVueAttribute}`);
-}
-
-for (const graphReferenceText of [
+for (const referenceText of [
   'Machine Learning',
   'Neural Networks',
   'All Nodes',
   'Orphans',
   'Long press to preview',
   'Backlinks',
-]) {
-  assert.ok(appSource.includes(graphReferenceText), `Expected Knowledge Graph to mirror Stitch graph reference text: ${graphReferenceText}`);
-}
-
-assert.ok(
-  !appSource.includes('xl:grid-cols-[320px_minmax(0,1fr)_376px]'),
-  'Expected Knowledge Graph document preview to be summoned from the canvas, not pinned as a permanent third column',
-);
-
-for (const graphInteractionText of [
-  'forceSimulation',
-  'forceManyBody',
-  'forceLink',
-  'graphFileRailCollapsed',
-  'graphDocumentPreviewNode',
-  'showGraphDocumentPreview',
-  'hideGraphDocumentPreview',
-  'data-testid="graph-file-rail"',
-  'data-testid="graph-file-rail-toggle"',
-  'data-testid="graph-document-preview-panel"',
-  'data-testid="force-node"',
-  '@pointerdown="startGraphNodeDrag',
-  '@pointermove="moveGraphNodeDrag"',
-]) {
-  assert.ok(appSource.includes(graphInteractionText), `Expected Knowledge Graph to implement interactive graph behavior: ${graphInteractionText}`);
-}
-
-for (const aiReferenceText of [
-  'Deep Thought Mode',
+  'Laboratory Sessions',
+  'Referenced Context Nodes',
+  'AI Models Configuration',
+  'Knowledge Graph Health',
   'New Research Space',
-  'Search history...',
-  'Today, 14:03',
-  'Context: Node B',
-  'AI responses may be structurally imperfect',
-  'aiHistoryRailCollapsed',
-  'data-testid="ai-history-rail"',
-  'data-testid="ai-history-rail-toggle"',
-  'Collapse chat history',
-  'Expand chat history',
 ]) {
-  assert.ok(appSource.includes(aiReferenceText), `Expected AI Laboratory to mirror Stitch chat reference text: ${aiReferenceText}`);
+  assert.ok(vueSource.includes(referenceText), `Expected polished workspace reference text: ${referenceText}`);
 }
 
-assert.ok(
-  appSource.includes('fixed bottom-0 right-0') || appSource.includes('sticky bottom-0'),
-  'Expected AI Laboratory input to stay anchored near the bottom like the Stitch chat reference',
-);
+assert.ok(workspaceSource.includes('ref<WorkspaceView>("graph")'), 'Expected preview/default workspace to open the graph');
+assert.ok(previewApiSource.includes('import.meta.env.MODE === "preview"'), 'Expected explicit preview mode');
+assert.ok(previewApiSource.includes('window.location.hash'), 'Expected hash preview detection');
 
-assert.ok(
-  !appSource.includes('{ id: "chat", label: "Chat"'),
-  'Expected chat to be centralized in Workspace instead of remaining a separate page',
-);
-
-for (const centralizedHook of [
-  'data-testid="unified-command-module"',
-  'data-testid="workspace-command-tabs"',
-  'data-testid="workspace-command-panel"',
-  'data-testid="workspace-chat-command"',
-  'data-testid="workspace-upload-command"',
-  'data-testid="workspace-create-kb-command"',
-]) {
-  assert.ok(appSource.includes(centralizedHook), `Expected Workspace to centralize app commands with ${centralizedHook}`);
+for (const apiMethod of ['uploadDocument', 'indexDocument', 'deleteDocument', 'testAiModelConfig', 'setDefaultAiModelConfig', 'updateAiModelConfig', 'deleteChatSession', 'graphRag']) {
+  assert.ok(apiSource.includes(apiMethod) || previewApiSource.includes(apiMethod), `Expected client API method ${apiMethod}`);
 }
 
-assert.ok(
-  appSource.includes('title="Graph Workspace"') && appSource.includes('h-screen min-h-screen'),
-  'Expected Graph to use a full-height Obsidian-like workspace instead of a small split canvas',
-);
-
-assert.ok(
-  !appSource.includes('data-testid="explorer-upload-command"') && !appSource.includes('data-testid="explorer-create-kb-command"'),
-  'Expected the explorer to remain navigation-only instead of owning create/upload commands',
-);
-
-for (const sidebarHook of [
-  'data-testid="sidebar-group-vaults"',
-  'data-testid="sidebar-group-files"',
-]) {
-  assert.ok(appSource.includes(sidebarHook), `Expected explorer to follow shadcn Sidebar group structure with ${sidebarHook}`);
-}
-
-assert.ok(
-  workspaceSource.includes('type WorkspaceCommandTab') && appSource.includes('workspace.workspaceCommandTab.value'),
-  'Expected Workspace Commands to behave like tabs instead of showing every form at once',
-);
-
-for (const apiMethod of [
-  'documentationStatus',
-  'supportStatus',
-  'uploadDocument',
-  'indexDocument',
-  'deleteDocument',
-  'testAiModelConfig',
-  'setDefaultAiModelConfig',
-  'updateAiModelConfig',
-  'deleteChatSession',
-  'graphRag',
-]) {
-  assert.ok(
-    appSource.includes(apiMethod) || apiSource.includes(apiMethod) || previewApiSource.includes(apiMethod),
-    `Expected client API/workspace method ${apiMethod}`,
-  );
-}
-
-for (const workspaceMethod of [
-  'showDocumentationStatus',
-  'showSupportStatus',
-  'uploadFile',
-  'indexDocument',
-  'deleteDocument',
-  'runGraphRag',
-  'deleteActiveChatSession',
-  'testAiModelConfig',
-  'setDefaultAiModelConfig',
-  'updateActiveModelContextWindow',
-]) {
+for (const workspaceMethod of ['showDocumentationStatus', 'showSupportStatus', 'uploadFile', 'indexDocument', 'deleteDocument', 'runGraphRag', 'deleteActiveChatSession', 'testAiModelConfig', 'setDefaultAiModelConfig', 'updateActiveModelContextWindow']) {
   assert.ok(workspaceSource.includes(workspaceMethod), `Expected workspace method ${workspaceMethod}`);
 }

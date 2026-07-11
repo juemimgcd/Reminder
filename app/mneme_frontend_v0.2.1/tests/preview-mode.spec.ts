@@ -35,7 +35,7 @@ test('preview workbench uses the Sanctuary wide layout instead of a rail dashboa
   await expect(shell).toBeVisible();
   await expect(topbar).toBeHidden();
   await expect(editorPane).toBeVisible();
-  await expect(sidebar).toContainText('Mneme Intelligence');
+  await expect(sidebar.getByRole('heading', { name: 'Mneme', exact: true })).toBeVisible();
   await expect(sidebar).toContainText('Cognitive Sanctuary');
   await expect(page.getByTestId('stitch-graph-layout')).toBeVisible();
 
@@ -93,6 +93,13 @@ test('research vault directory rail clips long folder labels inside the rail', a
   const directoryButton = directoryRail.getByRole('button', { name: /Demo Research Vault/ });
 
   await expect(layout).toBeVisible();
+  const viewport = page.viewportSize();
+  if (viewport && viewport.width < 768) {
+    await expect(directoryRail).toBeHidden();
+    const hasPageOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+    expect(hasPageOverflow).toBe(false);
+    return;
+  }
   await expect(directoryButton).toBeVisible();
 
   const railBox = await directoryRail.boundingBox();
@@ -240,7 +247,7 @@ test('ai laboratory renders API-backed sessions and appends sent messages', asyn
   await expect(page.getByTestId('chat-function-grid')).toContainText('How should I review this vault?');
   await expect(page.getByTestId('chat-function-grid')).toContainText('Start with the indexed documents');
 
-  const composer = page.getByPlaceholder('Message Cognitive Sanctuary... (/ for commands, @ for nodes)');
+  const composer = page.getByTestId('workspace-chat-command').locator('textarea');
   await composer.fill('Summarize the graph contradictions');
   await page.getByTestId('workspace-chat-command').getByRole('button').click();
 
