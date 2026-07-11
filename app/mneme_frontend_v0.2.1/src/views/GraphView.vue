@@ -98,7 +98,7 @@ function nodeTypeLabel(nodeType: string) {
         </nav>
       </aside>
 
-      <section data-testid="graph-output-workspace" class="graph-canvas">
+      <section data-testid="graph-output-workspace" class="graph-canvas" :data-simulation-phase="interaction.simulationPhase.value">
         <div class="graph-toolbar">
           <div class="graph-title"><Network /><span>{{ t("graph.view") }}</span></div>
           <div class="graph-toolbar-controls">

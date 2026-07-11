@@ -9,6 +9,7 @@ const cssSource = readFileSync(path.join(root, 'src', 'index.css'), 'utf8');
 const apiSource = readFileSync(path.join(root, 'src', 'lib', 'api.ts'), 'utf8');
 const previewApiSource = readFileSync(path.join(root, 'src', 'lib', 'previewApi.ts'), 'utf8');
 const workspaceSource = readFileSync(path.join(root, 'src', 'composables', 'useMnemeWorkspace.ts'), 'utf8');
+const graphInteractionSource = readFileSync(path.join(root, 'src', 'composables', 'useGraphInteraction.ts'), 'utf8');
 const messagesSource = readFileSync(path.join(root, 'src', 'i18n', 'messages.ts'), 'utf8');
 
 function collectVueSources(directory) {
@@ -82,3 +83,10 @@ for (const apiMethod of ['uploadDocument', 'indexDocument', 'deleteDocument', 't
 for (const workspaceMethod of ['showDocumentationStatus', 'showSupportStatus', 'uploadFile', 'indexDocument', 'deleteDocument', 'runGraphRag', 'deleteActiveChatSession', 'testAiModelConfig', 'setDefaultAiModelConfig', 'updateActiveModelContextWindow']) {
   assert.ok(workspaceSource.includes(workspaceMethod), `Expected workspace method ${workspaceMethod}`);
 }
+
+for (const forceApi of ['forceSimulation', 'forceLink', 'forceManyBody', 'forceCollide', 'forceCenter']) {
+  assert.ok(graphInteractionSource.includes(forceApi), `Expected graph physics to use ${forceApi}`);
+}
+assert.ok(graphInteractionSource.includes('requestAnimationFrame'), 'Expected graph positions to be frame-batched');
+assert.ok(graphInteractionSource.includes('simulation.stop()'), 'Expected force timers to stop during teardown');
+assert.ok(graphInteractionSource.includes('visibilitychange'), 'Expected hidden tabs to pause graph physics');
