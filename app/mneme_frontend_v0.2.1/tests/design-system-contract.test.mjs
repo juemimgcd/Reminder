@@ -22,6 +22,7 @@ for (const token of [
 assert.ok(css.includes('[data-theme="light"]'), 'Expected a calibrated light theme');
 assert.ok(css.includes('prefers-reduced-motion'), 'Expected reduced motion support');
 assert.ok(css.includes(':focus-visible'), 'Expected visible keyboard focus styling');
+assert.ok(!css.includes('fonts.googleapis.com'), 'Expected fonts to remain available offline');
 
 for (const component of [
   'UiButton.vue',
