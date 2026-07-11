@@ -90,3 +90,33 @@ def test_backend_ci_installs_test_requirements_and_runs_pytest():
 
     assert "python -m pip install -r requirements/test.txt" in workflow
     assert "python -m pytest -q -p no:cacheprovider" in workflow
+
+
+def test_dockerfile_copies_grouped_requirements_before_installing_dependencies():
+    dockerfile = read_text("docker/Dockerfile")
+
+    grouped_copy = "COPY requirements/ ./requirements/"
+    assert grouped_copy in dockerfile
+    assert dockerfile.index(grouped_copy) < dockerfile.index("RUN python -m pip install")
+
+
+def test_migration_container_upgrades_all_alembic_heads():
+    migrate_script = read_text("docker/start-migrate.sh")
+
+    assert "exec alembic upgrade heads" in migrate_script
+
+
+def test_celery_imports_tasks_from_the_application_package():
+    celery_source = read_text("app/mneme/infra/celery_app.py")
+
+    assert '"app.mneme.tasks.index_tasks"' in celery_source
+    assert '"app.mneme.tasks.outbox_tasks"' in celery_source
+
+
+def test_linux_image_uses_cpu_only_pytorch_wheel():
+    ai_requirements = read_text("requirements/ai.txt")
+
+    assert (
+        "torch @ https://download.pytorch.org/whl/cpu/"
+        "torch-2.11.0%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl"
+    ) in ai_requirements

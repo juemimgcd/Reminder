@@ -141,7 +141,7 @@ services:
         condition: service_started
 
   neo4j:
-    image: neo4j:5.28
+    image: neo4j:latest
     container_name: reminder-neo4j
     restart: unless-stopped
     environment:

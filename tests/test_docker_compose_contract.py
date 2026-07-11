@@ -33,6 +33,12 @@ class DockerComposeContractTest(unittest.TestCase):
 
         self.assertNotIn("milvus", migrate_dependencies)
 
+    def test_neo4j_uses_an_existing_compatible_image(self):
+        image = self.services["neo4j"]["image"]
+
+        self.assertNotEqual(image, "neo4j:5.28")
+        self.assertEqual(image, "neo4j:latest")
+
 
 if __name__ == "__main__":
     unittest.main()
