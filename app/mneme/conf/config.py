@@ -15,8 +15,6 @@ DEFAULT_CORS_ALLOWED_ORIGINS = [
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        # 本地开发统一从项目根目录 .env 读取；
-        # 容器环境下则优先读取注入进进程的环境变量。
         env_file=DEFAULT_BASE_DIR / ".env",
         env_file_encoding="utf-8",
         extra="ignore",
@@ -26,7 +24,7 @@ class Settings(BaseSettings):
 
     PROJECT_NAME: str = "Agentic RAG Assistant"
     VERSION: str = "0.1.0"
-    DESCRIPTION: str = "一个基于 FastAPI 的 Agentic RAG 私有知识助手后端项目"
+    DESCRIPTION: str = "A FastAPI backend for a private Agentic RAG knowledge assistant"
     LOG_LEVEL: str = "INFO"
 
     API_PREFIX: str = "/api/v1"
@@ -39,15 +37,11 @@ class Settings(BaseSettings):
     CORS_ALLOW_HEADERS: list[str] = Field(default_factory=lambda: ["*"])
     TRUSTED_HOSTS: list[str] = Field(default_factory=list)
 
-    # 数据库地址默认给出本地开发值，同时允许通过 .env 完整覆盖。
     DATABASE_URL: str = "postgresql+asyncpg://postgres:123456@localhost:5432/agentic"
 
-    # 这几个路径字段都可以在 .env 里单独改；如果不配，就用项目默认目录。
     STORAGE_DIR: Path = DEFAULT_BASE_DIR / "storage"
     RAW_FILE_DIR: Path = DEFAULT_BASE_DIR / "storage" / "raw"
 
-    # 如果你要在 .env 里覆盖 set/list 这类复杂类型，推荐写成 JSON。
-    # 默认放开 MarkItDown 能稳定处理的常见文档格式。
     # ALLOWED_EXTENSIONS=[".pdf",".txt",".md",".docx",".pptx",".xlsx",".xls",".csv",".json",".xml",".html",".htm",".epub"]
     ALLOWED_EXTENSIONS: set[str] = {
         ".pdf",
@@ -83,8 +77,6 @@ class Settings(BaseSettings):
     HF_TOKEN: str = ""
     VECTOR_BACKEND: str = "milvus"
     GRAPH_BACKEND: str = "neo4j"
-    # 本机直接启动应用时默认连宿主机映射端口；
-    # Docker Compose 中 app 容器会被环境变量覆盖为 http://milvus:19530。
     MILVUS_URI: str = "http://127.0.0.1:19530"
     MILVUS_TOKEN: str = ""
     MILVUS_DB_NAME: str = "default"
@@ -101,9 +93,15 @@ class Settings(BaseSettings):
     NEO4J_DATABASE: str = "neo4j"
     NEO4J_MAX_CONNECTION_POOL_SIZE: int = 20
 
+    LLM_PROVIDER: str = "deepseek"
+    LLM_API_KEY: str = ""
     DASHSCOPE_API_KEY: str = ""
-    LLM_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    LLM_MODEL_NAME: str = "qwen-plus"
+    MIMO_API_KEY: str = ""
+    KIMI_API_KEY: str = ""
+    GLM_API_KEY: str = ""
+    DEEPSEEK_API_KEY: str = ""
+    LLM_BASE_URL: str = ""
+    LLM_MODEL_NAME: str = ""
     LLM_TEMPERATURE: float = 0.0
 
     JWT_SECRET: str = Field(

@@ -1,5 +1,6 @@
+from datetime import datetime
 from typing import Optional
-from sqlalchemy import BigInteger, ForeignKey, Index, String
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 from app.mneme.models.base import Base
 
@@ -30,6 +31,10 @@ class ChatSession(Base):
         comment="所属知识库内部主键",
     )
     title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, comment="会话标题")
+
+    message_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0", comment="message count")
+    last_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, comment="last message time")
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, comment="archive time")
 
     def __repr__(self) -> str:
         return f"<ChatSession(id={self.id}, user_id={self.user_id}, knowledge_base_id={self.knowledge_base_id})>"

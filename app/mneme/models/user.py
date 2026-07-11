@@ -19,16 +19,16 @@ class User(Base):
         BigInteger,
         Identity(always=False),
         primary_key=True,
-        comment="鐢ㄦ埛ID",
+        comment="user id",
     )
     username: Mapped[str] = mapped_column(String(100), nullable=False, comment="username")
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True, comment="display name")
-    password_hash: Mapped[str] = mapped_column(String(255), nullable=False, comment="瀵嗙爜鍝堝笇")
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False, comment="password hash")
     avatar_url: Mapped[str] = mapped_column(
         String(500),
         nullable=False,
         default=DEFAULT_USER_AVATAR_URL,
-        comment="澶村儚鍦板潃",
+        comment="avatar URL",
     )
     last_login_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),

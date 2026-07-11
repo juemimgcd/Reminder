@@ -7,8 +7,8 @@ from app.mneme.crud.knowledge_base import get_knowledge_base_by_id
 from app.mneme.crud.user import get_user_by_id
 from app.mneme.crud.memory_entry import create_memory_entries
 from app.mneme.schemas.memory_entry import MemoryExtractPipelineResult, MemoryEntryPayload
-from app.mneme.services.graph_projection_service import sync_document_memory_projection
-from app.mneme.services.memory_service import extract_entries_from_chunks
+from app.mneme.domains.graph.projection import sync_document_memory_projection
+from app.mneme.domains.memory.service import extract_entries_from_chunks
 
 
 async def run_memory_extract_pipeline(
@@ -18,11 +18,6 @@ async def run_memory_extract_pipeline(
         knowledge_base_id: str,
         document_id: str | None = None,
 ) -> MemoryExtractPipelineResult:
-    # 浣犺鍋氱殑浜嬶細
-    # 1. 鍏堜粠 chunk docs 鎶?entries
-    # 2. 鍋氱涓€鐗堝幓閲?/ 褰掑苟
-    # 3. 璋?create_memory_entries(...) 鍏ュ簱
-    # 4. 杩斿洖缁撴瀯鍖栫粺璁＄粨鏋?
     app_logger.bind(module="memory_pipeline").info(
         f"memory extract pipeline start knowledge_base_id={knowledge_base_id} "
         f"document_id={document_id} chunk_count={len(chunk_docs)}"

@@ -1,3 +1,6 @@
+# Optional for standalone frontend previews.
+# In the recommended Docker deployment the Vue dist is embedded in the FastAPI image,
+# so these can stay blank and the frontend will use the current origin.
 VITE_API_BASE_URL=
 VITE_API_PREFIX=
 VITE_USE_MOCKS=false

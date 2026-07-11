@@ -55,9 +55,19 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements/base.txt
+            requirements/test.txt
+
+      - name: Install backend test dependencies
+        run: python -m pip install -r requirements/test.txt
 
       - name: Compile backend sources
         run: python -m compileall app main.py
+
+      - name: Run backend unit tests
+        run: python -m pytest -q -p no:cacheprovider
 
   deploy-ready:
     runs-on: ubuntu-latest
@@ -135,7 +145,7 @@ jobs:
 
           if (( ${#missing[@]} > 0 )); then
             echo "::error::Missing required GitHub Actions deploy configuration: ${missing[*]}"
-            echo "::error::Set them in Repository variables or Repository secrets. See github-actions.secrets.example in the repo root."
+            echo "::error::Set them in Repository variables or Repository secrets. See .github/deploy/github-actions.secrets.example."
             exit 1
           fi
 

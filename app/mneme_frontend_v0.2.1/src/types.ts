@@ -19,7 +19,12 @@ export interface GraphLink {
   target: string;
 }
 
-export type WorkspaceView = "workspace" | "chat" | "graph" | "memory" | "insights";
+export type WorkspaceView = "dashboard" | "notes" | "graph" | "ai" | "settings";
+
+export interface PlannedSupportData {
+  status: "planned";
+  message: string;
+}
 
 export interface ApiResponse<T> {
   code: number;
@@ -104,6 +109,33 @@ export interface DocumentDeleteData {
   deleted_vector_count: number;
 }
 
+export interface DocumentPreviewChunk {
+  chunk_id: string;
+  chunk_index: number;
+  text: string;
+  page_no: number | null;
+  section_title: string | null;
+}
+
+export interface DocumentPreviewMemoryEntry {
+  entry_id: string;
+  entry_name: string;
+  entry_type: string;
+  summary: string;
+  importance_score: number;
+}
+
+export interface DocumentPreviewData {
+  document_id: string;
+  knowledge_base_id: string;
+  file_name: string;
+  file_type: string;
+  status: string;
+  summary: string;
+  chunks: DocumentPreviewChunk[];
+  memory_entries: DocumentPreviewMemoryEntry[];
+}
+
 export interface TaskRecordData {
   id: string;
   task_type: string;
@@ -177,6 +209,42 @@ export interface ChatQueryData {
   uncertainty: string | null;
   route: QueryRouteDecision | null;
   debug: RetrievalDebugData | null;
+}
+
+export interface ChatMessageData {
+  id: string;
+  session_id: string;
+  user_id: number;
+  knowledge_base_id: string;
+  role: "user" | "assistant" | string;
+  content: string;
+  sources: ChatSourceItem[];
+  citations: ChatCitationItem[];
+  route: QueryRouteDecision | null;
+  model_config_id: string | null;
+  created_at: string;
+}
+
+export interface ChatSessionData {
+  id: string;
+  user_id: number;
+  knowledge_base_id: string;
+  title: string | null;
+  message_count: number;
+  last_message_at: string | null;
+  archived_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChatSessionListData {
+  items: ChatSessionData[];
+  total: number;
+}
+
+export interface ChatSessionDetailData {
+  session: ChatSessionData;
+  messages: ChatMessageData[];
 }
 
 export interface GraphNodeData {
@@ -485,6 +553,35 @@ export interface CompanionAnswerResult {
   next_step_hint: string;
   follow_up_questions: string[];
   companion_message: string;
+}
+
+export interface AiModelProviderPreset {
+  provider: string;
+  label: string;
+  base_url: string;
+  model_name: string;
+}
+
+export interface AiModelConfigData {
+  id: string;
+  user_id: number;
+  label: string;
+  provider: string;
+  base_url: string;
+  model_name: string;
+  temperature: number;
+  context_window: number;
+  is_default: boolean;
+  enabled: boolean;
+  has_api_key: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AiModelConfigListData {
+  provider_presets: AiModelProviderPreset[];
+  items: AiModelConfigData[];
+  default_config_id: string | null;
 }
 
 export interface ServiceHealthData {

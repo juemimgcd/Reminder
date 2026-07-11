@@ -40,6 +40,33 @@ class DocumentDetailItem(BaseModel):
     updated_at: datetime
 
 
+class DocumentPreviewChunk(BaseModel):
+    chunk_id: str
+    chunk_index: int
+    text: str
+    page_no: int | None
+    section_title: str | None
+
+
+class DocumentPreviewMemoryEntry(BaseModel):
+    entry_id: str
+    entry_name: str
+    entry_type: str
+    summary: str
+    importance_score: float
+
+
+class DocumentPreviewData(BaseModel):
+    document_id: str
+    knowledge_base_id: str
+    file_name: str
+    file_type: str
+    status: str
+    summary: str
+    chunks: list[DocumentPreviewChunk]
+    memory_entries: list[DocumentPreviewMemoryEntry]
+
+
 class DocumentListData(BaseModel):
     items: list[DocumentListItem]
     total: int

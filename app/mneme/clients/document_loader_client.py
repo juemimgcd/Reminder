@@ -82,7 +82,6 @@ def build_langchain_documents_from_markdown(
     return docs
 
 
-# 璇诲彇鍘熷鏂囦欢骞惰ˉ榻愭枃妗ｅ煙娴佹按绾垮悗缁楠ら渶瑕佺殑鍩虹 metadata銆?
 async def load_langchain_documents(
         *,
         file_path: str,
@@ -94,7 +93,6 @@ async def load_langchain_documents(
         document_pk: int,
         file_name: str,
 ) -> list[LCDocument]:
-    # 姣忎釜 loader 浜у嚭鐨?doc.metadata 鏈€缁堜細琛ユ垚绫讳技锛?
     # {
     #     "user_id": 1,
     #     "knowledge_base_id": "kb_demo_001",

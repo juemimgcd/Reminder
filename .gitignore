@@ -1,23 +1,55 @@
+# Environment files
 .env
 .env.*
 !.env-example
-!frontend_build/mneme_frontend/.env.example
+!**/.env.example
 
+# Python
 __pycache__/
 *.py[cod]
+*$py.class
 .venv/
+venv/
+/env/
 .pytest_cache/
+pytest-cache-files-*/
 .mypy_cache/
+.ruff_cache/
+.npm-cache/
+npm-cache-temp/
+.coverage
+coverage.xml
+htmlcov/
+.tmp/
 
+# Node / frontend
+node_modules/
+**/node_modules/
+dist/
+build/
+coverage/
+**/dist/
+**/build/
+**/coverage/
+*.tsbuildinfo
+
+# IDEs and local editors
 .idea/
+.vscode/
+*.iml
+.worktrees/
 
+# Local data and generated archives
 storage/
+company_target/
+*.sqlite
 *.sqlite3
+*.db
 *.tar
 *.zip
 sentence_transformers.zip
 
-frontend_build/**/node_modules/
-frontend_build/**/dist/
-frontend_build/**/.env.local
-frontend_build/**/.env.*.local
+# Logs and OS files
+*.log
+.DS_Store
+Thumbs.db
