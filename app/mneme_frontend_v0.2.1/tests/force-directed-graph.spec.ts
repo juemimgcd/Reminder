@@ -72,3 +72,44 @@ test('hidden graph rebuild stays paused until the page is visible', async ({ pag
   expect(Math.hypot(resumed.x - hiddenEnd.x, resumed.y - hiddenEnd.y)).toBeGreaterThan(0.5);
   await expect(graph).toHaveAttribute('data-simulation-phase', 'settled', { timeout: 5000 });
 });
+
+test('drag reheats the graph and release allows it to settle', async ({ page }) => {
+  await page.goto('/?preview=1', { waitUntil: 'domcontentloaded' });
+  const graph = page.getByTestId('graph-output-workspace');
+  await expect(graph).toHaveAttribute('data-simulation-phase', 'settled', { timeout: 5000 });
+  const node = page.locator('[data-node-id="node-doc-graph"]');
+  const box = await node.boundingBox();
+  await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box!.x + box!.width / 2 + 70, box!.y + box!.height / 2 + 35, { steps: 5 });
+  await expect(graph).toHaveAttribute('data-simulation-phase', 'running');
+  await page.mouse.up();
+  await expect(graph).toHaveAttribute('data-simulation-phase', 'settled', { timeout: 5000 });
+});
+
+test('filters preserve settled positions and restart reheats', async ({ page }) => {
+  await page.goto('/?preview=1', { waitUntil: 'domcontentloaded' });
+  const graph = page.getByTestId('graph-output-workspace');
+  const node = page.locator('[data-node-id="node-doc-graph"]');
+  await expect(graph).toHaveAttribute('data-simulation-phase', 'settled', { timeout: 5000 });
+  const before = await coordinate(node);
+  await page.getByRole('button', { name: 'Tags' }).click();
+  await page.getByRole('button', { name: 'All Nodes' }).click();
+  expect(await coordinate(node)).toEqual(before);
+  await page.getByRole('button', { name: 'Restart graph layout' }).click();
+  await expect(graph).toHaveAttribute('data-simulation-phase', 'running');
+  await page.waitForTimeout(160);
+  expect(await coordinate(node)).not.toEqual(before);
+  await expect(graph).toHaveAttribute('data-simulation-phase', 'settled', { timeout: 5000 });
+});
+
+test('reduced motion publishes one stable layout without animation', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/?preview=1', { waitUntil: 'domcontentloaded' });
+  const graph = page.getByTestId('graph-output-workspace');
+  const node = page.locator('[data-node-id="node-doc-graph"]');
+  await expect(graph).toHaveAttribute('data-simulation-phase', 'reduced');
+  const before = await coordinate(node);
+  await page.waitForTimeout(300);
+  expect(await coordinate(node)).toEqual(before);
+});

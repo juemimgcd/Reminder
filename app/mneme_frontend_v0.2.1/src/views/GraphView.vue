@@ -35,7 +35,8 @@ async function selectGraphNode(node: GraphNodeData) {
 function startGraphNodeDrag(node: GraphNodeData, event: PointerEvent) {
   event.stopPropagation();
   dragState = { nodeId: node.id, pointerId: event.pointerId };
-  (event.currentTarget as SVGGElement).setPointerCapture?.(event.pointerId);
+  (event.currentTarget as SVGGElement).setPointerCapture(event.pointerId);
+  interaction.startDrag(node.id);
   void selectGraphNode(node);
 }
 
@@ -51,7 +52,8 @@ function moveGraphNodeDrag(event: PointerEvent) {
 }
 
 function endGraphNodeDrag(event?: PointerEvent) {
-  if (event && dragState && event.pointerId !== dragState.pointerId) return;
+  if (!dragState || (event && event.pointerId !== dragState.pointerId)) return;
+  interaction.endDrag(dragState.nodeId);
   dragState = null;
 }
 
@@ -120,7 +122,7 @@ function nodeTypeLabel(nodeType: string) {
         <UiEmptyState v-if="!positionedNodes.length" :title="t('graph.emptyTitle')" :description="t('graph.emptyDescription')">
           <template #icon><Network class="size-5" /></template>
         </UiEmptyState>
-        <svg v-else ref="graphSvg" :viewBox="graphViewBox" role="img" aria-label="Knowledge graph" @pointerdown="clearGraphSelection" @pointermove="moveGraphNodeDrag" @pointerup="endGraphNodeDrag" @pointerleave="endGraphNodeDrag">
+        <svg v-else ref="graphSvg" :viewBox="graphViewBox" role="img" aria-label="Knowledge graph" @pointerdown="clearGraphSelection" @pointermove="moveGraphNodeDrag" @pointerup="endGraphNodeDrag" @pointercancel="endGraphNodeDrag" @pointerleave="endGraphNodeDrag">
           <g stroke="var(--border-strong)" stroke-width="2">
             <line v-for="edge in positionedEdges" :key="edge.id" :x1="edge.sourceNode!.x" :y1="edge.sourceNode!.y" :x2="edge.targetNode!.x" :y2="edge.targetNode!.y" />
           </g>
