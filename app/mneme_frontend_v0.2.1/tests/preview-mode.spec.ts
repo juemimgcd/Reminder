@@ -25,27 +25,40 @@ test('preview workbench uses the Sanctuary wide layout instead of a rail dashboa
 
   const shell = page.getByTestId('obsidian-shell');
   const sidebar = page.getByTestId('sanctuary-sidebar');
+  const resourceSidebar = page.getByTestId('resource-sidebar');
+  const activityBar = page.getByTestId('activity-bar');
+  const mobileNavigation = page.getByTestId('mobile-navigation');
   const topbar = page.getByTestId('sanctuary-topbar');
   const editorPane = page.getByTestId('obsidian-editor-pane');
+  const viewport = page.viewportSize();
 
   await expect(shell).toBeVisible();
-  await expect(sidebar).toBeVisible();
   await expect(topbar).toBeHidden();
   await expect(editorPane).toBeVisible();
-  await expect(sidebar).toContainText('Mneme Intelligence');
+  await expect(sidebar.getByRole('heading', { name: 'Mneme', exact: true })).toBeVisible();
   await expect(sidebar).toContainText('Cognitive Sanctuary');
-  await expect(sidebar.getByRole('button', { name: 'Knowledge Graph', exact: true })).toBeVisible();
   await expect(page.getByTestId('stitch-graph-layout')).toBeVisible();
 
   await expect(editorPane.getByText('Vaults', { exact: true })).not.toBeVisible();
-  await expect(editorPane.getByText('Files', { exact: true })).toBeVisible();
+  if (viewport && viewport.width < 1024) {
+    await expect(editorPane.getByText('Files', { exact: true })).toBeHidden();
+  } else {
+    await expect(editorPane.getByText('Files', { exact: true })).toBeVisible();
+  }
   await expect(editorPane.getByText('Tasks', { exact: true })).not.toBeVisible();
 
-  await expect(shell).toHaveCSS('background-color', 'rgb(9, 9, 11)');
-  await expect(sidebar).toHaveCSS('width', '256px');
-  await expect(sidebar.getByRole('button', { name: 'Research Vault', exact: true })).toBeVisible();
-  await expect(sidebar.getByRole('button', { name: 'AI Laboratory', exact: true })).toBeVisible();
-  await expect(sidebar.getByRole('button', { name: 'System Settings', exact: true })).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', /light|dark/);
+  await expect(shell).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  if (viewport && viewport.width < 768) {
+    await expect(activityBar).toBeHidden();
+    await expect(mobileNavigation).toBeVisible();
+  } else {
+    await expect(activityBar).toBeVisible();
+    await expect(resourceSidebar).toHaveCSS('width', '256px');
+    await expect(activityBar.getByRole('button', { name: 'Research Vault', exact: true })).toBeVisible();
+    await expect(activityBar.getByRole('button', { name: 'AI Laboratory', exact: true })).toBeVisible();
+    await expect(activityBar.getByRole('button', { name: 'System Settings', exact: true })).toBeVisible();
+  }
 });
 
 test('knowledge graph file rail can collapse and expand from the canvas handle', async ({ page }) => {
@@ -55,15 +68,20 @@ test('knowledge graph file rail can collapse and expand from the canvas handle',
   const toggle = page.getByTestId('graph-file-rail-toggle');
 
   await expect(page.getByTestId('stitch-graph-layout')).toBeVisible();
-  await expect(rail).toBeVisible();
-
-  await toggle.click();
-  await expect(rail).toBeHidden();
-  await expect(toggle).toHaveAttribute('title', 'Expand file list');
-
-  await toggle.click();
-  await expect(rail).toBeVisible();
-  await expect(toggle).toHaveAttribute('title', 'Collapse file list');
+  const viewport = page.viewportSize();
+  if (viewport && viewport.width < 1024) {
+    await expect(rail).toBeHidden();
+    await toggle.click();
+    await expect(rail).toBeVisible();
+    await expect(toggle).toHaveAttribute('title', 'Collapse file list');
+  } else {
+    await expect(rail).toBeVisible();
+    await toggle.click();
+    await expect(rail).toBeHidden();
+    await expect(toggle).toHaveAttribute('title', 'Expand file list');
+    await toggle.click();
+    await expect(rail).toBeVisible();
+  }
 });
 
 test('research vault directory rail clips long folder labels inside the rail', async ({ page }) => {
@@ -75,6 +93,13 @@ test('research vault directory rail clips long folder labels inside the rail', a
   const directoryButton = directoryRail.getByRole('button', { name: /Demo Research Vault/ });
 
   await expect(layout).toBeVisible();
+  const viewport = page.viewportSize();
+  if (viewport && viewport.width < 768) {
+    await expect(directoryRail).toBeHidden();
+    const hasPageOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+    expect(hasPageOverflow).toBe(false);
+    return;
+  }
   await expect(directoryButton).toBeVisible();
 
   const railBox = await directoryRail.boundingBox();
@@ -89,6 +114,10 @@ test('research vault directory rail clips long folder labels inside the rail', a
 
 test('documentation and support show planned backend feedback', async ({ page }) => {
   await openPreview(page);
+  const viewport = page.viewportSize();
+  if (viewport && viewport.width < 768) {
+    await page.getByRole('button', { name: 'Open resources' }).click();
+  }
 
   await page.getByRole('button', { name: 'Documentation' }).click();
   await expect(page.getByText('Documentation workspace is reserved for a future release.')).toBeVisible();
@@ -171,6 +200,10 @@ test('ai chat history rail can collapse and expand from the chat handle', async 
   const toggle = page.getByTestId('ai-history-rail-toggle');
 
   await expect(layout).toBeVisible();
+  if (viewport && viewport.width < 1024) {
+    await expect(rail).toBeHidden();
+    await toggle.click();
+  }
   await expect(rail).toBeVisible();
   const expandedChatBox = await chat.boundingBox();
   expect(expandedChatBox).not.toBeNull();
@@ -192,9 +225,16 @@ test('ai chat history rail can collapse and expand from the chat handle', async 
 test('ai laboratory filters and deletes chat sessions', async ({ page }) => {
   await openPreview(page);
   await page.getByRole('button', { name: 'AI Laboratory', exact: true }).click();
+  const viewport = page.viewportSize();
+  if (viewport && viewport.width < 1024) {
+    await page.getByTestId('ai-history-rail-toggle').click();
+  }
 
   await page.getByPlaceholder('Search history...').fill('Preview Vault');
   await expect(page.getByTestId('ai-history-rail')).toContainText('Preview Vault Review');
+  if (viewport && viewport.width < 1024) {
+    await page.getByTestId('ai-history-rail-toggle').click();
+  }
   await page.getByRole('button', { name: 'Delete active chat' }).click();
   await expect(page.getByTestId('ai-history-rail')).not.toContainText('Preview Vault Review');
 });
@@ -207,7 +247,7 @@ test('ai laboratory renders API-backed sessions and appends sent messages', asyn
   await expect(page.getByTestId('chat-function-grid')).toContainText('How should I review this vault?');
   await expect(page.getByTestId('chat-function-grid')).toContainText('Start with the indexed documents');
 
-  const composer = page.getByPlaceholder('Message Cognitive Sanctuary... (/ for commands, @ for nodes)');
+  const composer = page.getByTestId('workspace-chat-command').locator('textarea');
   await composer.fill('Summarize the graph contradictions');
   await page.getByTestId('workspace-chat-command').getByRole('button').click();
 
