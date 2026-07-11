@@ -5,6 +5,7 @@ import yaml
 
 
 COMPOSE_FILE = Path(__file__).resolve().parents[1] / "docker-compose.yml"
+NGINX_FILE = Path(__file__).resolve().parents[1] / "nginx" / "reminder.conf"
 
 
 class DockerComposeContractTest(unittest.TestCase):
@@ -38,6 +39,12 @@ class DockerComposeContractTest(unittest.TestCase):
 
         self.assertNotEqual(image, "neo4j:5.28")
         self.assertEqual(image, "neo4j:latest")
+
+    def test_nginx_uses_the_production_hostname_and_private_upstream(self):
+        nginx = NGINX_FILE.read_text(encoding="utf-8")
+
+        self.assertIn("server_name www.mneme.com.cn;", nginx)
+        self.assertIn("server 127.0.0.1:8000;", nginx)
 
 
 if __name__ == "__main__":
