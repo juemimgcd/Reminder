@@ -106,6 +106,13 @@ def test_migration_container_upgrades_all_alembic_heads():
     assert "exec alembic upgrade heads" in migrate_script
 
 
+def test_container_shell_scripts_use_unix_line_endings():
+    shell_scripts = (ROOT / "docker").glob("*.sh")
+
+    for script in shell_scripts:
+        assert b"\r\n" not in script.read_bytes(), f"{script.name} must use LF line endings"
+
+
 def test_celery_imports_tasks_from_the_application_package():
     celery_source = read_text("app/mneme/infra/celery_app.py")
 
