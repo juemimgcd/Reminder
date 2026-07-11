@@ -1,4 +1,5 @@
 import { computed, ref, watch } from "vue";
+import { safeStorageGet, safeStorageSet } from "../lib/safeStorage";
 
 export type ThemeMode = "light" | "dark" | "system";
 export type ResolvedTheme = Exclude<ThemeMode, "system">;
@@ -9,12 +10,12 @@ const LOCALE_STORAGE_KEY = "mneme.locale";
 const colorScheme = window.matchMedia("(prefers-color-scheme: dark)");
 
 function readTheme(): ThemeMode {
-  const value = localStorage.getItem(THEME_STORAGE_KEY);
+  const value = safeStorageGet(THEME_STORAGE_KEY);
   return value === "light" || value === "dark" || value === "system" ? value : "system";
 }
 
 function readLocale(): Locale {
-  const value = localStorage.getItem(LOCALE_STORAGE_KEY);
+  const value = safeStorageGet(LOCALE_STORAGE_KEY);
   if (value === "zh-CN" || value === "en-US") return value;
   return navigator.language.toLowerCase().startsWith("zh") ? "zh-CN" : "en-US";
 }
@@ -45,12 +46,12 @@ colorScheme.addEventListener("change", (event) => {
 });
 
 watch(themeMode, (value) => {
-  localStorage.setItem(THEME_STORAGE_KEY, value);
+  safeStorageSet(THEME_STORAGE_KEY, value);
   applyPreferences();
 });
 
 watch(locale, (value) => {
-  localStorage.setItem(LOCALE_STORAGE_KEY, value);
+  safeStorageSet(LOCALE_STORAGE_KEY, value);
   applyPreferences();
 });
 

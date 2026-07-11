@@ -93,6 +93,24 @@ type RequestOptions = Omit<RequestInit, "body"> & {
 
 const inflightRequests = new Map<string, Promise<unknown>>();
 
+function normalizeErrorDetail(detail: unknown): string {
+  if (typeof detail === "string") {
+    return detail;
+  }
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        if (!item || typeof item !== "object") return String(item);
+        const record = item as Record<string, unknown>;
+        const location = Array.isArray(record.loc) ? record.loc.slice(1).join(".") : "";
+        const message = typeof record.msg === "string" ? record.msg : "Invalid value";
+        return location ? `${location}: ${message}` : message;
+      })
+      .join("; ");
+  }
+  return detail ? String(detail) : "Request failed";
+}
+
 function resolveRequestKey(path: string, options: RequestOptions) {
   const method = (options.method ?? "GET").toUpperCase();
   if (method !== "GET" && method !== "HEAD") {
@@ -149,7 +167,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       (payload && typeof payload === "object" && "message" in payload ? payload.message : undefined) ??
       text ??
       "Request failed";
-    throw new ApiError(String(detail), response.status);
+    throw new ApiError(normalizeErrorDetail(detail), response.status);
   }
 
   if (!payload || typeof payload !== "object" || !("code" in payload)) {

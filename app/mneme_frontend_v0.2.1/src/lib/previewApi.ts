@@ -389,10 +389,10 @@ const previewApi = {
       message: "Support contact workflow is reserved for a future release.",
     });
   },
-  register(): Promise<UserPublic> {
+  register(_payload?: { username: string; password: string; display_name?: string | null }): Promise<UserPublic> {
     return delay(previewUser);
   },
-  login(): Promise<AuthTokenData> {
+  login(_payload?: { username: string; password: string }): Promise<AuthTokenData> {
     return delay({ access_token: PREVIEW_TOKEN, token_type: "bearer" });
   },
   me(): Promise<UserPublic> {

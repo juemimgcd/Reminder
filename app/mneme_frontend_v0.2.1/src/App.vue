@@ -66,11 +66,23 @@ function openCreateCommand() {
   <main v-if="!workspace.isAuthenticated.value" class="auth-screen">
     <section class="auth-card">
       <header><div class="auth-mark"><BrainCircuit /></div><div><h1>Mneme</h1><p>Personal knowledge, kept close.</p></div></header>
-      <form @submit.prevent="workspace.login">
-        <label><span>Username</span><input v-model="workspace.loginForm.value.username" autocomplete="username" /></label>
-        <label><span>Password</span><input v-model="workspace.loginForm.value.password" type="password" autocomplete="current-password" /></label>
-        <p v-if="workspace.authError.value" class="auth-error">{{ workspace.authError.value }}</p>
-        <button><ShieldCheck />Sign in</button>
+      <div class="auth-mode" role="group" aria-label="Authentication mode">
+        <button type="button" :class="{ active: workspace.authMode.value === 'login' }" @click="workspace.setAuthMode('login')">{{ t("auth.login") }}</button>
+        <button type="button" :class="{ active: workspace.authMode.value === 'register' }" @click="workspace.setAuthMode('register')">{{ t("auth.register") }}</button>
+      </div>
+      <form v-if="workspace.authMode.value === 'login'" @submit.prevent="workspace.login">
+        <label><span>{{ t("auth.username") }}</span><input v-model="workspace.loginForm.value.username" autocomplete="username" required /></label>
+        <label><span>{{ t("auth.password") }}</span><input v-model="workspace.loginForm.value.password" type="password" autocomplete="current-password" required /></label>
+        <p v-if="workspace.authError.value" class="auth-error" aria-live="polite">{{ workspace.authError.value }}</p>
+        <button :disabled="workspace.authPending.value"><ShieldCheck />{{ workspace.authPending.value ? t("auth.signingIn") : t("auth.login") }}</button>
+      </form>
+      <form v-else @submit.prevent="workspace.register">
+        <label><span>{{ t("auth.username") }}</span><input v-model="workspace.registerForm.value.username" autocomplete="username" minlength="3" required /></label>
+        <label><span>{{ t("auth.displayName") }}</span><input v-model="workspace.registerForm.value.displayName" autocomplete="name" /></label>
+        <label><span>{{ t("auth.password") }}</span><input v-model="workspace.registerForm.value.password" type="password" autocomplete="new-password" minlength="8" required /></label>
+        <label><span>{{ t("auth.confirmPassword") }}</span><input v-model="workspace.registerForm.value.confirmPassword" type="password" autocomplete="new-password" minlength="8" required /></label>
+        <p v-if="workspace.authError.value" class="auth-error" aria-live="polite">{{ workspace.authError.value }}</p>
+        <button :disabled="workspace.authPending.value"><ShieldCheck />{{ workspace.authPending.value ? t("auth.creatingAccount") : t("auth.createAccount") }}</button>
       </form>
     </section>
   </main>
@@ -114,6 +126,7 @@ function openCreateCommand() {
           <div><span>{{ activeHealthLabel }}</span><UiIconButton label="Refresh panels" @click="workspace.loadKnowledgeBasePanels"><RefreshCw /></UiIconButton><UiIconButton label="Log out" @click="workspace.logout"><LogOut /></UiIconButton></div>
         </header>
         <UiStatusPanel v-if="workspace.banner.value" class="workspace-banner" :title="workspace.banner.value" />
+        <UiStatusPanel v-if="workspace.authNotice.value" class="workspace-banner" :title="workspace.authNotice.value" />
 
         <section data-testid="obsidian-editor-pane" class="workspace-content">
           <div v-if="workspace.isLoading.value" class="workspace-loading" aria-label="Loading workspace">
@@ -146,9 +159,13 @@ function openCreateCommand() {
 .auth-card h1 { font: 600 1.35rem var(--font-serif); }
 .auth-card p { margin-top: 0.15rem; color: var(--text-secondary); font-size: 0.78rem; }
 .auth-card form { display: grid; gap: 0.8rem; margin-top: 1.3rem; }
+.auth-mode { display: grid; grid-template-columns: 1fr 1fr; gap: 0.25rem; margin-top: 1.3rem; padding: 0.2rem; background: var(--bg-canvas); border: 1px solid var(--border-muted); border-radius: 0.5rem; }
+.auth-mode button { min-height: 2.1rem; color: var(--text-secondary); background: transparent; border: 0; border-radius: 0.35rem; font-weight: 600; }
+.auth-mode button.active { color: var(--text-primary); background: var(--accent-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 42%, transparent); }
 .auth-card label { display: grid; gap: 0.3rem; color: var(--text-secondary); font-size: 0.75rem; }
 .auth-card input { height: 2.5rem; padding: 0 0.7rem; color: var(--text-primary); background: var(--bg-canvas); border: 1px solid var(--border-muted); border-radius: 0.4rem; }
 .auth-card form > button { display: flex; height: 2.5rem; align-items: center; justify-content: center; gap: 0.45rem; color: var(--accent-contrast); background: var(--accent); border: 0; border-radius: 0.4rem; }
+.auth-card form > button:disabled { cursor: wait; opacity: 0.58; }
 .auth-card form > button svg { width: 1rem; }
 .auth-error { color: var(--danger) !important; }
 .explorer { display: flex; min-height: 0; flex: 1; flex-direction: column; }

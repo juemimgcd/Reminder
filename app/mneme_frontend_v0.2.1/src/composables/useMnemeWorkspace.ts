@@ -1,8 +1,11 @@
 import { computed, onMounted, ref } from "vue";
+import { useI18n } from "./useI18n";
 import { api, API_BASE_URL, IS_PREVIEW_MODE, PREVIEW_TOKEN } from "../lib/api";
+import { safeStorageGet, safeStorageRemove, safeStorageSet } from "../lib/safeStorage";
 import type {
   AiModelConfigData,
   AiModelProviderPreset,
+  AuthMode,
   ChatQueryData,
   ChatMessageData,
   ChatSessionData,
@@ -31,27 +34,18 @@ const SELECTED_KB_KEY = "mneme.selected_knowledge_base_id";
 export type AuthStatus = "checking" | "guest" | "authenticated";
 export type WorkspaceCommandTab = "create" | "upload" | "ask" | "companion";
 
-function storageGet(key: string) {
-  if (typeof window === "undefined") {
-    return "";
-  }
-  return window.localStorage.getItem(key) ?? "";
-}
-
-function storageSet(key: string, value: string) {
-  if (typeof window !== "undefined") {
-    window.localStorage.setItem(key, value);
-  }
-}
-
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
 export function useMnemeWorkspace() {
-  const token = ref(IS_PREVIEW_MODE ? PREVIEW_TOKEN : storageGet(TOKEN_KEY));
+  const { t } = useI18n();
+  const token = ref(IS_PREVIEW_MODE ? PREVIEW_TOKEN : safeStorageGet(TOKEN_KEY));
   const authStatus = ref<AuthStatus>(IS_PREVIEW_MODE || token.value ? "checking" : "guest");
   const authError = ref("");
+  const authMode = ref<AuthMode>("login");
+  const authPending = ref(false);
+  const authNotice = ref("");
   const banner = ref("");
   const isLoading = ref(false);
 
@@ -59,7 +53,7 @@ export function useMnemeWorkspace() {
   const workspaceCommandTab = ref<WorkspaceCommandTab>("ask");
   const user = ref<UserPublic | null>(null);
   const knowledgeBases = ref<KnowledgeBaseData[]>([]);
-  const selectedKnowledgeBaseId = ref(storageGet(SELECTED_KB_KEY));
+  const selectedKnowledgeBaseId = ref(safeStorageGet(SELECTED_KB_KEY));
   const documents = ref<DocumentListItem[]>([]);
 
   const serviceHealth = ref<ServiceHealthData | null>(null);
@@ -92,6 +86,7 @@ export function useMnemeWorkspace() {
   const chatSessionFilter = ref("");
 
   const loginForm = ref({ username: "", password: "" });
+  const registerForm = ref({ username: "", displayName: "", password: "", confirmPassword: "" });
   const knowledgeBaseForm = ref({ name: "", description: "" });
   const chatQuestion = ref("How should I review this vault?");
   const companionQuestion = ref("What should I focus on next?");
@@ -138,7 +133,7 @@ export function useMnemeWorkspace() {
       }
 
       if (selectedKnowledgeBaseId.value) {
-        storageSet(SELECTED_KB_KEY, selectedKnowledgeBaseId.value);
+        safeStorageSet(SELECTED_KB_KEY, selectedKnowledgeBaseId.value);
       }
 
       await loadKnowledgeBasePanels();
@@ -196,21 +191,59 @@ export function useMnemeWorkspace() {
       authStatus.value = "guest";
       authError.value = errorMessage(error, "Session expired. Please sign in again.");
       token.value = "";
+      safeStorageRemove(TOKEN_KEY);
     }
+  }
+
+  async function establishSession(accessToken: string) {
+    token.value = accessToken;
+    if (!safeStorageSet(TOKEN_KEY, accessToken)) {
+      authNotice.value = t("auth.sessionOnly");
+    }
+    await authenticateWithToken();
+  }
+
+  function setAuthMode(mode: AuthMode) {
+    authMode.value = mode;
+    authError.value = "";
   }
 
   async function login() {
     authError.value = "";
-    isLoading.value = true;
+    authPending.value = true;
     try {
       const auth = await api.login(loginForm.value);
-      token.value = auth.access_token;
-      storageSet(TOKEN_KEY, token.value);
-      await authenticateWithToken();
+      await establishSession(auth.access_token);
     } catch (error) {
-      authError.value = errorMessage(error, "Unable to sign in.");
+      authError.value = errorMessage(error, t("auth.loginFailed"));
     } finally {
-      isLoading.value = false;
+      authPending.value = false;
+    }
+  }
+
+  async function register() {
+    authError.value = "";
+    if (registerForm.value.password !== registerForm.value.confirmPassword) {
+      authError.value = t("auth.passwordMismatch");
+      return;
+    }
+
+    authPending.value = true;
+    try {
+      await api.register({
+        username: registerForm.value.username,
+        display_name: registerForm.value.displayName.trim() || null,
+        password: registerForm.value.password,
+      });
+      const auth = await api.login({
+        username: registerForm.value.username,
+        password: registerForm.value.password,
+      });
+      await establishSession(auth.access_token);
+    } catch (error) {
+      authError.value = errorMessage(error, t("auth.registerFailed"));
+    } finally {
+      authPending.value = false;
     }
   }
 
@@ -478,7 +511,7 @@ export function useMnemeWorkspace() {
 
   function selectKnowledgeBase(id: string) {
     selectedKnowledgeBaseId.value = id;
-    storageSet(SELECTED_KB_KEY, id);
+    safeStorageSet(SELECTED_KB_KEY, id);
     void loadKnowledgeBasePanels();
   }
 
@@ -486,9 +519,7 @@ export function useMnemeWorkspace() {
     token.value = "";
     user.value = null;
     authStatus.value = "guest";
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem(TOKEN_KEY);
-    }
+    safeStorageRemove(TOKEN_KEY);
   }
 
   onMounted(() => {
@@ -510,6 +541,9 @@ export function useMnemeWorkspace() {
     askCompanion,
     askVault,
     authError,
+    authMode,
+    authNotice,
+    authPending,
     authStatus,
     banner,
     chatQuestion,
@@ -550,6 +584,8 @@ export function useMnemeWorkspace() {
     profile,
     profileEvidence,
     readiness,
+    register,
+    registerForm,
     rebuildActiveGraph,
     rebuildActiveMemory,
     refreshAdvice,
@@ -561,6 +597,7 @@ export function useMnemeWorkspace() {
     selectChatSession,
     sendChatMessage,
     serviceHealth,
+    setAuthMode,
     setDefaultAiModelConfig,
     showDocumentationStatus,
     showSupportStatus,
