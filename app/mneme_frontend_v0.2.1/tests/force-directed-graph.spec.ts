@@ -103,7 +103,7 @@ test('filters preserve settled positions and restart reheats', async ({ page }) 
   await expect(graph).toHaveAttribute('data-simulation-phase', 'settled', { timeout: 5000 });
 });
 
-test('reduced motion publishes one stable layout without animation', async ({ page }) => {
+test('reduced motion keeps restart and drag release synchronous and stable', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/?preview=1', { waitUntil: 'domcontentloaded' });
   const graph = page.getByTestId('graph-output-workspace');
@@ -112,4 +112,22 @@ test('reduced motion publishes one stable layout without animation', async ({ pa
   const before = await coordinate(node);
   await page.waitForTimeout(300);
   expect(await coordinate(node)).toEqual(before);
+
+  await page.getByRole('button', { name: 'Restart graph layout' }).click();
+  await expect(graph).toHaveAttribute('data-simulation-phase', 'reduced');
+  const restarted = await coordinate(node);
+  expect(restarted).not.toEqual(before);
+  await page.waitForTimeout(300);
+  expect(await coordinate(node)).toEqual(restarted);
+
+  const box = await node.boundingBox();
+  await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box!.x + box!.width / 2 + 55, box!.y + box!.height / 2 + 28, { steps: 4 });
+  await expect(graph).toHaveAttribute('data-simulation-phase', 'reduced');
+  await page.mouse.up();
+  await expect(graph).toHaveAttribute('data-simulation-phase', 'reduced');
+  const released = await coordinate(node);
+  await page.waitForTimeout(300);
+  expect(await coordinate(node)).toEqual(released);
 });

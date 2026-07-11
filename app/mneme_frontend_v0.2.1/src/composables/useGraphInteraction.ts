@@ -51,6 +51,7 @@ export function useGraphInteraction(
   let simulationNodes: SimulationGraphNode[] = [];
   let frameId: number | null = null;
   let pausedForVisibility = false;
+  let reducedMotionActive = false;
 
   function publishPositions() {
     if (frameId !== null) return;
@@ -68,6 +69,23 @@ export function useGraphInteraction(
     pausedForVisibility = false;
     if (frameId !== null) window.cancelAnimationFrame(frameId);
     frameId = null;
+  }
+
+  function publishPositionsImmediately() {
+    if (frameId !== null) window.cancelAnimationFrame(frameId);
+    frameId = null;
+    publishedPositions.value = new Map(
+      simulationNodes.map((node) => [node.id, { x: node.x, y: node.y }]),
+    );
+  }
+
+  function settleReducedMotion(alpha: number) {
+    if (!simulation) return;
+    simulation.stop().alphaTarget(0).alpha(alpha);
+    for (let index = 0; index < 120; index += 1) simulation.tick();
+    publishPositionsImmediately();
+    simulationPhase.value = "reduced";
+    pausedForVisibility = false;
   }
 
   function handleVisibilityChange() {
@@ -152,6 +170,11 @@ export function useGraphInteraction(
     if (!node || !simulation) return;
     node.fx = node.x;
     node.fy = node.y;
+    if (reducedMotionActive) {
+      simulation.stop();
+      simulationPhase.value = "reduced";
+      return;
+    }
     simulation.alphaTarget(0.22).restart();
     simulationPhase.value = "running";
   }
@@ -171,6 +194,10 @@ export function useGraphInteraction(
     if (!node || !simulation) return;
     node.fx = null;
     node.fy = null;
+    if (reducedMotionActive) {
+      settleReducedMotion(0.32);
+      return;
+    }
     simulation.alphaTarget(0).alpha(Math.max(simulation.alpha(), 0.32)).restart();
     simulationPhase.value = "running";
   }
@@ -188,6 +215,10 @@ export function useGraphInteraction(
       node.vx = 0;
       node.vy = 0;
     });
+    if (reducedMotionActive) {
+      settleReducedMotion(1);
+      return;
+    }
     simulation.alphaTarget(0).alpha(1);
     simulationPhase.value = "running";
     publishPositions();
@@ -219,7 +250,7 @@ export function useGraphInteraction(
       fy: null,
     }));
     const links: SimulationGraphLink[] = edges.value.map((edge) => ({ ...edge, source: edge.source, target: edge.target }));
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    reducedMotionActive = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     simulation = forceSimulation<SimulationGraphNode>(simulationNodes)
       .alpha(1)
@@ -238,11 +269,8 @@ export function useGraphInteraction(
         simulationPhase.value = "settled";
       });
 
-    if (reducedMotion) {
-      simulation.stop();
-      for (let index = 0; index < 120; index += 1) simulation.tick();
-      publishedPositions.value = new Map(simulationNodes.map((node) => [node.id, { x: node.x, y: node.y }]));
-      simulationPhase.value = "reduced";
+    if (reducedMotionActive) {
+      settleReducedMotion(1);
     } else {
       simulationPhase.value = "running";
       if (document.hidden) {
