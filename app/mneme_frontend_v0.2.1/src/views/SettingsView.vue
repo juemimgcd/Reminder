@@ -15,7 +15,7 @@ const locales: Array<{ value: Locale; label: string }> = [{ value: "en-US", labe
 
 <template>
   <div data-testid="stitch-settings-layout" class="settings-layout">
-    <aside><small>{{ t("settings.preferences") }}</small><h1>{{ t("settings.title") }}</h1><nav><a href="#appearance">{{ t("settings.appearance") }}</a><a href="#models">{{ t("settings.models") }}</a><a href="#sync">{{ t("settings.sync") }}</a><a href="#health">{{ t("settings.health") }}</a></nav></aside>
+    <aside class="settings-section-nav"><small>{{ t("settings.preferences") }}</small><nav><a href="#appearance">{{ t("settings.appearance") }}</a><a href="#models">{{ t("settings.models") }}</a><a href="#sync">{{ t("settings.sync") }}</a><a href="#health">{{ t("settings.health") }}</a></nav></aside>
     <section>
       <article id="appearance">
         <header><div><small>{{ t("settings.appearance") }}</small><h2>{{ t("settings.appearanceDescription") }}</h2></div></header>
@@ -45,16 +45,15 @@ const locales: Array<{ value: Locale; label: string }> = [{ value: "en-US", labe
 </template>
 
 <style scoped>
-.settings-layout { display: grid; width: min(100%, 1100px); margin: 0 auto; padding: 2rem; grid-template-columns: 190px minmax(0, 1fr); gap: 2.5rem; }
-.settings-layout > aside { position: sticky; top: 1rem; height: fit-content; }
+.settings-layout { display: grid; width: min(100%, 1100px); min-width: 0; margin: 0 auto; padding: 2rem; grid-template-columns: 190px minmax(0, 1fr); gap: 2.5rem; font-family: var(--font-sans); }
+.settings-layout > aside { position: sticky; top: 1rem; min-width: 0; height: fit-content; }
 small { color: var(--text-tertiary); font: 0.66rem var(--font-mono); text-transform: uppercase; letter-spacing: 0.07em; }
-h1 { margin: 0.35rem 0 1.3rem; font: 600 2rem var(--font-serif); }
-h2 { margin: 0.25rem 0 0; font-size: 1rem; font-weight: 600; }
-.settings-layout > aside nav { display: grid; gap: 0.15rem; }
+h2 { margin: 0.25rem 0 0; font-family: var(--font-sans); font-size: 1rem; font-weight: 650; line-height: 1.45; }
+.settings-layout > aside nav { display: grid; gap: 0.15rem; margin-top: 0.75rem; }
 .settings-layout > aside a { padding: 0.55rem 0.65rem; color: var(--text-secondary); border-radius: 0.35rem; text-decoration: none; }
 .settings-layout > aside a:hover { color: var(--text-primary); background: var(--bg-elevated); }
-.settings-layout > section { display: grid; gap: 1rem; }
-article { padding: 1.25rem; background: var(--bg-panel); border: 1px solid var(--border-muted); border-radius: 0.5rem; }
+.settings-layout > section { display: grid; min-width: 0; gap: 1rem; }
+article { min-width: 0; scroll-margin-top: 1rem; padding: 1.25rem; background: var(--bg-panel); border: 1px solid var(--border-muted); border-radius: 0.5rem; }
 article > header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-muted); }
 article > header > svg { width: 1.1rem; color: var(--accent); }
 fieldset { margin: 1rem 0 0; padding: 0; border: 0; }
@@ -65,10 +64,11 @@ legend { margin-bottom: 0.55rem; color: var(--text-secondary); font-size: 0.76re
 .choice-grid svg { width: 1rem; }
 .locale-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .model-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.65rem; margin-top: 1rem; }
-.model-grid section { padding: 0.9rem; background: var(--bg-canvas); border: 1px solid var(--border-muted); border-radius: 0.4rem; }
+.model-grid section { min-width: 0; padding: 0.9rem; background: var(--bg-canvas); border: 1px solid var(--border-muted); border-radius: 0.4rem; }
 .model-grid section.selected { border-color: var(--accent); }
 .model-grid section > div { display: flex; justify-content: space-between; gap: 0.5rem; }
 .model-grid section > div span { color: var(--accent); font-size: 0.7rem; }
+.model-grid p, .model-grid small { overflow-wrap: anywhere; }
 .model-grid p { margin: 0.6rem 0 0.15rem; color: var(--text-secondary); font-size: 0.78rem; }
 .model-grid footer { display: flex; gap: 0.35rem; margin-top: 0.8rem; }
 .model-grid button, .range button, .sync-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; padding: 0.45rem 0.65rem; color: var(--text-secondary); background: transparent; border: 1px solid var(--border-muted); border-radius: 0.35rem; font-size: 0.72rem; }
@@ -87,5 +87,6 @@ legend { margin-bottom: 0.55rem; color: var(--text-secondary); font-size: 0.76re
 .health-grid span { color: var(--text-tertiary); font-size: 0.68rem; }
 .health-grid strong { overflow: hidden; font-size: 0.85rem; text-overflow: ellipsis; }
 @keyframes spin { to { transform: rotate(360deg); } }
-@media (max-width: 767px) { .settings-layout { grid-template-columns: 1fr; padding: 1rem; } .settings-layout > aside { position: static; } .settings-layout > aside nav { display: none; } .model-grid, .health-grid { grid-template-columns: 1fr; } .health-grid section { border-right: 0; border-bottom: 1px solid var(--border-muted); } }
+@media (max-width: 900px) { .settings-layout { grid-template-columns: minmax(0, 1fr); gap: 1rem; padding: 1rem; } .settings-layout > aside { position: sticky; top: 0; z-index: 8; padding: 0.65rem; background: color-mix(in srgb, var(--bg-canvas) 94%, transparent); border-bottom: 1px solid var(--border-muted); backdrop-filter: blur(12px); } .settings-layout > aside > small { display: none; } .settings-layout > aside nav { display: flex; gap: 0.25rem; margin: 0; overflow-x: auto; } .settings-layout > aside a { flex: 0 0 auto; white-space: nowrap; } }
+@media (max-width: 560px) { .model-grid, .health-grid, .choice-grid { grid-template-columns: 1fr; } .locale-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .health-grid section { border-right: 0; border-bottom: 1px solid var(--border-muted); } .sync-actions { flex-direction: column; } }
 </style>

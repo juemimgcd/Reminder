@@ -200,7 +200,7 @@ function openCreateCommand() {
 .workspace-topbar h2 { margin: 0.12rem 0 0; font-size: 0.92rem; }
 .workspace-topbar > div:last-child { display: flex; align-items: center; gap: 0.3rem; }
 .workspace-topbar > div:last-child > span { padding: 0.25rem 0.4rem; color: var(--text-tertiary); border: 1px solid var(--border-muted); border-radius: 0.3rem; font: 0.62rem var(--font-mono); }
-.workspace-banner { margin: 0; padding: 0.55rem 1rem; color: var(--text-secondary); background: var(--accent-soft); border-bottom: 1px solid var(--border-muted); font-size: 0.72rem; }
+.workspace-banner { width: 100%; min-width: 0; flex: 0 0 auto; margin: 0; padding: 0.55rem 1rem; color: var(--text-secondary); background: var(--accent-soft); border-width: 0 0 1px; border-radius: 0; font-size: 0.72rem; }
 .workspace-content { min-width: 0; min-height: 0; flex: 1; overflow: auto; }
 .workspace-loading { display: grid; width: min(100%, 900px); gap: 0.9rem; margin: 0 auto; padding: 2rem; }
 @media (max-width: 767px) { .workspace-topbar { padding-inline: 0.75rem; } .workspace-topbar > div:last-child > span { display: none; } }

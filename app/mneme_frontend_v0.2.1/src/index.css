@@ -161,6 +161,12 @@
     grid-template-columns: 52px 0 minmax(0, 1fr);
   }
 
+  .mneme-shell--resource-closed > [data-testid="resource-sidebar"] {
+    width: 0;
+    visibility: hidden;
+    border: 0;
+  }
+
   .mneme-shell__main {
     display: flex;
     width: 100%;
