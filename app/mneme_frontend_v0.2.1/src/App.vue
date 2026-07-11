@@ -21,6 +21,8 @@ import MobileNavigation from "./components/shell/MobileNavigation.vue";
 import ResourceSidebar from "./components/shell/ResourceSidebar.vue";
 import StatusBar from "./components/shell/StatusBar.vue";
 import UiIconButton from "./components/ui/UiIconButton.vue";
+import UiSkeleton from "./components/ui/UiSkeleton.vue";
+import UiStatusPanel from "./components/ui/UiStatusPanel.vue";
 import { useI18n } from "./composables/useI18n";
 import { useMnemeWorkspace } from "./composables/useMnemeWorkspace";
 import { useResponsiveShell } from "./composables/useResponsiveShell";
@@ -35,17 +37,17 @@ type ViewItem = { id: WorkspaceView; label: string; shortLabel: string; icon: Co
 
 const workspace = useMnemeWorkspace();
 const shell = useResponsiveShell();
-const { formatDate } = useI18n();
+const { formatDate, t } = useI18n();
 
-const VIEW_ITEMS: ViewItem[] = [
-  { id: "dashboard", label: "Semantic Map", shortLabel: "Map", icon: Network, hint: "Workspace overview and semantic health" },
-  { id: "notes", label: "Research Vault", shortLabel: "Vault", icon: FolderOpen, hint: "Documents and durable memory" },
-  { id: "graph", label: "Knowledge Graph", shortLabel: "Graph", icon: GitBranch, hint: "GraphRAG node structure" },
-  { id: "ai", label: "AI Laboratory", shortLabel: "AI", icon: FlaskConical, hint: "Ask and companion replies" },
-  { id: "settings", label: "System Settings", shortLabel: "Settings", icon: SlidersHorizontal, hint: "Appearance, models, and sync" },
-];
+const VIEW_ITEMS = computed<ViewItem[]>(() => [
+  { id: "dashboard", label: t("nav.map"), shortLabel: t("nav.short.map"), icon: Network, hint: t("nav.hint.map") },
+  { id: "notes", label: t("nav.vault"), shortLabel: t("nav.short.vault"), icon: FolderOpen, hint: t("nav.hint.vault") },
+  { id: "graph", label: t("nav.graph"), shortLabel: t("nav.short.graph"), icon: GitBranch, hint: t("nav.hint.graph") },
+  { id: "ai", label: t("nav.ai"), shortLabel: t("nav.short.ai"), icon: FlaskConical, hint: t("nav.hint.ai") },
+  { id: "settings", label: t("nav.settings"), shortLabel: t("nav.short.settings"), icon: SlidersHorizontal, hint: t("nav.hint.settings") },
+]);
 
-const currentViewItem = computed(() => VIEW_ITEMS.find((item) => item.id === workspace.view.value) ?? VIEW_ITEMS[0]);
+const currentViewItem = computed(() => VIEW_ITEMS.value.find((item) => item.id === workspace.view.value) ?? VIEW_ITEMS.value[0]);
 const activeHealthLabel = computed(() => workspace.readiness.value?.overall_status ?? workspace.serviceHealth.value?.status ?? "preview");
 
 function navigate(id: string) {
@@ -83,25 +85,25 @@ function openCreateCommand() {
             <div class="brand-mark"><BrainCircuit /></div>
             <div><h1>Mneme</h1><p>Cognitive Sanctuary</p></div>
           </header>
-          <button class="new-research" @click="openCreateCommand"><Plus />New Research Space</button>
+          <button class="new-research" @click="openCreateCommand"><Plus />{{ t("shell.newResearch") }}</button>
 
           <nav class="explorer-scroll">
             <section data-testid="sidebar-group-vaults">
-              <header><span>Research spaces</span><UiIconButton label="Create vault" size="sm" @click="openCreateCommand"><Plus /></UiIconButton></header>
+              <header><span>{{ t("shell.researchSpaces") }}</span><UiIconButton label="Create vault" size="sm" @click="openCreateCommand"><Plus /></UiIconButton></header>
               <button v-for="vault in workspace.knowledgeBases.value" :key="vault.id" :class="{ active: workspace.selectedKnowledgeBaseId.value === vault.id }" @click="workspace.selectKnowledgeBase(vault.id)">
-                <strong>{{ vault.name }}</strong><small>{{ vault.description || "No description" }}</small>
+                <strong>{{ vault.name }}</strong><small>{{ vault.description || t("shell.noDescription") }}</small>
               </button>
             </section>
             <section data-testid="sidebar-group-files">
-              <header><span>Recent files</span></header>
+              <header><span>{{ t("shell.recentFiles") }}</span></header>
               <button v-for="doc in workspace.selectedDocuments.value.slice(0, 6)" :key="doc.id"><strong>{{ doc.file_name }}</strong><small>{{ doc.status }} · {{ formatDate(doc.created_at) }}</small></button>
             </section>
           </nav>
 
           <footer>
-            <button @click="workspace.showDocumentationStatus"><BookOpen />Documentation</button>
-            <button @click="workspace.showSupportStatus"><LifeBuoy />Support</button>
-            <div class="user-card"><div><UserRound /></div><span><strong>{{ workspace.user.value?.display_name || "Preview User" }}</strong><small>{{ workspace.user.value?.username }}</small></span></div>
+            <button @click="workspace.showDocumentationStatus"><BookOpen />{{ t("shell.documentation") }}</button>
+            <button @click="workspace.showSupportStatus"><LifeBuoy />{{ t("shell.support") }}</button>
+            <div class="user-card"><div><UserRound /></div><span><strong>{{ workspace.user.value?.display_name || t("shell.previewUser") }}</strong><small>{{ workspace.user.value?.username }}</small></span></div>
           </footer>
         </aside>
       </ResourceSidebar>
@@ -111,10 +113,15 @@ function openCreateCommand() {
           <div data-testid="sanctuary-active-view"><small>{{ currentViewItem.hint }}</small><h2>{{ currentViewItem.label }}</h2></div>
           <div><span>{{ activeHealthLabel }}</span><UiIconButton label="Refresh panels" @click="workspace.loadKnowledgeBasePanels"><RefreshCw /></UiIconButton><UiIconButton label="Log out" @click="workspace.logout"><LogOut /></UiIconButton></div>
         </header>
-        <p v-if="workspace.banner.value" class="workspace-banner">{{ workspace.banner.value }}</p>
+        <UiStatusPanel v-if="workspace.banner.value" class="workspace-banner" :title="workspace.banner.value" />
 
         <section data-testid="obsidian-editor-pane" class="workspace-content">
-          <DashboardView v-if="workspace.view.value === 'dashboard'" :workspace="workspace" />
+          <div v-if="workspace.isLoading.value" class="workspace-loading" aria-label="Loading workspace">
+            <UiSkeleton width="38%" height="1.8rem" />
+            <UiSkeleton width="72%" height="0.8rem" />
+            <UiSkeleton width="100%" height="13rem" />
+          </div>
+          <DashboardView v-else-if="workspace.view.value === 'dashboard'" :workspace="workspace" />
           <VaultView v-else-if="workspace.view.value === 'notes'" :workspace="workspace" @create="openCreateCommand" />
           <GraphView v-else-if="workspace.view.value === 'graph'" :workspace="workspace" />
           <AiLabView v-else-if="workspace.view.value === 'ai'" :workspace="workspace" :format-date="formatDate" />
@@ -175,5 +182,6 @@ function openCreateCommand() {
 .workspace-topbar > div:last-child > span { padding: 0.25rem 0.4rem; color: var(--text-tertiary); border: 1px solid var(--border-muted); border-radius: 0.3rem; font: 0.62rem var(--font-mono); }
 .workspace-banner { margin: 0; padding: 0.55rem 1rem; color: var(--text-secondary); background: var(--accent-soft); border-bottom: 1px solid var(--border-muted); font-size: 0.72rem; }
 .workspace-content { min-width: 0; min-height: 0; flex: 1; overflow: auto; }
+.workspace-loading { display: grid; width: min(100%, 900px); gap: 0.9rem; margin: 0 auto; padding: 2rem; }
 @media (max-width: 767px) { .workspace-topbar { padding-inline: 0.75rem; } .workspace-topbar > div:last-child > span { display: none; } }
 </style>

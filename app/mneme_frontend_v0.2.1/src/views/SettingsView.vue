@@ -15,7 +15,7 @@ const locales: Array<{ value: Locale; label: string }> = [{ value: "en-US", labe
 
 <template>
   <div data-testid="stitch-settings-layout" class="settings-layout">
-    <aside><small>Preferences</small><h1>Settings</h1><nav><a href="#appearance">Appearance</a><a href="#models">AI models</a><a href="#sync">Data sync</a><a href="#health">Health</a></nav></aside>
+    <aside><small>{{ t("settings.preferences") }}</small><h1>{{ t("settings.title") }}</h1><nav><a href="#appearance">{{ t("settings.appearance") }}</a><a href="#models">{{ t("settings.models") }}</a><a href="#sync">{{ t("settings.sync") }}</a><a href="#health">{{ t("settings.health") }}</a></nav></aside>
     <section>
       <article id="appearance">
         <header><div><small>{{ t("settings.appearance") }}</small><h2>{{ t("settings.appearanceDescription") }}</h2></div></header>

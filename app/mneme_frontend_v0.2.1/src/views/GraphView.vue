@@ -3,8 +3,11 @@ import { ChevronLeft, File, FolderOpen, FolderPlus, Network, Play, Search, Send,
 import { computed, onBeforeUnmount, ref } from "vue";
 import type { MnemeWorkspace } from "../composables/useMnemeWorkspace";
 import type { GraphNodeData } from "../types";
+import { useI18n } from "../composables/useI18n";
+import UiEmptyState from "../components/ui/UiEmptyState.vue";
 
 const props = defineProps<{ workspace: MnemeWorkspace }>();
+const { t } = useI18n();
 const railCollapsed = ref(window.matchMedia("(max-width: 1023px)").matches);
 const previewNode = ref<GraphNodeData | null>(null);
 const zoom = ref(1);
@@ -53,7 +56,7 @@ onBeforeUnmount(() => window.clearTimeout(previewTimer));
   <div data-testid="stitch-graph-layout" class="graph-layout" title="Graph Workspace">
     <div data-testid="graph-function-grid" class="graph-grid">
       <aside data-testid="graph-file-rail" class="graph-file-panel" :aria-hidden="railCollapsed">
-        <header><div><small>Active vault</small><h2>Files</h2></div><FolderPlus class="size-4" /></header>
+        <header><div><small>{{ t("graph.activeVault") }}</small><h2>{{ t("graph.files") }}</h2></div><FolderPlus class="size-4" /></header>
         <nav>
           <section><h3><FolderOpen />Machine Learning</h3><button class="active"><File />Neural Networks</button><button><File />Gradient Descent</button><button><File />Optimization</button></section>
           <button><FolderOpen />Architecture</button><button><FolderOpen />Research Papers</button>
@@ -63,15 +66,18 @@ onBeforeUnmount(() => window.clearTimeout(previewTimer));
 
       <section data-testid="graph-output-workspace" class="graph-canvas">
         <div class="graph-toolbar">
-          <div class="graph-title"><Network /><span>Graph View</span></div>
+          <div class="graph-title"><Network /><span>{{ t("graph.view") }}</span></div>
           <div class="graph-toolbar-controls">
-            <form @submit.prevent="workspace.runGraphRag"><Search /><input v-model="workspace.graphRagQuestion.value" placeholder="Search knowledge base..." /><button aria-label="Run GraphRAG"><Send /></button></form>
-            <div class="graph-tabs"><button class="active">All Nodes</button><button>Tags</button><button>Orphans</button><button aria-label="Graph filters"><SlidersHorizontal /></button></div>
+            <form @submit.prevent="workspace.runGraphRag"><Search /><input v-model="workspace.graphRagQuestion.value" :placeholder="t('graph.search')" /><button aria-label="Run GraphRAG"><Send /></button></form>
+            <div class="graph-tabs"><button class="active">{{ t("graph.allNodes") }}</button><button>{{ t("graph.tags") }}</button><button>{{ t("graph.orphans") }}</button><button aria-label="Graph filters"><SlidersHorizontal /></button></div>
           </div>
         </div>
         <p v-if="workspace.graphRagStatus.value" class="graph-status">{{ workspace.graphRagStatus.value }}</p>
 
-        <svg :viewBox="graphViewBox" role="img" aria-label="Knowledge graph" @pointermove="moveGraphNodeDrag" @pointerup="endGraphNodeDrag" @pointerleave="endGraphNodeDrag">
+        <UiEmptyState v-if="!positionedNodes.length" :title="t('graph.emptyTitle')" :description="t('graph.emptyDescription')">
+          <template #icon><Network class="size-5" /></template>
+        </UiEmptyState>
+        <svg v-else :viewBox="graphViewBox" role="img" aria-label="Knowledge graph" @pointermove="moveGraphNodeDrag" @pointerup="endGraphNodeDrag" @pointerleave="endGraphNodeDrag">
           <g stroke="var(--border-strong)" stroke-width="2">
             <line v-for="edge in positionedEdges" :key="edge.id" :x1="edge.sourceNode!.x" :y1="edge.sourceNode!.y" :x2="edge.targetNode!.x" :y2="edge.targetNode!.y" />
           </g>
@@ -81,13 +87,13 @@ onBeforeUnmount(() => window.clearTimeout(previewTimer));
           </g>
         </svg>
 
-        <div class="graph-hint"><Workflow /><span>Long press to preview</span></div>
+        <div class="graph-hint"><Workflow /><span>{{ t("graph.longPress") }}</span></div>
         <aside v-if="previewNode" data-testid="graph-document-preview-panel" class="graph-preview">
-          <header><small>Properties</small><button title="Close preview" @click="hideGraphDocumentPreview"><X /></button></header>
+          <header><small>{{ t("graph.properties") }}</small><button title="Close preview" @click="hideGraphDocumentPreview"><X /></button></header>
           <h2>{{ workspace.documentPreview.value?.file_name ?? previewNode.label }}</h2>
           <div class="tags"><span>#{{ previewNode.node_type }}</span><span>#{{ workspace.documentPreview.value?.file_type ?? "graph" }}</span></div>
-          <section><small>Summary</small><p>{{ workspace.documentPreview.value?.summary ?? `${previewNode.label} is linked inside the active knowledge graph.` }}</p><a href="#document">Read full note</a></section>
-          <section v-if="workspace.documentPreview.value?.memory_entries.length"><small>Backlinks</small><article v-for="entry in workspace.documentPreview.value.memory_entries" :key="entry.entry_id"><strong>{{ entry.entry_name }}</strong><p>{{ entry.summary }}</p></article></section>
+          <section><small>{{ t("graph.summary") }}</small><p>{{ workspace.documentPreview.value?.summary ?? `${previewNode.label} is linked inside the active knowledge graph.` }}</p><a href="#document">{{ t("graph.readFull") }}</a></section>
+          <section v-if="workspace.documentPreview.value?.memory_entries.length"><small>{{ t("graph.backlinks") }}</small><article v-for="entry in workspace.documentPreview.value.memory_entries" :key="entry.entry_id"><strong>{{ entry.entry_name }}</strong><p>{{ entry.summary }}</p></article></section>
         </aside>
 
         <button data-testid="graph-file-rail-toggle" class="rail-toggle" :title="railCollapsed ? 'Expand file list' : 'Collapse file list'" @click="railCollapsed = !railCollapsed"><ChevronLeft :class="{ rotate: railCollapsed }" /></button>

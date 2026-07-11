@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { Bot, Database, File, FolderPlus, Network, Search, Upload } from "@lucide/vue";
 import type { MnemeWorkspace, WorkspaceCommandTab } from "../composables/useMnemeWorkspace";
+import { useI18n } from "../composables/useI18n";
 
 defineProps<{ workspace: MnemeWorkspace }>();
+const { t } = useI18n();
 
 const commands: Array<{ id: WorkspaceCommandTab; label: string; hint: string; icon: unknown }> = [
   { id: "create", label: "Create vault", hint: "Start a research space", icon: FolderPlus },
@@ -15,9 +17,9 @@ const commands: Array<{ id: WorkspaceCommandTab; label: string; hint: string; ic
 <template>
   <section data-testid="dashboard-overview" class="view-page">
     <header class="view-heading">
-      <p>Semantic map</p>
-      <h1>{{ workspace.selectedKnowledgeBase.value?.name ?? "Your research workspace" }}</h1>
-      <span>Capture sources, connect ideas, and return to the work that matters.</span>
+      <p>{{ t("dashboard.kicker") }}</p>
+      <h1>{{ workspace.selectedKnowledgeBase.value?.name ?? t("dashboard.title") }}</h1>
+      <span>{{ t("dashboard.description") }}</span>
     </header>
 
     <div data-testid="stitch-dashboard-grid" class="dashboard-stats">

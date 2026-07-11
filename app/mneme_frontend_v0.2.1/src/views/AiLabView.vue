@@ -2,8 +2,11 @@
 import { Bot, ChevronLeft, MessageSquare, Search, Send, Trash2 } from "@lucide/vue";
 import { computed, ref } from "vue";
 import type { MnemeWorkspace } from "../composables/useMnemeWorkspace";
+import { useI18n } from "../composables/useI18n";
+import UiEmptyState from "../components/ui/UiEmptyState.vue";
 
 const props = defineProps<{ workspace: MnemeWorkspace; formatDate: (value: string | number | Date) => string }>();
+const { t } = useI18n();
 const historyCollapsed = ref(window.matchMedia("(max-width: 1023px)").matches);
 const activeSession = computed(() => props.workspace.chatSessions.value.find((session) => session.id === props.workspace.activeChatSessionId.value));
 const activeModel = computed(() => props.workspace.aiModelConfigs.value.find((config) => config.id === props.workspace.activeAiModelConfigId.value));
@@ -12,9 +15,9 @@ const activeModel = computed(() => props.workspace.aiModelConfigs.value.find((co
 <template>
   <div data-testid="stitch-ai-laboratory-layout" class="ai-layout" :class="{ 'ai-layout--collapsed': historyCollapsed }">
     <aside data-testid="ai-history-rail" class="ai-history-panel" :aria-hidden="historyCollapsed">
-      <header><div><small>Deep Thought Mode</small><h2>Laboratory Sessions</h2></div><button aria-label="Close chat history" @click="historyCollapsed = true"><ChevronLeft class="size-4" /></button></header>
-      <label class="history-search"><Search class="size-4" /><input v-model="workspace.chatSessionFilter.value" placeholder="Search history..." /></label>
-      <button class="new-chat" @click="workspace.createChatSession"><MessageSquare class="size-4" />New chat</button>
+      <header><div><small>{{ t("ai.mode") }}</small><h2>{{ t("ai.sessions") }}</h2></div><button aria-label="Close chat history" @click="historyCollapsed = true"><ChevronLeft class="size-4" /></button></header>
+      <label class="history-search"><Search class="size-4" /><input v-model="workspace.chatSessionFilter.value" :placeholder="t('ai.search')" /></label>
+      <button class="new-chat" @click="workspace.createChatSession"><MessageSquare class="size-4" />{{ t("ai.newChat") }}</button>
       <nav>
         <button v-for="session in workspace.filteredChatSessions.value" :key="session.id" :class="{ active: workspace.activeChatSessionId.value === session.id }" @click="workspace.selectChatSession(session.id); historyCollapsed = true">
           <strong>{{ session.title || "Untitled chat" }}</strong><small>{{ session.last_message_at ? formatDate(session.last_message_at) : "No messages" }}</small>
@@ -26,7 +29,7 @@ const activeModel = computed(() => props.workspace.aiModelConfigs.value.find((co
       <button data-testid="ai-history-rail-toggle" class="rail-toggle" :title="historyCollapsed ? 'Expand chat history' : 'Collapse chat history'" @click="historyCollapsed = !historyCollapsed"><ChevronLeft :class="{ rotate: historyCollapsed }" /></button>
       <header class="chat-header">
         <div><small>AI Laboratory</small><h1>{{ activeSession?.title || "New chat" }}</h1><p>{{ activeModel?.label || "Default backend model" }} · {{ activeModel?.context_window?.toLocaleString() || "backend" }} tokens</p></div>
-        <button class="delete-chat" aria-label="Delete active chat" @click="workspace.deleteActiveChatSession"><Trash2 class="size-4" /><span>Delete active chat</span></button>
+        <button class="delete-chat" :aria-label="t('ai.delete')" @click="workspace.deleteActiveChatSession"><Trash2 class="size-4" /><span>{{ t("ai.delete") }}</span></button>
       </header>
 
       <div class="messages">
@@ -36,13 +39,15 @@ const activeModel = computed(() => props.workspace.aiModelConfigs.value.find((co
             <div><small>{{ message.role === "user" ? "You" : "Mneme" }} · {{ message.role === "assistant" ? "Analysis Complete" : "Today, 14:03" }}</small><p>{{ message.content }}</p><div v-if="message.sources.length" class="sources"><span>Referenced Context Nodes</span><button v-for="source in message.sources" :key="source.source_id">{{ source.document_id }}</button></div></div>
           </article>
         </template>
-        <div v-else class="chat-empty"><Bot class="size-6" /><strong>Begin with a question</strong><span>Ask about the active vault, a source, or a pattern across your memory.</span></div>
+        <UiEmptyState v-else :title="t('ai.emptyTitle')" :description="t('ai.emptyDescription')">
+          <template #icon><Bot class="size-5" /></template>
+        </UiEmptyState>
       </div>
 
       <form data-testid="workspace-chat-command" class="composer" @submit.prevent="workspace.sendChatMessage">
         <div class="context-chip">Context: Node B</div>
-        <div><textarea v-model="workspace.chatQuestion.value" placeholder="Message Mneme..." /><button aria-label="Send message"><Send class="size-5" /></button></div>
-        <small>AI responses may be structurally imperfect. Verify critical data against original research nodes.</small>
+        <div><textarea v-model="workspace.chatQuestion.value" :placeholder="t('ai.placeholder')" /><button aria-label="Send message"><Send class="size-5" /></button></div>
+        <small>{{ t("ai.disclaimer") }}</small>
       </form>
     </section>
   </div>
@@ -82,7 +87,6 @@ h1, h2, p { margin: 0; }
 .sources { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.8rem; }
 .sources > span { width: 100%; color: var(--text-tertiary); font: 0.64rem var(--font-mono); text-transform: uppercase; }
 .sources button { padding: 0.25rem 0.4rem; color: var(--accent); background: var(--accent-soft); border: 0; border-radius: 0.3rem; font-size: 0.66rem; }
-.chat-empty { display: grid; min-height: 18rem; place-items: center; align-content: center; gap: 0.45rem; color: var(--text-secondary); text-align: center; }
 .composer { position: sticky; bottom: 0; padding: 0.75rem max(1rem, calc((100% - 820px) / 2)) 1rem; background: color-mix(in srgb, var(--bg-canvas) 94%, transparent); border-top: 1px solid var(--border-muted); }
 .context-chip { width: fit-content; margin-bottom: 0.35rem; padding: 0.2rem 0.45rem; color: var(--text-secondary); background: var(--bg-elevated); border-radius: 0.3rem; font-size: 0.66rem; }
 .composer > div:nth-child(2) { display: flex; align-items: end; gap: 0.5rem; padding: 0.55rem; background: var(--bg-panel); border: 1px solid var(--border-muted); border-radius: 0.5rem; }

@@ -9,6 +9,7 @@ const cssSource = readFileSync(path.join(root, 'src', 'index.css'), 'utf8');
 const apiSource = readFileSync(path.join(root, 'src', 'lib', 'api.ts'), 'utf8');
 const previewApiSource = readFileSync(path.join(root, 'src', 'lib', 'previewApi.ts'), 'utf8');
 const workspaceSource = readFileSync(path.join(root, 'src', 'composables', 'useMnemeWorkspace.ts'), 'utf8');
+const messagesSource = readFileSync(path.join(root, 'src', 'i18n', 'messages.ts'), 'utf8');
 
 function collectVueSources(directory) {
   return readdirSync(directory).flatMap((entry) => {
@@ -18,6 +19,7 @@ function collectVueSources(directory) {
 }
 
 const vueSource = collectVueSources(path.join(root, 'src')).join('\n');
+const localizedSource = `${vueSource}\n${messagesSource}`;
 
 for (const testId of [
   'data-testid="obsidian-shell"',
@@ -42,8 +44,8 @@ for (const view of ['DashboardView', 'VaultView', 'GraphView', 'AiLabView', 'Set
   assert.ok(appSource.includes(`<${view}`), `Expected App.vue to compose ${view}`);
 }
 
-for (const navLabel of ['Knowledge Graph', 'Research Vault', 'Semantic Map', 'AI Laboratory', 'System Settings']) {
-  assert.ok(appSource.includes(`label: "${navLabel}"`), `Expected primary navigation to include ${navLabel}`);
+for (const navLabel of ['Knowledge Graph', 'Research Vault', 'Semantic Map', 'AI Laboratory', 'System Settings', '知识图谱', '研究库', '语义地图', 'AI 实验室', '设置']) {
+  assert.ok(messagesSource.includes(`"${navLabel}"`), `Expected localized primary navigation to include ${navLabel}`);
 }
 
 for (const token of ['--bg-canvas', '--bg-sidebar', '--bg-panel', '--text-primary', '--border-muted', '--accent', '--focus-ring']) {
@@ -66,7 +68,7 @@ for (const referenceText of [
   'Knowledge Graph Health',
   'New Research Space',
 ]) {
-  assert.ok(vueSource.includes(referenceText), `Expected polished workspace reference text: ${referenceText}`);
+  assert.ok(localizedSource.includes(referenceText), `Expected polished workspace reference text: ${referenceText}`);
 }
 
 assert.ok(workspaceSource.includes('ref<WorkspaceView>("graph")'), 'Expected preview/default workspace to open the graph');

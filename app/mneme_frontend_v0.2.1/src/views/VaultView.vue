@@ -2,8 +2,11 @@
 import { File, FilePlus2, FolderOpen, LayoutGrid, List, Plus } from "@lucide/vue";
 import { computed, ref } from "vue";
 import type { MnemeWorkspace } from "../composables/useMnemeWorkspace";
+import { useI18n } from "../composables/useI18n";
+import UiEmptyState from "../components/ui/UiEmptyState.vue";
 
 const props = defineProps<{ workspace: MnemeWorkspace }>();
+const { t } = useI18n();
 const emit = defineEmits<{ create: [] }>();
 const statusFilter = ref<"all" | "indexed">("all");
 const compact = ref(false);
@@ -13,23 +16,23 @@ const visibleDocuments = computed(() => props.workspace.selectedDocuments.value.
 <template>
   <div data-testid="stitch-research-vault-layout" class="vault-layout">
     <aside>
-      <header><div><small>Research spaces</small><h2>Vaults</h2></div><button aria-label="Create vault" @click="emit('create')"><Plus class="size-4" /></button></header>
+      <header><div><small>{{ t("vault.spaces") }}</small><h2>{{ t("vault.title") }}</h2></div><button aria-label="Create vault" @click="emit('create')"><Plus class="size-4" /></button></header>
       <nav>
         <button v-for="vault in workspace.knowledgeBases.value" :key="vault.id" :class="{ active: workspace.selectedKnowledgeBaseId.value === vault.id }" @click="workspace.selectKnowledgeBase(vault.id)">
           <FolderOpen class="size-4" /><span><strong>{{ vault.name }}</strong><small>{{ vault.description || "No description" }}</small></span>
         </button>
       </nav>
-      <section><small>Saved tags</small><div><span>#research</span><span>#memory</span><span>#graph</span></div></section>
+      <section><small>{{ t("vault.savedTags") }}</small><div><span>#research</span><span>#memory</span><span>#graph</span></div></section>
     </aside>
 
     <section class="vault-content">
       <header class="vault-heading">
-        <div><small>{{ workspace.selectedKnowledgeBase.value?.description || "Active research space" }}</small><h1>{{ workspace.selectedKnowledgeBase.value?.name ?? "No vault selected" }}</h1></div>
+        <div><small>{{ workspace.selectedKnowledgeBase.value?.description || t("vault.active") }}</small><h1>{{ workspace.selectedKnowledgeBase.value?.name ?? t("vault.title") }}</h1></div>
         <div class="vault-actions">
           <input :key="workspace.uploadInputKey.value" data-testid="workspace-upload-input" class="sr-only" type="file" @change="workspace.uploadFile(($event.target as HTMLInputElement).files?.[0])" />
           <button :aria-label="statusFilter === 'all' ? 'Show indexed files' : 'Show all files'" @click="statusFilter = statusFilter === 'all' ? 'indexed' : 'all'"><List class="size-4" /></button>
           <button aria-label="Toggle document density" @click="compact = !compact"><component :is="compact ? LayoutGrid : List" class="size-4" /></button>
-          <label class="upload-button"><FilePlus2 class="size-4" />Upload<input class="sr-only" type="file" @change="workspace.uploadFile(($event.target as HTMLInputElement).files?.[0])" /></label>
+          <label class="upload-button"><FilePlus2 class="size-4" />{{ t("vault.upload") }}<input class="sr-only" type="file" @change="workspace.uploadFile(($event.target as HTMLInputElement).files?.[0])" /></label>
         </div>
       </header>
 
@@ -38,15 +41,17 @@ const visibleDocuments = computed(() => props.workspace.selectedDocuments.value.
           <File class="document-icon" />
           <div class="document-copy"><strong>{{ doc.file_name }}</strong><small>{{ doc.file_type || "document" }} · {{ doc.status }}</small></div>
           <div class="document-actions">
-            <button :disabled="doc.status === 'indexed'" @click="workspace.indexDocument(doc.id)">Index</button>
-            <button class="danger" @click="workspace.deleteDocument(doc.id)">Delete</button>
+            <button :disabled="doc.status === 'indexed'" @click="workspace.indexDocument(doc.id)">{{ t("vault.index") }}</button>
+            <button class="danger" @click="workspace.deleteDocument(doc.id)">{{ t("vault.delete") }}</button>
           </div>
         </article>
-        <div v-if="!visibleDocuments.length" class="empty"><File class="size-6" /><strong>No documents here yet</strong><span>Upload a source to begin building this vault.</span></div>
+        <UiEmptyState v-if="!visibleDocuments.length" :title="t('vault.emptyTitle')" :description="t('vault.emptyDescription')">
+          <template #icon><File class="size-5" /></template>
+        </UiEmptyState>
       </div>
 
       <section data-testid="memory-function-grid" class="memory-strip">
-        <header><div><small>Memory Output Workspace</small><h2>Recent memory</h2></div><span>{{ workspace.memoryLibrary.value?.timeline.length ?? 0 }} entries</span></header>
+        <header><div><small>Memory Output Workspace</small><h2>{{ t("vault.memory") }}</h2></div><span>{{ workspace.memoryLibrary.value?.timeline.length ?? 0 }} entries</span></header>
         <div data-testid="memory-output-workspace">
           <article v-for="entry in (workspace.memoryLibrary.value?.timeline ?? []).slice(0, 4)" :key="entry.entry_id"><strong>{{ entry.entry_name }}</strong><p>{{ entry.summary }}</p></article>
           <p v-if="!(workspace.memoryLibrary.value?.timeline ?? []).length">No synthesized memory events yet.</p>
@@ -86,7 +91,6 @@ h1, h2 { margin: 0.2rem 0 0; font-weight: 600; }
 .document-actions button { padding: 0.35rem 0.55rem; color: var(--text-secondary); background: transparent; border: 1px solid var(--border-muted); border-radius: 0.35rem; font-size: 0.72rem; }
 .document-actions .danger { color: var(--danger); }
 .document-actions button:disabled { opacity: 0.4; }
-.empty { display: grid; min-height: 13rem; place-items: center; align-content: center; gap: 0.45rem; color: var(--text-secondary); text-align: center; }
 .memory-strip { margin-top: 2.5rem; padding-top: 1.2rem; border-top: 1px solid var(--border-muted); }
 .memory-strip header > span { color: var(--text-tertiary); font: 0.7rem var(--font-mono); }
 .memory-strip > div { display: grid; gap: 0.75rem; margin-top: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
