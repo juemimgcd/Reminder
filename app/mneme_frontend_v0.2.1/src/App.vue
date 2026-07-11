@@ -49,6 +49,8 @@ const VIEW_ITEMS = computed<ViewItem[]>(() => [
 
 const currentViewItem = computed(() => VIEW_ITEMS.value.find((item) => item.id === workspace.view.value) ?? VIEW_ITEMS.value[0]);
 const activeHealthLabel = computed(() => workspace.readiness.value?.overall_status ?? workspace.serviceHealth.value?.status ?? "preview");
+const activeViewLoadState = computed(() => workspace.viewLoadStates[workspace.view.value]);
+const activeViewLoading = computed(() => activeViewLoadState.value.phase.value === "loading");
 
 function navigate(id: string) {
   workspace.view.value = id as WorkspaceView;
@@ -125,11 +127,12 @@ function openCreateCommand() {
           <div data-testid="sanctuary-active-view"><small>{{ currentViewItem.hint }}</small><h2>{{ currentViewItem.label }}</h2></div>
           <div><span>{{ activeHealthLabel }}</span><UiIconButton label="Refresh panels" @click="workspace.loadKnowledgeBasePanels"><RefreshCw /></UiIconButton><UiIconButton label="Log out" @click="workspace.logout"><LogOut /></UiIconButton></div>
         </header>
-        <UiStatusPanel v-if="workspace.banner.value" class="workspace-banner" :title="workspace.banner.value" />
+        <UiStatusPanel v-if="workspace.banner.value" class="workspace-banner" :title="workspace.banner.value" dismissible @dismiss="workspace.dismissBanner" />
         <UiStatusPanel v-if="workspace.authNotice.value" class="workspace-banner" :title="workspace.authNotice.value" />
+        <UiStatusPanel v-if="activeViewLoadState.message.value" class="workspace-banner" :title="activeViewLoadState.message.value" variant="warning" />
 
         <section data-testid="obsidian-editor-pane" class="workspace-content">
-          <div v-if="workspace.isLoading.value" class="workspace-loading" aria-label="Loading workspace">
+          <div v-if="workspace.isLoading.value || activeViewLoading" class="workspace-loading" aria-label="Loading workspace">
             <UiSkeleton width="38%" height="1.8rem" />
             <UiSkeleton width="72%" height="0.8rem" />
             <UiSkeleton width="100%" height="13rem" />
