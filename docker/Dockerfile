@@ -31,6 +31,7 @@ ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 ARG PIP_EXTRA_INDEX_URL=
 
 COPY requirements.txt ./
+COPY requirements/ ./requirements/
 
 RUN python -m pip install --upgrade pip setuptools wheel && \
     if [ -n "$PIP_EXTRA_INDEX_URL" ]; then \

@@ -22,7 +22,10 @@ def build_celery_app() -> Celery:
         task_acks_late=True,
         task_reject_on_worker_lost=True,
         worker_prefetch_multiplier=settings.CELERY_WORKER_PREFETCH_MULTIPLIER,
-        imports=("tasks.index_tasks", "tasks.outbox_tasks"),
+        imports=(
+            "app.mneme.tasks.index_tasks",
+            "app.mneme.tasks.outbox_tasks",
+        ),
     )
     return app
 
