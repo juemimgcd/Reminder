@@ -10,7 +10,7 @@ from app.mneme.bootstrap.lifespan import lifespan
 from app.mneme.bootstrap.root_routes import router as root_router
 from app.mneme.bootstrap.router_registry import register_routers
 from app.mneme.conf.config import settings
-from app.mneme.utils.exceptions import BusinessException, business_exception_handler
+from app.mneme.api.errors import BusinessException, business_exception_handler, unhandled_exception_handler
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -30,6 +30,7 @@ def configure_cors(app: FastAPI) -> None:
 
 def configure_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(BusinessException, business_exception_handler)
+    app.add_exception_handler(Exception, unhandled_exception_handler)
 
 
 def configure_trusted_hosts(app: FastAPI) -> None:
