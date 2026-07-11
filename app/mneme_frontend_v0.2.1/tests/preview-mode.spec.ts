@@ -14,9 +14,14 @@ test('preview mode opens the populated workbench without a backend login', async
   await openPreview(page);
 
   const sidebar = page.locator('aside');
+  const viewport = page.viewportSize();
 
-  await expect(sidebar.getByRole('button', { name: /Demo Research Vault/ })).toBeVisible();
-  await expect(sidebar.getByText('mneme.preview', { exact: true })).toBeVisible();
+  if (viewport && viewport.width < 1024) {
+    await expect(page.getByTestId('resource-sidebar')).toBeHidden();
+  } else {
+    await expect(sidebar.getByRole('button', { name: /Demo Research Vault/ })).toBeVisible();
+    await expect(sidebar.getByText('mneme.preview', { exact: true })).toBeVisible();
+  }
   await expect(page.getByText('Backend endpoint')).not.toBeVisible();
 });
 
@@ -35,8 +40,12 @@ test('preview workbench uses the Sanctuary wide layout instead of a rail dashboa
   await expect(shell).toBeVisible();
   await expect(topbar).toBeHidden();
   await expect(editorPane).toBeVisible();
-  await expect(sidebar.getByRole('heading', { name: 'Mneme', exact: true })).toBeVisible();
-  await expect(sidebar).toContainText('Cognitive Sanctuary');
+  if (viewport && viewport.width < 1024) {
+    await expect(resourceSidebar).toBeHidden();
+  } else {
+    await expect(sidebar.getByRole('heading', { name: 'Mneme', exact: true })).toBeVisible();
+    await expect(sidebar).toContainText('Cognitive Sanctuary');
+  }
   await expect(page.getByTestId('stitch-graph-layout')).toBeVisible();
 
   await expect(editorPane.getByText('Vaults', { exact: true })).not.toBeVisible();

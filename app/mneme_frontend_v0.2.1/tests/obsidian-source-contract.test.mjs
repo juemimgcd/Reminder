@@ -56,11 +56,9 @@ assert.ok(cssSource.includes('prefers-reduced-motion'), 'Expected reduced-motion
 assert.ok(!vueSource.includes('bg-[#070708]') && !vueSource.includes('bg-[#08080a]'), 'Expected views to use semantic surfaces');
 
 for (const referenceText of [
-  'Machine Learning',
-  'Neural Networks',
   'All Nodes',
   'Orphans',
-  'Long press to preview',
+  'Click a node to preview',
   'Backlinks',
   'Laboratory Sessions',
   'Referenced Context Nodes',
@@ -71,7 +69,9 @@ for (const referenceText of [
   assert.ok(localizedSource.includes(referenceText), `Expected polished workspace reference text: ${referenceText}`);
 }
 
-assert.ok(workspaceSource.includes('ref<WorkspaceView>("graph")'), 'Expected preview/default workspace to open the graph');
+assert.ok(!vueSource.includes('Machine Learning') && !vueSource.includes('Neural Networks'), 'Expected graph rails to render API-backed documents without placeholder folders');
+
+assert.ok(workspaceSource.includes('ref<WorkspaceView>(IS_PREVIEW_MODE ? "graph" : "dashboard")'), 'Expected preview to open Graph while authenticated production starts on the lightweight dashboard');
 assert.ok(previewApiSource.includes('import.meta.env.MODE === "preview"'), 'Expected explicit preview mode');
 assert.ok(previewApiSource.includes('window.location.hash'), 'Expected hash preview detection');
 
