@@ -21,6 +21,8 @@ export interface GraphLink {
 
 export type WorkspaceView = "dashboard" | "notes" | "graph" | "ai" | "settings";
 
+export type AuthMode = "login" | "register";
+
 export interface PlannedSupportData {
   status: "planned";
   message: string;
