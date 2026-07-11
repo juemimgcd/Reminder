@@ -24,6 +24,19 @@ type SimulationGraphNode = GraphNodeData & SimulationNodeDatum & {
 };
 type SimulationGraphLink = SimulationLinkDatum<SimulationGraphNode> & GraphEdgeData;
 
+export function createGraphSignature(
+  nodes: Pick<GraphNodeData, "id" | "parent_id">[],
+  edges: Pick<GraphEdgeData, "id" | "source" | "target">[],
+) {
+  const nodeIdentities = nodes
+    .map((node) => [node.id, node.parent_id] as const)
+    .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+  const edgeIdentities = edges
+    .map((edge) => [edge.id, edge.source, edge.target] as const)
+    .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+  return JSON.stringify({ nodes: nodeIdentities, edges: edgeIdentities });
+}
+
 export function useGraphInteraction(
   nodes: ComputedRef<GraphNodeData[]>,
   edges: ComputedRef<GraphEdgeData[]>,
@@ -52,18 +65,20 @@ export function useGraphInteraction(
   function stopSimulation() {
     simulation?.stop();
     simulation = null;
+    pausedForVisibility = false;
     if (frameId !== null) window.cancelAnimationFrame(frameId);
     frameId = null;
   }
 
   function handleVisibilityChange() {
     if (document.hidden) {
-      pausedForVisibility = simulationPhase.value === "running";
+      pausedForVisibility = simulationPhase.value === "running" && simulation !== null;
       if (pausedForVisibility) simulation?.stop();
       return;
     }
-    if (pausedForVisibility && simulation) {
-      pausedForVisibility = false;
+    const shouldRestart = pausedForVisibility && simulation !== null && simulationPhase.value === "running";
+    pausedForVisibility = false;
+    if (shouldRestart && simulation) {
       simulation.restart();
     }
   }
@@ -141,10 +156,7 @@ export function useGraphInteraction(
     rebuildSimulation();
   }
 
-  const graphSignature = computed(() => [
-    ...nodes.value.map((node) => `n:${node.id}:${node.parent_id ?? ""}`),
-    ...edges.value.map((edge) => `e:${edge.id}:${edge.source}:${edge.target}`),
-  ].join("|"));
+  const graphSignature = computed(() => createGraphSignature(nodes.value, edges.value));
 
   function rebuildSimulation() {
     stopSimulation();
@@ -190,6 +202,10 @@ export function useGraphInteraction(
       simulationPhase.value = "reduced";
     } else {
       simulationPhase.value = "running";
+      if (document.hidden) {
+        pausedForVisibility = true;
+        simulation.stop();
+      }
     }
   }
 
