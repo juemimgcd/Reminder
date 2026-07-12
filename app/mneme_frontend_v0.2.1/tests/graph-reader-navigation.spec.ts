@@ -28,7 +28,7 @@ test('pending single-click intent is cancelled by canvas clear and filters', asy
   await expect(page.getByTestId('graph-document-preview-panel')).toHaveCount(0);
 
   await node.dispatchEvent('pointerdown', { pointerId: 33, clientX: 500, clientY: 400 });
-  await page.getByRole('button', { name: 'Tags' }).click();
+  await page.getByRole('button', { name: 'Tags' }).dispatchEvent('click');
   await page.waitForTimeout(320);
   await expect(page.getByTestId('graph-document-preview-panel')).toHaveCount(0);
 });
