@@ -95,7 +95,7 @@ function openCreateCommand() {
       :key="workspace.uploadInputKey.value"
       class="sr-only"
       type="file"
-      aria-label="Upload document"
+      :aria-label="t('reader.uploadDocument')"
       @change="workspace.uploadFile(($event.target as HTMLInputElement).files?.[0])"
     />
     <div class="mneme-shell" :class="{ 'mneme-shell--resource-closed': !shell.resourceOpen.value }">

@@ -2,6 +2,7 @@
 import { ChevronRight, FileText, Folder, FolderOpen, MoreHorizontal } from "@lucide/vue";
 import { computed, ref } from "vue";
 import type { DocumentFolderData, DocumentListItem } from "../../types";
+import { useI18n } from "../../composables/useI18n";
 
 const props = defineProps<{
   folder: DocumentFolderData;
@@ -14,7 +15,9 @@ const emit = defineEmits<{
   openDocument: [documentId: string];
   selectFolder: [folderId: string];
   moveDocument: [documentId: string, folderId: string];
+  moveFolder: [folderId: string, parentId: string];
 }>();
+const { t } = useI18n();
 const expanded = ref(true);
 const movingDocumentId = ref("");
 const childFolders = computed(() => props.folders.filter((folder) => !folder.is_root && folder.parent_id === props.folder.id));
@@ -25,7 +28,17 @@ function startDrag(event: DragEvent, documentId: string) {
   if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
 }
 
+function startFolderDrag(event: DragEvent) {
+  event.dataTransfer?.setData("application/x-mneme-folder", props.folder.id);
+  if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+}
+
 function dropDocument(event: DragEvent) {
+  const folderId = event.dataTransfer?.getData("application/x-mneme-folder");
+  if (folderId) {
+    emit("moveFolder", folderId, props.folder.id);
+    return;
+  }
   const documentId = event.dataTransfer?.getData("application/x-mneme-document");
   if (documentId) emit("moveDocument", documentId, props.folder.id);
 }
@@ -38,10 +51,10 @@ function dropDocument(event: DragEvent) {
     :data-testid="`folder-${folder.name}`"
     class="folder-node"
     @dragover.prevent
-    @drop.prevent="dropDocument"
+    @drop.prevent.stop="dropDocument"
   >
-    <div class="folder-row" :style="{ '--tree-depth': depth }">
-      <button type="button" class="folder-toggle" :aria-label="`${expanded ? 'Collapse' : 'Expand'} ${folder.name}`" @click="expanded = !expanded">
+    <div class="folder-row" draggable="true" :style="{ '--tree-depth': depth }" @dragstart.stop="startFolderDrag">
+      <button type="button" class="folder-toggle" :aria-label="t(expanded ? 'reader.collapseFolder' : 'reader.expandFolder', { name: folder.name })" @click="expanded = !expanded">
         <ChevronRight :class="{ expanded }" />
       </button>
       <button type="button" class="folder-name" @click="emit('selectFolder', folder.id)">
@@ -51,12 +64,12 @@ function dropDocument(event: DragEvent) {
     </div>
 
     <ul v-show="expanded" role="group">
-      <li v-for="document in folderDocuments" :key="document.id" class="document-row" :class="{ active: activeDocumentId === document.id }" :style="{ '--tree-depth': depth + 1 }">
-        <button type="button" draggable="true" @dragstart="startDrag($event, document.id)" @dblclick="emit('openDocument', document.id)" @click="emit('openDocument', document.id)">
+      <li v-for="document in folderDocuments" :key="document.id" role="treeitem" class="document-row" :class="{ active: activeDocumentId === document.id }" :style="{ '--tree-depth': depth + 1 }">
+        <button type="button" draggable="true" @dragstart.stop="startDrag($event, document.id)" @dblclick="emit('openDocument', document.id)" @click="emit('openDocument', document.id)">
           <FileText /><span>{{ document.file_name }}</span><small v-if="document.version_number > 1">v{{ document.version_number }}</small>
         </button>
-        <button type="button" :aria-label="`Move ${document.file_name}`" @click="movingDocumentId = movingDocumentId === document.id ? '' : document.id"><MoreHorizontal /></button>
-        <div v-if="movingDocumentId === document.id" class="move-menu" role="listbox" aria-label="Move document">
+        <button type="button" :aria-label="t('reader.moveDocument', { name: document.file_name })" @click="movingDocumentId = movingDocumentId === document.id ? '' : document.id" @keydown.esc.stop="movingDocumentId = ''"><MoreHorizontal /></button>
+        <div v-if="movingDocumentId === document.id" class="move-menu" role="listbox" :aria-label="t('reader.moveDocumentMenu')" @keydown.esc.stop="movingDocumentId = ''">
           <button
             v-for="target in folders.filter((item) => item.id !== folder.id)"
             :key="target.id"
@@ -64,7 +77,7 @@ function dropDocument(event: DragEvent) {
             role="option"
             :aria-selected="false"
             @click="emit('moveDocument', document.id, target.id); movingDocumentId = ''"
-          >{{ target.is_root ? "Vault root" : target.name }}</button>
+          >{{ target.is_root ? t("reader.vaultRoot") : target.name }}</button>
         </div>
       </li>
       <DocumentTreeNode
@@ -78,6 +91,7 @@ function dropDocument(event: DragEvent) {
         @open-document="emit('openDocument', $event)"
         @select-folder="emit('selectFolder', $event)"
         @move-document="(documentId, folderId) => emit('moveDocument', documentId, folderId)"
+        @move-folder="(folderId, parentId) => emit('moveFolder', folderId, parentId)"
       />
     </ul>
   </li>

@@ -27,6 +27,8 @@ export function useDocumentWorkspace(params: {
   const documentVersions = ref<DocumentVersionData[]>([]);
   const documentContentPhase = ref<ContentPhase>("idle");
   const documentContentError = ref("");
+  const documentBlobPhase = ref<"idle" | "loading" | "ready" | "error">("idle");
+  const documentBlobError = ref("");
   const duplicateUpload = ref<DocumentUploadData | null>(null);
   const contentCache = new Map<string, DocumentContentData>();
   const rawRequests = new Map<string, { controller: AbortController; generation: number; tab: DocumentTab }>();
@@ -64,6 +66,8 @@ export function useDocumentWorkspace(params: {
     documentVersions.value = [];
     documentContentPhase.value = "idle";
     documentContentError.value = "";
+    documentBlobPhase.value = "idle";
+    documentBlobError.value = "";
     duplicateUpload.value = null;
     contentCache.clear();
   }
@@ -84,6 +88,8 @@ export function useDocumentWorkspace(params: {
     const generation = ++openGeneration;
     documentContentPhase.value = "loading";
     documentContentError.value = "";
+    documentBlobPhase.value = "idle";
+    documentBlobError.value = "";
 
     try {
       const cachedContent = contentCache.get(documentId);
@@ -99,7 +105,7 @@ export function useDocumentWorkspace(params: {
       documentPreview.value = preview;
       documentVersions.value = versions.items;
       selectedFolderId.value = content.folder_id;
-      documentContentPhase.value = content.text || content.sections.length || content.render_mode === "pdf" ? "ready" : "empty";
+      documentContentPhase.value = content.text || content.sections.length || content.render_mode === "pdf" || content.render_mode === "unsupported" || content.parse_warning ? "ready" : "empty";
       if (!openDocumentTabs.value.some((tab) => tab.documentId === documentId)) {
         openDocumentTabs.value = [
           ...openDocumentTabs.value,
@@ -120,13 +126,20 @@ export function useDocumentWorkspace(params: {
 
   async function ensureDocumentBlob(documentId = activeDocumentId.value) {
     const tab = openDocumentTabs.value.find((item) => item.documentId === documentId);
-    if (!tab || tab.blobUrl) return tab?.blobUrl ?? null;
+    if (!tab) return null;
+    if (tab.blobUrl) {
+      documentBlobPhase.value = "ready";
+      documentBlobError.value = "";
+      return tab.blobUrl;
+    }
     rawRequests.get(documentId)?.controller.abort();
     const controller = new AbortController();
     const generation = ++rawGeneration;
     const token = params.token.value;
     const request = { controller, generation, tab };
     rawRequests.set(documentId, request);
+    documentBlobPhase.value = "loading";
+    documentBlobError.value = "";
     try {
       const blob = await api.documentRawBlob(token, documentId, "inline", { signal: controller.signal });
       const currentTab = openDocumentTabs.value.find((item) => item.documentId === documentId);
@@ -140,25 +153,44 @@ export function useDocumentWorkspace(params: {
       ) return null;
       if (currentTab.blobUrl) return currentTab.blobUrl;
       currentTab.blobUrl = URL.createObjectURL(blob);
+      documentBlobPhase.value = "ready";
       return currentTab.blobUrl;
     } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") return null;
-      throw error;
+      if (error instanceof Error && error.name === "AbortError") {
+        if (activeDocumentId.value === documentId) documentBlobPhase.value = "idle";
+        return null;
+      }
+      if (rawRequests.get(documentId) === request && activeDocumentId.value === documentId) {
+        documentBlobPhase.value = "error";
+        documentBlobError.value = error instanceof Error ? error.message : "Unable to load secured PDF.";
+      }
+      return null;
     } finally {
       if (rawRequests.get(documentId) === request) rawRequests.delete(documentId);
     }
   }
 
+  async function retryDocumentBlob(documentId = activeDocumentId.value) {
+    if (!documentId) return null;
+    revokeTabBlob(documentId);
+    return ensureDocumentBlob(documentId);
+  }
+
   async function downloadDocument(documentId = activeDocumentId.value) {
     if (!documentId || !params.token.value) return;
-    const blob = await api.documentRawBlob(params.token.value, documentId, "attachment");
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = documentContent.value?.file_name ?? "document";
-    anchor.rel = "noopener";
-    anchor.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    try {
+      const blob = await api.documentRawBlob(params.token.value, documentId, "attachment");
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = documentContent.value?.file_name ?? "document";
+      anchor.rel = "noopener";
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch (error) {
+      documentBlobPhase.value = "error";
+      documentBlobError.value = error instanceof Error ? error.message : "Unable to download original file.";
+    }
   }
 
   function closeDocument(documentId: string) {
@@ -185,6 +217,8 @@ export function useDocumentWorkspace(params: {
     documentVersions.value = [];
     documentContentPhase.value = "idle";
     documentContentError.value = "";
+    documentBlobPhase.value = "idle";
+    documentBlobError.value = "";
   }
 
   async function refreshDocumentFolders() {
@@ -268,6 +302,8 @@ export function useDocumentWorkspace(params: {
     deleteFolder,
     dismissDuplicateUpload,
     documentContent,
+    documentBlobError,
+    documentBlobPhase,
     documentContentError,
     documentContentPhase,
     documentFolders,
@@ -281,6 +317,7 @@ export function useDocumentWorkspace(params: {
     openDocumentTabs,
     openDuplicateUpload,
     refreshDocumentFolders,
+    retryDocumentBlob,
     selectedFolderId,
     updateFolder,
     uploadDocument,

@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { BookOpen, FileClock, Link2, Tag } from "@lucide/vue";
 import type { DocumentPreviewData, DocumentVersionData } from "../../types";
+import { useI18n } from "../../composables/useI18n";
+
+const { formatDate, t } = useI18n();
 
 defineProps<{
   preview: DocumentPreviewData | null;
@@ -11,25 +14,25 @@ const emit = defineEmits<{ selectVersion: [documentId: string] }>();
 </script>
 
 <template>
-  <aside data-testid="document-properties" class="properties">
-    <header><small>Inspector</small><h2>Properties</h2></header>
+  <aside id="document-properties-pane" data-testid="document-properties" class="properties" :aria-label="t('reader.properties')">
+    <header><small>{{ t("reader.inspector") }}</small><h2>{{ t("reader.properties") }}</h2></header>
     <div v-if="preview" class="properties-scroll">
       <section>
-        <h3><BookOpen /> Source</h3>
+        <h3><BookOpen /> {{ t("reader.source") }}</h3>
         <dl>
-          <div><dt>Type</dt><dd>{{ preview.file_type }}</dd></div>
-          <div><dt>Status</dt><dd><span class="status-dot" />{{ preview.status }}</dd></div>
-          <div><dt>Version</dt><dd>v{{ preview.version_number ?? 1 }}</dd></div>
+          <div><dt>{{ t("reader.type") }}</dt><dd>{{ preview.file_type }}</dd></div>
+          <div><dt>{{ t("reader.status") }}</dt><dd><span class="status-dot" />{{ preview.status }}</dd></div>
+          <div><dt>{{ t("reader.version") }}</dt><dd>v{{ preview.version_number ?? 1 }}</dd></div>
         </dl>
       </section>
 
       <section v-if="preview.summary">
-        <h3><Tag /> Summary</h3>
+        <h3><Tag /> {{ t("reader.summary") }}</h3>
         <p>{{ preview.summary }}</p>
       </section>
 
       <section data-testid="document-version-history">
-        <h3><FileClock /> Version history</h3>
+        <h3><FileClock /> {{ t("reader.versionHistory") }}</h3>
         <div class="version-list">
           <button
             v-for="version in versions"
@@ -39,21 +42,21 @@ const emit = defineEmits<{ selectVersion: [documentId: string] }>();
             @click="emit('selectVersion', version.document_id)"
           >
             <span>v{{ version.version_number }}</span>
-            <small>{{ new Date(version.created_at).toLocaleDateString() }}</small>
+            <small>{{ formatDate(version.created_at) }}</small>
           </button>
-          <p v-if="!versions.length">No earlier versions.</p>
+          <p v-if="!versions.length">{{ t("reader.noVersions") }}</p>
         </div>
       </section>
 
       <section>
-        <h3><Link2 /> Backlinks</h3>
-        <p>{{ preview.memory_entries.length }} linked memories</p>
+        <h3><Link2 /> {{ t("reader.backlinks") }}</h3>
+        <p>{{ t("reader.linkedMemories", { count: preview.memory_entries.length }) }}</p>
         <ul v-if="preview.memory_entries.length">
           <li v-for="memory in preview.memory_entries" :key="memory.entry_id">{{ memory.entry_name }}</li>
         </ul>
       </section>
     </div>
-    <p v-else class="properties-empty">Open a document to inspect its metadata and connections.</p>
+    <p v-else class="properties-empty">{{ t("reader.propertiesEmpty") }}</p>
   </aside>
 </template>
 

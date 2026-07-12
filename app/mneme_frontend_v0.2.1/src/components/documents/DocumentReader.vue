@@ -15,28 +15,31 @@ defineProps<{
   phase: "idle" | "loading" | "ready" | "empty" | "error";
   error: string;
   blobUrl: string | null;
+  blobPhase: "idle" | "loading" | "ready" | "error";
+  blobError: string;
 }>();
 const emit = defineEmits<{
   selectTab: [documentId: string];
   closeTab: [documentId: string];
   download: [];
+  retry: [];
 }>();
 </script>
 
 <template>
-  <main data-testid="document-reader" class="reader">
-    <div v-if="tabs.length" class="reader-tabs" role="tablist" aria-label="Open documents">
+  <main data-testid="document-reader" class="reader" tabindex="-1" :aria-label="t('reader.landmark')">
+    <div v-if="tabs.length" class="reader-tabs" role="tablist" :aria-label="t('reader.openDocuments')">
       <div v-for="tab in tabs" :key="tab.documentId" class="reader-tab" :class="{ active: activeDocumentId === tab.documentId }">
         <button type="button" role="tab" :aria-selected="activeDocumentId === tab.documentId" @click="emit('selectTab', tab.documentId)">
           <FileText />
           <span>{{ tab.title }}</span>
         </button>
-        <button type="button" :aria-label="`Close ${tab.title}`" @click.stop="emit('closeTab', tab.documentId)"><X /></button>
+        <button type="button" :aria-label="t('reader.closeDocument', { name: tab.title })" @click.stop="emit('closeTab', tab.documentId)"><X /></button>
       </div>
     </div>
 
     <section class="reader-body">
-      <div v-if="phase === 'loading'" class="reader-loading" aria-label="Loading document">
+      <div v-if="phase === 'loading'" class="reader-loading" :aria-label="t('reader.loadingDocument')">
         <UiSkeleton width="42%" height="2.4rem" />
         <UiSkeleton width="90%" height="0.85rem" />
         <UiSkeleton width="76%" height="0.85rem" />
@@ -45,11 +48,11 @@ const emit = defineEmits<{
       <UiEmptyState v-else-if="phase === 'idle'" :title="t('reader.openSource')" :description="t('reader.openSourceDescription')">
         <template #icon><FileText /></template>
       </UiEmptyState>
-      <UiEmptyState v-else-if="phase === 'empty'" :title="t('reader.empty')" description="The original file is available even though there is no readable text." />
-      <UiEmptyState v-else-if="phase === 'error'" :title="t('reader.unavailable')" :description="error || 'Try again or download the original file.'">
+      <UiEmptyState v-else-if="phase === 'empty'" :title="t('reader.empty')" :description="t('reader.emptyDescription')" />
+      <UiEmptyState v-else-if="phase === 'error'" :title="t('reader.unavailable')" :description="error || t('reader.unavailableDescription')">
         <template #action><button type="button" @click="emit('download')">{{ t("reader.downloadOriginal") }}</button></template>
       </UiEmptyState>
-      <DocumentContent v-else-if="content" :content="content" :blob-url="blobUrl" @download="emit('download')" />
+      <DocumentContent v-else-if="content" :content="content" :blob-url="blobUrl" :blob-phase="blobPhase" :blob-error="blobError" @download="emit('download')" @retry="emit('retry')" />
     </section>
 
     <footer v-if="content" class="reader-status">

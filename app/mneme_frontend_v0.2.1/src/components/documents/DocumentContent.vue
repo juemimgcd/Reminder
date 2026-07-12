@@ -3,21 +3,44 @@ import DOMPurify from "dompurify";
 import { marked } from "marked";
 import { computed } from "vue";
 import type { DocumentContentData } from "../../types";
+import { useI18n } from "../../composables/useI18n";
 
 const props = defineProps<{
   content: DocumentContentData;
   blobUrl: string | null;
+  blobPhase: "idle" | "loading" | "ready" | "error";
+  blobError: string;
 }>();
-const emit = defineEmits<{ download: [] }>();
+const emit = defineEmits<{ download: []; retry: [] }>();
+const { t } = useI18n();
+
+const pdfErrorText = computed(() => {
+  if (/\b(401|403)\b/.test(props.blobError)) return t("reader.pdfAuthError");
+  if (/\b404\b/.test(props.blobError)) return t("reader.pdfMissingError");
+  if (/\b5\d\d\b/.test(props.blobError)) return t("reader.pdfServerError");
+  if (/network|failed to fetch/i.test(props.blobError)) return t("reader.pdfNetworkError");
+  return t("reader.pdfError");
+});
 
 const safeMarkdown = computed(() => {
   if (!(["markdown", "office"] as string[]).includes(props.content.render_mode)) return "";
   const parsed = marked.parse(props.content.text ?? "", { async: false }) as string;
-  return DOMPurify.sanitize(parsed, {
-    FORBID_TAGS: ["script", "iframe", "object", "embed", "style", "img", "video", "audio", "source"],
-    FORBID_ATTR: ["onerror", "onload", "onclick", "style", "srcdoc"],
+  const sanitized = DOMPurify.sanitize(parsed, {
+    ALLOWED_TAGS: ["a", "blockquote", "br", "code", "del", "em", "h1", "h2", "h3", "h4", "h5", "h6", "hr", "li", "ol", "p", "pre", "strong", "table", "tbody", "td", "th", "thead", "tr", "ul"],
+    ALLOWED_ATTR: ["href", "title"],
+    FORBID_TAGS: ["svg", "math", "image", "use", "script", "iframe", "object", "embed", "style", "img", "input", "video", "audio", "source"],
+    FORBID_ATTR: ["src", "srcset", "poster", "xlink:href", "onerror", "onload", "onclick", "style", "srcdoc"],
     ALLOW_UNKNOWN_PROTOCOLS: false,
   });
+  const template = document.createElement("template");
+  template.innerHTML = sanitized;
+  template.content.querySelectorAll("a").forEach((anchor) => {
+    const href = anchor.getAttribute("href") ?? "";
+    if (!/^(https?:|mailto:|#)/i.test(href)) anchor.removeAttribute("href");
+    anchor.setAttribute("rel", "noopener noreferrer");
+    if (/^https?:/i.test(href)) anchor.setAttribute("target", "_blank");
+  });
+  return template.innerHTML;
 });
 </script>
 
@@ -25,7 +48,7 @@ const safeMarkdown = computed(() => {
   <div class="document-content">
     <div v-if="content.parse_warning" class="reader-warning" role="status">
       <span>{{ content.parse_warning }}</span>
-      <button type="button" @click="emit('download')">Download original</button>
+      <button type="button" @click="emit('download')">{{ t("reader.downloadOriginal") }}</button>
     </div>
 
     <article
@@ -45,15 +68,19 @@ const safeMarkdown = computed(() => {
     <iframe
       v-else-if="content.render_mode === 'pdf' && blobUrl"
       data-testid="document-pdf"
-      title="PDF document"
+      :title="t('reader.pdfTitle')"
       :src="blobUrl"
     />
+    <section v-else-if="content.render_mode === 'pdf' && blobPhase === 'error'" data-testid="document-pdf-error" class="reader-placeholder" role="alert">
+      <p>{{ pdfErrorText }}</p>
+      <div><button type="button" @click="emit('retry')">{{ t("reader.retryPdf") }}</button><button type="button" @click="emit('download')">{{ t("reader.downloadOriginal") }}</button></div>
+    </section>
     <section v-else-if="content.render_mode === 'pdf'" class="reader-placeholder" aria-live="polite">
-      Loading secured PDF…
+      {{ t("reader.pdfLoading") }}
     </section>
     <section v-else class="reader-placeholder">
-      <p>This file cannot be displayed in the reader.</p>
-      <button type="button" @click="emit('download')">Download original</button>
+      <p>{{ t("reader.unsupported") }}</p>
+      <button type="button" @click="emit('download')">{{ t("reader.downloadOriginal") }}</button>
     </section>
   </div>
 </template>
