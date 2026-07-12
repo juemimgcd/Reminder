@@ -52,7 +52,7 @@ test("index monitoring reaches terminal success and refreshes notes again", asyn
 
   await page.getByRole("button", { name: "Index", exact: true }).click();
 
-  await expect(page.getByTestId("document-action-status")).toContainText("Indexing completed");
+  await expect(page.getByRole("status").filter({ hasText: "Indexing completed" })).toBeVisible();
   await expect.poll(calls.taskCalls).toBe(2);
   await expect.poll(calls.documentCalls).toBeGreaterThanOrEqual(2);
   await expect(page.getByRole("button", { name: "Index", exact: true })).toBeDisabled();
@@ -64,7 +64,7 @@ test("index monitoring stops at failure and surfaces the task error", async ({ p
 
   await page.getByRole("button", { name: "Index", exact: true }).click();
 
-  await expect(page.getByTestId("document-action-status")).toContainText(/Indexing failed: Parser failed/);
+  await expect(page.getByRole("status").filter({ hasText: "Indexing failed: Parser failed" })).toBeVisible();
   await expect.poll(calls.taskCalls).toBe(2);
 });
 
