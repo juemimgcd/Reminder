@@ -73,9 +73,14 @@ export interface DocumentListItem {
   id: string;
   user_id: number;
   knowledge_base_id: string;
+  folder_id: string;
   file_name: string;
   file_type: string;
   status: string;
+  content_sha256?: string;
+  version_group_id: string;
+  version_number: number;
+  duplicate_of_document_id: string | null;
   created_at: string;
 }
 
@@ -85,13 +90,62 @@ export interface DocumentListData {
 }
 
 export interface DocumentUploadData {
+  disposition: "created" | "duplicate";
   document_id: string;
+  canonical_document_id: string;
   user_id: number;
   knowledge_base_id: string | null;
+  folder_id: string;
+  folder_path: string[];
   file_name: string;
   file_type: string;
   file_size: number;
   status: string;
+  version_group_id: string;
+  version_number: number;
+}
+
+export interface DocumentFolderData {
+  id: string;
+  parent_id: string;
+  name: string;
+  is_root: boolean;
+  children: DocumentFolderData[];
+}
+
+export interface DocumentVersionData {
+  document_id: string;
+  version_group_id: string;
+  version_number: number;
+  file_name: string;
+  created_at: string;
+}
+
+export interface DocumentVersionListData {
+  items: DocumentVersionData[];
+  total: number;
+}
+
+export interface DocumentContentSection {
+  title: string | null;
+  text: string;
+}
+
+export interface DocumentContentData {
+  document_id: string;
+  folder_id: string;
+  file_name: string;
+  render_mode: "markdown" | "text" | "structured" | "office" | "pdf" | "unsupported";
+  mime_type: string;
+  text: string | null;
+  sections: DocumentContentSection[];
+  parse_warning: string | null;
+}
+
+export interface DocumentTab {
+  documentId: string;
+  title: string;
+  blobUrl: string | null;
 }
 
 export interface DocumentIndexTaskData {
@@ -130,9 +184,13 @@ export interface DocumentPreviewMemoryEntry {
 export interface DocumentPreviewData {
   document_id: string;
   knowledge_base_id: string;
+  folder_id?: string;
   file_name: string;
   file_type: string;
   status: string;
+  content_sha256?: string;
+  version_group_id?: string;
+  version_number?: number;
   summary: string;
   chunks: DocumentPreviewChunk[];
   memory_entries: DocumentPreviewMemoryEntry[];

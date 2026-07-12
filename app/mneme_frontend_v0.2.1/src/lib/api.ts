@@ -8,11 +8,14 @@ import type {
   ChatSessionListData,
   ChatQueryData,
   CompanionAnswerResult,
+  DocumentContentData,
   DocumentDeleteData,
+  DocumentFolderData,
   DocumentIndexTaskData,
   DocumentListData,
   DocumentPreviewData,
   DocumentUploadData,
+  DocumentVersionListData,
   EvidenceProfileData,
   GraphData,
   GraphProjectionRebuildData,
@@ -113,11 +116,25 @@ function normalizeErrorDetail(detail: unknown): string {
 
 function resolveRequestKey(path: string, options: RequestOptions) {
   const method = (options.method ?? "GET").toUpperCase();
-  if (method !== "GET" && method !== "HEAD") {
+  if ((method !== "GET" && method !== "HEAD") || options.signal) {
     return null;
   }
 
   return `${method}:${options.token ?? ""}:${path}`;
+}
+
+async function responseError(response: Response) {
+  const text = await response.text();
+  let payload: Record<string, unknown> | null = null;
+  if (text) {
+    try {
+      payload = JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      payload = null;
+    }
+  }
+  const detail = (payload?.detail ?? payload?.message ?? text) || "Request failed";
+  return new ApiError(normalizeErrorDetail(detail), response.status);
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -162,11 +179,11 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   if (!response.ok) {
-    const detail =
+    const detail = (
       (payload && typeof payload === "object" && "detail" in payload ? payload.detail : undefined) ??
       (payload && typeof payload === "object" && "message" in payload ? payload.message : undefined) ??
-      text ??
-      "Request failed";
+      text
+    ) || "Request failed";
     throw new ApiError(normalizeErrorDetail(detail), response.status);
   }
 
@@ -274,6 +291,7 @@ const realApi = {
       file: File;
       userId?: number | null;
       knowledgeBaseId?: string | null;
+      folderId?: string | null;
     },
   ) {
     const formData = new FormData();
@@ -283,6 +301,9 @@ const realApi = {
     }
     if (payload.knowledgeBaseId) {
       formData.append("knowledge_base_id", payload.knowledgeBaseId);
+    }
+    if (payload.folderId) {
+      formData.append("folder_id", payload.folderId);
     }
 
     return request<DocumentUploadData>("/kb/documents/upload", {
@@ -306,6 +327,41 @@ const realApi = {
   },
   documentPreview(token: string, documentId: string, chunkLimit = 5) {
     return request<DocumentPreviewData>(`/kb/documents/${documentId}/preview${buildQuery({ chunk_limit: chunkLimit })}`, { token });
+  },
+  listDocumentFolders(token: string, knowledgeBaseId: string) {
+    return request<DocumentFolderData[]>(
+      `/kb/document-folders${buildQuery({ knowledge_base_id: knowledgeBaseId })}`,
+      { token },
+    );
+  },
+  createDocumentFolder(token: string, payload: { knowledge_base_id: string; parent_id: string; name: string }) {
+    return request<DocumentFolderData>("/kb/document-folders", { method: "POST", token, body: payload });
+  },
+  updateDocumentFolder(token: string, folderId: string, payload: { name?: string; parent_id?: string }) {
+    return request<DocumentFolderData>(`/kb/document-folders/${folderId}`, { method: "PATCH", token, body: payload });
+  },
+  deleteDocumentFolder(token: string, folderId: string) {
+    return request<{ id: string }>(`/kb/document-folders/${folderId}`, { method: "DELETE", token });
+  },
+  moveDocument(token: string, documentId: string, folderId: string) {
+    return request<{ document_id: string; folder_id: string }>(
+      `/kb/document-folders/documents/${documentId}/move`,
+      { method: "POST", token, body: { folder_id: folderId } },
+    );
+  },
+  documentContent(token: string, documentId: string, options: { signal?: AbortSignal } = {}) {
+    return request<DocumentContentData>(`/kb/documents/${documentId}/content`, { token, signal: options.signal });
+  },
+  documentVersions(token: string, documentId: string) {
+    return request<DocumentVersionListData>(`/kb/documents/${documentId}/versions`, { token });
+  },
+  async documentRawBlob(token: string, documentId: string, disposition: "inline" | "attachment" = "inline") {
+    const response = await fetch(
+      `${API_BASE_URL}/kb/documents/${documentId}/raw${buildQuery({ disposition })}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!response.ok) throw await responseError(response);
+    return response.blob();
   },
   getTask(taskId: string, token: string) {
     return request<TaskRecordData>(`/tasks/${taskId}`, { token });

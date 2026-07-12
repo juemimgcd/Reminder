@@ -1,5 +1,6 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "./useI18n";
+import { useDocumentWorkspace } from "./useDocumentWorkspace";
 import { useWorkspaceLoaders, type ViewLoadResult } from "./useWorkspaceLoaders";
 import { api, API_BASE_URL, IS_PREVIEW_MODE, PREVIEW_TOKEN } from "../lib/api";
 import { safeStorageGet, safeStorageRemove, safeStorageSet } from "../lib/safeStorage";
@@ -12,7 +13,6 @@ import type {
   ChatSessionData,
   CompanionAnswerResult,
   DocumentListItem,
-  DocumentPreviewData,
   EvidenceProfileData,
   GraphData,
   GrowthAdviceResult,
@@ -76,7 +76,6 @@ export function useMnemeWorkspace() {
   const aiModelConfigs = ref<AiModelConfigData[]>([]);
   const aiModelProviderPresets = ref<AiModelProviderPreset[]>([]);
   const activeAiModelConfigId = ref("");
-  const documentPreview = ref<DocumentPreviewData | null>(null);
   const syncStatus = ref("");
   const syncBusyTarget = ref<"graph" | "memory" | "">("");
   const uploadInputKey = ref(0);
@@ -118,6 +117,12 @@ export function useMnemeWorkspace() {
     settings: loadSettingsView,
   });
   const { ensureViewLoaded, viewLoadStates } = workspaceLoaders;
+  const documentWorkspace = useDocumentWorkspace({
+    token,
+    activeKnowledgeBaseId,
+    view,
+    invalidateWorkspace: workspaceLoaders.invalidate,
+  });
 
   async function applyRequest<T>(generation: number, request: Promise<T>, apply: (value: T) => void): Promise<boolean> {
     try {
@@ -144,8 +149,9 @@ export function useMnemeWorkspace() {
     if (!token.value || !activeKnowledgeBaseId.value) return { empty: true };
     const kbId = activeKnowledgeBaseId.value;
     const documentsRequest = applyRequest(generation, api.listDocuments(token.value, { userId: user.value?.id ?? null, knowledgeBaseId: kbId }), (data) => { documents.value = data.items; });
+    const foldersRequest = applyRequest(generation, api.listDocumentFolders(token.value, kbId), (data) => { documentWorkspace.documentFolders.value = data; });
     const memoryRequest = applyRequest(generation, api.memoryLibrary(token.value, kbId), (data) => { memoryLibrary.value = data; });
-    const outcomes = [await documentsRequest, await memoryRequest];
+    const outcomes = await Promise.all([documentsRequest, foldersRequest, memoryRequest]);
     return loadResult(outcomes, !selectedDocuments.value.length);
   }
 
@@ -336,14 +342,14 @@ export function useMnemeWorkspace() {
       return;
     }
 
-    const result = await api.uploadDocument(token.value, {
+    const result = await documentWorkspace.uploadDocument(
       file,
-      userId: user.value?.id ?? null,
-      knowledgeBaseId: activeKnowledgeBaseId.value,
-    });
-    banner.value = `Uploaded ${result.file_name}`;
+      user.value?.id ?? null,
+      documentWorkspace.selectedFolderId.value || null,
+    );
+    banner.value = result.disposition === "duplicate" ? `${result.file_name} already exists` : `Uploaded ${result.file_name}`;
     uploadInputKey.value += 1;
-    await loadKnowledgeBasePanels();
+    if (result.disposition === "created") await ensureViewLoaded("notes", true);
   }
 
   async function indexDocument(documentId: string) {
@@ -353,7 +359,8 @@ export function useMnemeWorkspace() {
 
     const result = await api.indexDocument(documentId, token.value);
     documentActionStatus.value = result.message;
-    await loadKnowledgeBasePanels();
+    workspaceLoaders.invalidate();
+    await ensureViewLoaded(view.value, true);
   }
 
   async function deleteDocument(documentId: string) {
@@ -363,7 +370,9 @@ export function useMnemeWorkspace() {
 
     const result = await api.deleteDocument(documentId, token.value);
     documentActionStatus.value = `Deleted ${result.document_id}`;
-    await loadKnowledgeBasePanels();
+    documentWorkspace.closeDocument(documentId);
+    workspaceLoaders.invalidate();
+    await ensureViewLoaded(view.value, true);
   }
 
   async function askVault() {
@@ -507,14 +516,14 @@ export function useMnemeWorkspace() {
 
   async function loadDocumentPreview(documentId: string) {
     if (!token.value || !documentId) {
-      documentPreview.value = null;
+      documentWorkspace.documentPreview.value = null;
       return;
     }
-    documentPreview.value = await api.documentPreview(token.value, documentId);
+    documentWorkspace.documentPreview.value = await api.documentPreview(token.value, documentId);
   }
 
   function clearDocumentPreview() {
-    documentPreview.value = null;
+    documentWorkspace.documentPreview.value = null;
   }
 
   async function rebuildActiveGraph() {
@@ -627,7 +636,7 @@ export function useMnemeWorkspace() {
     deleteDocument,
     dismissBanner,
     documentActionStatus,
-    documentPreview,
+    ...documentWorkspace,
     documents,
     filteredChatSessions,
     graphData,

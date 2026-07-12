@@ -90,6 +90,13 @@ function openCreateCommand() {
   </main>
 
   <main v-else data-testid="obsidian-shell" class="mneme-workbench">
+    <input
+      :key="workspace.uploadInputKey.value"
+      class="sr-only"
+      type="file"
+      aria-label="Upload document"
+      @change="workspace.uploadFile(($event.target as HTMLInputElement).files?.[0])"
+    />
     <div class="mneme-shell" :class="{ 'mneme-shell--resource-closed': !shell.resourceOpen.value }">
       <ActivityBar :items="VIEW_ITEMS" :active-id="workspace.view.value" @create="openCreateCommand" @toggle-resource="shell.toggleResource" @navigate="navigate" />
 
@@ -110,7 +117,7 @@ function openCreateCommand() {
             </section>
             <section data-testid="sidebar-group-files">
               <header><span>{{ t("shell.recentFiles") }}</span></header>
-              <button v-for="doc in workspace.selectedDocuments.value.slice(0, 6)" :key="doc.id"><strong>{{ doc.file_name }}</strong><small>{{ doc.status }} · {{ formatDate(doc.created_at) }}</small></button>
+              <button v-for="doc in workspace.selectedDocuments.value.slice(0, 6)" :key="doc.id" @click="workspace.openDocument(doc.id)"><strong>{{ doc.file_name }}</strong><small>{{ doc.status }} · {{ formatDate(doc.created_at) }}</small></button>
             </section>
           </nav>
 
@@ -130,6 +137,14 @@ function openCreateCommand() {
         <UiStatusPanel v-if="workspace.banner.value" class="workspace-banner" :title="workspace.banner.value" dismissible @dismiss="workspace.dismissBanner" />
         <UiStatusPanel v-if="workspace.authNotice.value" class="workspace-banner" :title="workspace.authNotice.value" />
         <UiStatusPanel v-if="activeViewLoadState.message.value" class="workspace-banner" :title="activeViewLoadState.message.value" variant="warning" />
+        <UiStatusPanel
+          v-if="workspace.duplicateUpload.value"
+          data-testid="duplicate-upload-notice"
+          class="workspace-banner"
+          :title="`${workspace.duplicateUpload.value.file_name} already exists`"
+        >
+          <template #action><button type="button" @click="workspace.openDuplicateUpload">Open existing file</button></template>
+        </UiStatusPanel>
 
         <section data-testid="obsidian-editor-pane" class="workspace-content">
           <div v-if="workspace.isLoading.value || activeViewLoading" class="workspace-loading" aria-label="Loading workspace">
@@ -138,7 +153,12 @@ function openCreateCommand() {
             <UiSkeleton width="100%" height="13rem" />
           </div>
           <DashboardView v-else-if="workspace.view.value === 'dashboard'" :workspace="workspace" />
-          <VaultView v-else-if="workspace.view.value === 'notes'" :workspace="workspace" @create="openCreateCommand" />
+          <div v-else-if="workspace.view.value === 'notes'">
+            <section v-if="workspace.activeDocumentId.value" data-testid="document-reader" class="workspace-banner" aria-live="polite">
+              <strong data-testid="document-reader-title">{{ workspace.documentContent.value?.file_name }}</strong>
+            </section>
+            <VaultView :workspace="workspace" @create="openCreateCommand" />
+          </div>
           <GraphView v-else-if="workspace.view.value === 'graph'" :workspace="workspace" />
           <AiLabView v-else-if="workspace.view.value === 'ai'" :workspace="workspace" :format-date="formatDate" />
           <SettingsView v-else :workspace="workspace" :health-label="activeHealthLabel" />

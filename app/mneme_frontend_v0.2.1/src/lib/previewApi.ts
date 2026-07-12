@@ -7,11 +7,14 @@
   ChatSessionData,
   ChatSessionDetailData,
   CompanionAnswerResult,
+  DocumentContentData,
   DocumentDeleteData,
+  DocumentFolderData,
   DocumentIndexTaskData,
   DocumentListItem,
   DocumentPreviewData,
   DocumentUploadData,
+  DocumentVersionListData,
   EvidenceProfileData,
   GraphData,
   GraphProjectionRebuildData,
@@ -37,6 +40,12 @@ export const PREVIEW_TOKEN = "mneme-preview-token";
 export const PREVIEW_API_BASE_URL = "Preview demo data";
 
 const now = "2026-06-24T08:00:00.000Z";
+const ROOT_FOLDER_ID = "fld-preview-root";
+const ATOMIC_NOTES_SHA256 = "7d432177bd9d155ec1732c049db90d4c3b018b10ce1a1d4d3723131b9ddb8cd7";
+
+let documentFolders: DocumentFolderData[] = [
+  { id: ROOT_FOLDER_ID, parent_id: ROOT_FOLDER_ID, name: "/", is_root: true, children: [] },
+];
 
 const previewUser: UserPublic = {
   id: 1,
@@ -69,27 +78,42 @@ let documents: DocumentListItem[] = [
     id: "doc-zettelkasten",
     user_id: previewUser.id,
     knowledge_base_id: "kb-demo-research",
+    folder_id: ROOT_FOLDER_ID,
     file_name: "zettelkasten-principles.md",
     file_type: "markdown",
     status: "indexed",
+    content_sha256: ATOMIC_NOTES_SHA256,
+    version_group_id: "ver-zettelkasten",
+    version_number: 1,
+    duplicate_of_document_id: null,
     created_at: "2026-06-20T10:15:00.000Z",
   },
   {
     id: "doc-memory-graph",
     user_id: previewUser.id,
     knowledge_base_id: "kb-demo-research",
+    folder_id: ROOT_FOLDER_ID,
     file_name: "memory-graph-design.pdf",
     file_type: "pdf",
     status: "indexed",
+    content_sha256: "2f0c7e6b1f89f43af91b1f0649f734b6e0aac7af2838eea9142ddbfe66d43c6a",
+    version_group_id: "ver-memory-graph",
+    version_number: 1,
+    duplicate_of_document_id: null,
     created_at: "2026-06-21T14:45:00.000Z",
   },
   {
     id: "doc-roadmap",
     user_id: previewUser.id,
     knowledge_base_id: "kb-product-notes",
+    folder_id: ROOT_FOLDER_ID,
     file_name: "preview-roadmap.md",
     file_type: "markdown",
     status: "parsed",
+    content_sha256: "dd61f833b2eb3e5a44cb2af5bdab877553b47e89aa24e9d5f235366e8f08b39c",
+    version_group_id: "ver-roadmap",
+    version_number: 1,
+    duplicate_of_document_id: null,
     created_at: "2026-06-23T16:20:00.000Z",
   },
 ];
@@ -163,9 +187,13 @@ const documentPreviews: Record<string, DocumentPreviewData> = {
   "doc-zettelkasten": {
     document_id: "doc-zettelkasten",
     knowledge_base_id: "kb-demo-research",
+    folder_id: ROOT_FOLDER_ID,
     file_name: "zettelkasten-principles.md",
     file_type: "markdown",
     status: "indexed",
+    content_sha256: ATOMIC_NOTES_SHA256,
+    version_group_id: "ver-zettelkasten",
+    version_number: 1,
     summary: "Atomic notes are easier to recombine when each note carries a clear relationship to its neighbors.",
     chunks: [
       {
@@ -189,9 +217,12 @@ const documentPreviews: Record<string, DocumentPreviewData> = {
   "doc-memory-graph": {
     document_id: "doc-memory-graph",
     knowledge_base_id: "kb-demo-research",
+    folder_id: ROOT_FOLDER_ID,
     file_name: "memory-graph-design.pdf",
     file_type: "pdf",
     status: "indexed",
+    version_group_id: "ver-memory-graph",
+    version_number: 1,
     summary: "Graph neighborhoods can provide retrieval context before vector search, improving answer grounding and source inspection.",
     chunks: [
       {
@@ -216,6 +247,37 @@ const documentPreviews: Record<string, DocumentPreviewData> = {
 
 function delay<T>(value: T): Promise<T> {
   return Promise.resolve(value);
+}
+
+async function sha256(file: File) {
+  const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function documentContent(documentId: string): DocumentContentData {
+  if (documentId === "doc-zettelkasten") {
+    return {
+      document_id: documentId,
+      folder_id: ROOT_FOLDER_ID,
+      file_name: "zettelkasten-principles.md",
+      render_mode: "markdown",
+      mime_type: "text/markdown",
+      text: "# Atomic notes\n\nAtomic notes are easier to recombine across contexts.",
+      sections: [{ title: "Atomic notes", text: "Atomic notes are easier to recombine across contexts." }],
+      parse_warning: null,
+    };
+  }
+  const document = documents.find((item) => item.id === documentId) ?? documents[0];
+  return {
+    document_id: document.id,
+    folder_id: document.folder_id,
+    file_name: document.file_name,
+    render_mode: document.file_type === "pdf" ? "pdf" : "markdown",
+    mime_type: document.file_type === "pdf" ? "application/pdf" : "text/markdown",
+    text: document.file_type === "pdf" ? null : `# ${document.file_name}\n\nPreview document content.`,
+    sections: [],
+    parse_warning: null,
+  };
 }
 
 function requireKnowledgeBase(knowledgeBaseId: string) {
@@ -423,11 +485,50 @@ const previewApi = {
     const items = documents.filter((item) => !params.knowledgeBaseId || item.knowledge_base_id === params.knowledgeBaseId);
     return delay({ items, total: items.length });
   },
-  uploadDocument(_token: string, payload: { file: File; userId?: number | null; knowledgeBaseId?: string | null }): Promise<DocumentUploadData> {
+  async uploadDocument(_token: string, payload: { file: File; userId?: number | null; knowledgeBaseId?: string | null; folderId?: string | null }): Promise<DocumentUploadData> {
+    const contentSha256 = await sha256(payload.file);
+    if (contentSha256 === ATOMIC_NOTES_SHA256) {
+      return delay({
+        disposition: "duplicate",
+        document_id: "doc-zettelkasten",
+        canonical_document_id: "doc-zettelkasten",
+        user_id: payload.userId ?? previewUser.id,
+        knowledge_base_id: payload.knowledgeBaseId ?? knowledgeBases[0].id,
+        folder_id: ROOT_FOLDER_ID,
+        folder_path: [],
+        file_name: "zettelkasten-principles.md",
+        file_type: "markdown",
+        file_size: payload.file.size,
+        status: "indexed",
+        version_group_id: "ver-zettelkasten",
+        version_number: 1,
+      });
+    }
     const documentId = `doc-preview-${Date.now()}`;
     const knowledgeBaseId = payload.knowledgeBaseId ?? knowledgeBases[0].id;
-    documents = [...documents, { id: documentId, user_id: payload.userId ?? previewUser.id, knowledge_base_id: knowledgeBaseId, file_name: payload.file.name, file_type: payload.file.name.split(".").pop() ?? "file", status: "uploaded", created_at: new Date().toISOString() }];
-    return delay({ document_id: documentId, user_id: payload.userId ?? previewUser.id, knowledge_base_id: knowledgeBaseId, file_name: payload.file.name, file_type: payload.file.type || "application/octet-stream", file_size: payload.file.size, status: "uploaded" });
+    const folderId = payload.folderId ?? ROOT_FOLDER_ID;
+    const normalizedName = payload.file.name.toLocaleLowerCase();
+    const previous = documents
+      .filter((item) => item.knowledge_base_id === knowledgeBaseId && item.folder_id === folderId && item.file_name.toLocaleLowerCase() === normalizedName)
+      .sort((left, right) => right.version_number - left.version_number)[0];
+    const versionGroupId = previous?.version_group_id ?? `ver-${documentId}`;
+    const versionNumber = (previous?.version_number ?? 0) + 1;
+    const fileType = payload.file.name.split(".").pop() ?? "file";
+    documents = [...documents, {
+      id: documentId,
+      user_id: payload.userId ?? previewUser.id,
+      knowledge_base_id: knowledgeBaseId,
+      folder_id: folderId,
+      file_name: payload.file.name,
+      file_type: fileType,
+      status: "uploaded",
+      content_sha256: contentSha256,
+      version_group_id: versionGroupId,
+      version_number: versionNumber,
+      duplicate_of_document_id: null,
+      created_at: new Date().toISOString(),
+    }];
+    return delay({ disposition: "created", document_id: documentId, canonical_document_id: documentId, user_id: payload.userId ?? previewUser.id, knowledge_base_id: knowledgeBaseId, folder_id: folderId, folder_path: [], file_name: payload.file.name, file_type: payload.file.type || "application/octet-stream", file_size: payload.file.size, status: "uploaded", version_group_id: versionGroupId, version_number: versionNumber });
   },
   indexDocument(documentId: string): Promise<DocumentIndexTaskData> {
     documents = documents.map((item) => item.id === documentId ? { ...item, status: "indexed" } : item);
@@ -453,6 +554,41 @@ const previewApi = {
         memory_entries: [],
       },
     );
+  },
+  listDocumentFolders(_token: string, _knowledgeBaseId: string): Promise<DocumentFolderData[]> {
+    return delay(documentFolders);
+  },
+  createDocumentFolder(_token: string, payload: { knowledge_base_id: string; parent_id: string; name: string }): Promise<DocumentFolderData> {
+    const folder = { id: `fld-preview-${Date.now()}`, parent_id: payload.parent_id, name: payload.name, is_root: false, children: [] };
+    documentFolders = [...documentFolders, folder];
+    return delay(folder);
+  },
+  updateDocumentFolder(_token: string, folderId: string, payload: { name?: string; parent_id?: string }): Promise<DocumentFolderData> {
+    documentFolders = documentFolders.map((folder) => folder.id === folderId ? { ...folder, name: payload.name ?? folder.name, parent_id: payload.parent_id ?? folder.parent_id } : folder);
+    return delay(documentFolders.find((folder) => folder.id === folderId) ?? documentFolders[0]);
+  },
+  deleteDocumentFolder(_token: string, folderId: string): Promise<{ id: string }> {
+    documentFolders = documentFolders.filter((folder) => folder.id !== folderId);
+    return delay({ id: folderId });
+  },
+  moveDocument(_token: string, documentId: string, folderId: string): Promise<{ document_id: string; folder_id: string }> {
+    documents = documents.map((document) => document.id === documentId ? { ...document, folder_id: folderId } : document);
+    return delay({ document_id: documentId, folder_id: folderId });
+  },
+  documentContent(_token: string, documentId: string, options: { signal?: AbortSignal } = {}): Promise<DocumentContentData> {
+    if (options.signal?.aborted) return Promise.reject(new DOMException("Aborted", "AbortError"));
+    return delay(documentContent(documentId));
+  },
+  documentVersions(_token: string, documentId: string): Promise<DocumentVersionListData> {
+    const document = documents.find((item) => item.id === documentId) ?? documents[0];
+    const items = documents
+      .filter((item) => item.version_group_id === document.version_group_id)
+      .map((item) => ({ document_id: item.id, version_group_id: item.version_group_id, version_number: item.version_number, file_name: item.file_name, created_at: item.created_at }));
+    return delay({ items, total: items.length });
+  },
+  documentRawBlob(_token: string, documentId: string, _disposition: "inline" | "attachment" = "inline"): Promise<Blob> {
+    const content = documentContent(documentId);
+    return delay(new Blob([content.text ?? "Preview PDF"], { type: content.mime_type }));
   },
   getTask(taskId: string): Promise<TaskRecordData> {
     return delay(tasks[taskId] ?? createTask(taskId, "preview-target"));
