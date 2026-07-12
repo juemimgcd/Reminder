@@ -28,7 +28,7 @@ class DocumentFolder(Base):
     knowledge_base_id: Mapped[str] = mapped_column(String(64), nullable=False)
     knowledge_base_pk: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("knowledge_bases.pk"),
+        ForeignKey("knowledge_bases.pk", ondelete="CASCADE"),
         nullable=False,
     )
     parent_pk: Mapped[int] = mapped_column(

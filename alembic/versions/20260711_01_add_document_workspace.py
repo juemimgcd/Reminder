@@ -23,7 +23,12 @@ def upgrade():
         sa.Column("id", sa.String(64), nullable=False, unique=True),
         sa.Column("user_id", sa.BigInteger(), sa.ForeignKey("users.id"), nullable=False),
         sa.Column("knowledge_base_id", sa.String(64), nullable=False),
-        sa.Column("knowledge_base_pk", sa.BigInteger(), sa.ForeignKey("knowledge_bases.pk"), nullable=False),
+        sa.Column(
+            "knowledge_base_pk",
+            sa.BigInteger(),
+            sa.ForeignKey("knowledge_bases.pk", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column(
             "parent_pk",
             sa.BigInteger(),
