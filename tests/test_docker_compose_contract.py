@@ -7,6 +7,7 @@ import yaml
 COMPOSE_FILE = Path(__file__).resolve().parents[1] / "docker-compose.yml"
 NGINX_FILE = Path(__file__).resolve().parents[1] / "nginx" / "reminder.conf"
 PRODUCTION_ENV_TEMPLATE = Path(__file__).resolve().parents[1] / "deploy" / "env" / "backend.production.example"
+DOCKERIGNORE_FILE = Path(__file__).resolve().parents[1] / ".dockerignore"
 
 
 class DockerComposeContractTest(unittest.TestCase):
@@ -52,6 +53,13 @@ class DockerComposeContractTest(unittest.TestCase):
 
         self.assertIn("NEO4J_URI=bolt://neo4j:7687", text)
         self.assertNotIn("8.147.57.104", text)
+
+    def test_document_hash_backfill_is_included_in_the_image_build_context(self):
+        patterns = DOCKERIGNORE_FILE.read_text(encoding="utf-8").splitlines()
+
+        self.assertIn("!scripts/", patterns)
+        self.assertIn("scripts/*", patterns)
+        self.assertIn("!scripts/backfill_document_hashes.py", patterns)
 
 
 if __name__ == "__main__":

@@ -16,6 +16,9 @@ target
 ER_graph
 rebuild
 scripts
+!scripts/
+scripts/*
+!scripts/backfill_document_hashes.py
 scripts2
 docs
 frontend_build
