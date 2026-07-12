@@ -91,6 +91,7 @@ function openCreateCommand() {
 
   <main v-else data-testid="obsidian-shell" class="mneme-workbench">
     <input
+      id="workspace-upload"
       :key="workspace.uploadInputKey.value"
       class="sr-only"
       type="file"
@@ -154,12 +155,7 @@ function openCreateCommand() {
             <UiSkeleton width="100%" height="13rem" />
           </div>
           <DashboardView v-else-if="workspace.view.value === 'dashboard'" :workspace="workspace" />
-          <div v-else-if="workspace.view.value === 'notes'">
-            <section v-if="workspace.activeDocumentId.value" data-testid="document-reader" class="workspace-banner" aria-live="polite">
-              <strong data-testid="document-reader-title">{{ workspace.documentContent.value?.file_name }}</strong>
-            </section>
-            <VaultView :workspace="workspace" @create="openCreateCommand" />
-          </div>
+          <VaultView v-else-if="workspace.view.value === 'notes'" :workspace="workspace" @create="openCreateCommand" />
           <GraphView v-else-if="workspace.view.value === 'graph'" :workspace="workspace" />
           <AiLabView v-else-if="workspace.view.value === 'ai'" :workspace="workspace" :format-date="formatDate" />
           <SettingsView v-else :workspace="workspace" :health-label="activeHealthLabel" />

@@ -47,3 +47,22 @@ for (const viewport of viewports) {
     await page.screenshot({ path: testInfo.outputPath(`settings-${viewport.name}.png`), fullPage: true });
   });
 }
+
+test('document workspace keeps the reader primary across desktop, tablet, and mobile', async ({ page }) => {
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 1024, height: 768 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto('/?preview=1');
+    await page.getByRole('button', { name: 'Research Vault', exact: true }).click();
+    await page.getByTestId('document-tree').getByRole('button', { name: 'zettelkasten-principles.md', exact: true }).click();
+    await expect(page.getByTestId('document-reader')).toBeVisible();
+    const columns = await page.getByTestId('document-workspace').evaluate((element) => getComputedStyle(element).gridTemplateColumns);
+    if (viewport.width === 1440) expect(columns.split(' ')).toHaveLength(3);
+    else expect(columns.split(' ')).toHaveLength(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+    await page.screenshot({ path: `../../.tmp/document-workspace-visual/reader-${viewport.width}x${viewport.height}.png` });
+  }
+});

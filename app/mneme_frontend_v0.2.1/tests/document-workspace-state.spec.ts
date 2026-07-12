@@ -1,9 +1,17 @@
 import { expect, test } from "@playwright/test";
 
+async function revealRecentFiles(page: import("@playwright/test").Page) {
+  const recentFiles = page.getByTestId("sidebar-group-files");
+  if (!(await recentFiles.isVisible())) {
+    await page.getByRole("button", { name: "Open resources" }).click();
+  }
+  await expect(recentFiles).toBeVisible();
+  return recentFiles;
+}
+
 test("opening a recent file reaches the unified reader", async ({ page }) => {
   await page.goto("/?preview=1", { waitUntil: "domcontentloaded" });
-  await page
-    .getByTestId("sidebar-group-files")
+  await (await revealRecentFiles(page))
     .getByRole("button", { name: /zettelkasten/i })
     .click();
   await expect(page.getByTestId("document-reader")).toBeVisible();
@@ -39,8 +47,9 @@ test("a created upload invalidates the notes list and opens its canonical docume
     buffer: Buffer.from("# Workspace state\n\nA changed document version."),
   });
   await expect(page.getByTestId("document-reader-title")).toContainText("workspace-state.md");
+  const recentFiles = await revealRecentFiles(page);
   await expect(
-    page.getByTestId("sidebar-group-files").getByRole("button", { name: /workspace-state/i }),
+    recentFiles.getByRole("button", { name: /workspace-state/i }),
   ).toBeVisible();
 });
 

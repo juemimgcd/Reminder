@@ -149,6 +149,18 @@ export function useDocumentWorkspace(params: {
     }
   }
 
+  async function downloadDocument(documentId = activeDocumentId.value) {
+    if (!documentId || !params.token.value) return;
+    const blob = await api.documentRawBlob(params.token.value, documentId, "attachment");
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = documentContent.value?.file_name ?? "document";
+    anchor.rel = "noopener";
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+
   function closeDocument(documentId: string) {
     const rawRequest = rawRequests.get(documentId);
     if (rawRequest) {
@@ -261,6 +273,7 @@ export function useDocumentWorkspace(params: {
     documentFolders,
     documentPreview,
     documentVersions,
+    downloadDocument,
     duplicateUpload,
     ensureDocumentBlob,
     moveDocument,

@@ -98,26 +98,20 @@ test('knowledge graph file rail can collapse and expand from the canvas handle',
   }
 });
 
-test('research vault directory rail clips long folder labels inside the rail', async ({ page }) => {
+test('research vault file tree stays inside the reader workspace', async ({ page }) => {
   await openPreview(page);
   await page.getByRole('button', { name: 'Research Vault', exact: true }).click();
 
-  const layout = page.getByTestId('stitch-research-vault-layout');
-  const directoryRail = layout.locator('aside').first();
-  const directoryButton = directoryRail.getByRole('button', { name: /Demo Research Vault/ });
+  const layout = page.getByTestId('document-workspace');
+  const directoryRail = page.getByTestId('document-tree-pane');
+  const documentButton = directoryRail.getByRole('button', { name: 'zettelkasten-principles.md', exact: true });
 
   await expect(layout).toBeVisible();
-  const viewport = page.viewportSize();
-  if (viewport && viewport.width < 768) {
-    await expect(directoryRail).toBeHidden();
-    const hasPageOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
-    expect(hasPageOverflow).toBe(false);
-    return;
-  }
-  await expect(directoryButton).toBeVisible();
+  await expect(directoryRail).toBeVisible();
+  await expect(documentButton).toBeVisible();
 
   const railBox = await directoryRail.boundingBox();
-  const buttonBox = await directoryButton.boundingBox();
+  const buttonBox = await documentButton.boundingBox();
   expect(railBox).not.toBeNull();
   expect(buttonBox).not.toBeNull();
   expect(buttonBox!.x + buttonBox!.width).toBeLessThanOrEqual(railBox!.x + railBox!.width + 1);
@@ -144,19 +138,16 @@ test('research vault upload and document actions are wired', async ({ page }) =>
   await openPreview(page);
   await page.getByRole('button', { name: 'Research Vault', exact: true }).click();
 
-  await page.getByTestId('workspace-upload-input').setInputFiles({
+  await page.getByLabel('Upload document').setInputFiles({
     name: 'closure-notes.md',
     mimeType: 'text/markdown',
     buffer: Buffer.from('# Closure notes'),
   });
-  await expect(page.getByTestId('stitch-research-vault-layout')).toContainText('closure-notes.md');
-
-  const card = page.getByTestId('document-card').filter({ hasText: 'closure-notes.md' });
-  await card.getByRole('button', { name: 'Index' }).click();
-  await expect(card).toContainText('indexed');
-
-  await card.getByRole('button', { name: 'Delete' }).click();
-  await expect(page.getByTestId('stitch-research-vault-layout')).not.toContainText('closure-notes.md');
+  await expect(page.getByTestId('document-reader-title')).toContainText('closure-notes.md');
+  await page.getByRole('button', { name: 'Index', exact: true }).click();
+  await expect(page.getByText('Indexing completed')).toBeVisible();
+  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(page.getByTestId('document-reader-title')).toHaveCount(0);
 });
 
 test('knowledge graph document panel opens on click and canvas clears selection', async ({ page }) => {
