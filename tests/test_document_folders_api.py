@@ -1,11 +1,14 @@
+import asyncio
 from types import SimpleNamespace
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
 
 from app.mneme.conf.database import get_database, get_write_database
+from app.mneme.crud.document_folder import descendant_folder_pks, list_folders
 from app.mneme.domains.documents.folders import normalize_folder_name, router, validate_folder_move
 from app.mneme.utils.auth import get_current_user
 from app.mneme.utils.exceptions import BusinessException, business_exception_handler
@@ -38,6 +41,32 @@ class FakeWriteDatabase:
 
     async def rollback(self):
         self.rollbacks += 1
+
+
+class EmptyScalarsResult:
+    def scalars(self):
+        return self
+
+    def all(self):
+        return []
+
+
+class StatementCaptureDatabase:
+    def __init__(self):
+        self.statement = None
+
+    async def execute(self, statement):
+        self.statement = statement
+        return EmptyScalarsResult()
+
+
+def compile_postgresql(statement) -> str:
+    return str(
+        statement.compile(
+            dialect=postgresql.dialect(),
+            compile_kwargs={"literal_binds": True},
+        )
+    )
 
 
 def folder(
@@ -91,6 +120,28 @@ def test_folder_names_are_casefolded_and_trimmed():
 def test_folder_cannot_move_beneath_descendant():
     with pytest.raises(BusinessException, match="descendant"):
         validate_folder_move(folder_pk=4, new_parent_pk=9, descendant_pks={9, 10})
+
+
+def test_list_folders_scopes_recursive_term_and_final_result():
+    database = StatementCaptureDatabase()
+
+    asyncio.run(list_folders(database, knowledge_base_pk=10, user_id=7))
+
+    sql = compile_postgresql(database.statement)
+    assert sql.count("knowledge_base_pk = 10") == 3
+    assert sql.count("user_id = 7") == 3
+
+
+def test_descendants_carry_source_scope_through_every_recursive_level():
+    database = StatementCaptureDatabase()
+
+    asyncio.run(descendant_folder_pks(database, folder_pk=4))
+
+    sql = compile_postgresql(database.statement)
+    assert "document_folders_1.user_id = folder_scope.user_id" in sql
+    assert "document_folders_1.knowledge_base_pk = folder_scope.knowledge_base_pk" in sql
+    assert "document_folders_2.user_id = folder_descendants.user_id" in sql
+    assert "document_folders_2.knowledge_base_pk = folder_descendants.knowledge_base_pk" in sql
 
 
 def test_create_folder_requires_owned_knowledge_base(api, monkeypatch):

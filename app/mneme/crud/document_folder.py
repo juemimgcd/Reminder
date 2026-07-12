@@ -126,11 +126,19 @@ async def list_folders(
     tree = tree.union_all(
         select(child.pk, (tree.c.depth + 1).label("depth"))
         .join(tree, child.parent_pk == tree.c.pk)
-        .where(child.pk != child.parent_pk)
+        .where(
+            child.pk != child.parent_pk,
+            child.knowledge_base_pk == knowledge_base_pk,
+            child.user_id == user_id,
+        )
     )
     result = await db.execute(
         select(DocumentFolder)
         .join(tree, DocumentFolder.pk == tree.c.pk)
+        .where(
+            DocumentFolder.knowledge_base_pk == knowledge_base_pk,
+            DocumentFolder.user_id == user_id,
+        )
         .order_by(tree.c.depth.asc(), DocumentFolder.pk.asc())
     )
     return list(result.scalars().all())
@@ -141,17 +149,42 @@ async def descendant_folder_pks(
     *,
     folder_pk: int,
 ) -> set[int]:
+    folder_scope = (
+        select(
+            DocumentFolder.pk.label("pk"),
+            DocumentFolder.user_id.label("user_id"),
+            DocumentFolder.knowledge_base_pk.label("knowledge_base_pk"),
+        )
+        .where(DocumentFolder.pk == folder_pk)
+        .cte("folder_scope")
+    )
+    child = aliased(DocumentFolder)
     descendants = (
-        select(DocumentFolder.pk.label("pk"))
+        select(
+            child.pk.label("pk"),
+            folder_scope.c.user_id.label("user_id"),
+            folder_scope.c.knowledge_base_pk.label("knowledge_base_pk"),
+        )
+        .join(folder_scope, child.parent_pk == folder_scope.c.pk)
         .where(
-            DocumentFolder.parent_pk == folder_pk,
-            DocumentFolder.pk != folder_pk,
+            child.pk != folder_pk,
+            child.user_id == folder_scope.c.user_id,
+            child.knowledge_base_pk == folder_scope.c.knowledge_base_pk,
         )
         .cte("folder_descendants", recursive=True)
     )
-    child = aliased(DocumentFolder)
+    recursive_child = aliased(DocumentFolder)
     descendants = descendants.union_all(
-        select(child.pk).join(descendants, child.parent_pk == descendants.c.pk)
+        select(
+            recursive_child.pk,
+            descendants.c.user_id,
+            descendants.c.knowledge_base_pk,
+        )
+        .join(descendants, recursive_child.parent_pk == descendants.c.pk)
+        .where(
+            recursive_child.user_id == descendants.c.user_id,
+            recursive_child.knowledge_base_pk == descendants.c.knowledge_base_pk,
+        )
     )
     result = await db.execute(select(descendants.c.pk))
     return set(result.scalars().all())
