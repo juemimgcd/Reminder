@@ -28,6 +28,18 @@ test('graph identity signature ignores node and edge order', () => {
   ));
 });
 
+test('graph labels are deterministic and expand with zoom', async ({ page }) => {
+  await page.goto('/?preview=1', { waitUntil: 'domcontentloaded' });
+  const visibleLabels = page.locator('[data-testid="force-node"][data-label-visible="true"]');
+  await expect(visibleLabels).toHaveCount(4);
+  await expect(page.locator('[data-node-id="node-kb-demo"]')).toHaveAttribute('data-label-visible', 'true');
+
+  await page.getByRole('button', { name: 'Zoom in graph' }).click();
+  await page.getByRole('button', { name: 'Zoom in graph' }).click();
+  await page.getByRole('button', { name: 'Zoom in graph' }).click();
+  await expect(visibleLabels).toHaveCount(6);
+});
+
 test('graph moves across frames and then settles', async ({ page }) => {
   await page.goto('/?preview=1', { waitUntil: 'domcontentloaded' });
   const graph = page.getByTestId('graph-output-workspace');

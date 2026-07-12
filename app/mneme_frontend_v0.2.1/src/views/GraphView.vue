@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ChevronLeft, File, FolderPlus, Network, Play, Search, Send, SlidersHorizontal, Target, Workflow, X, ZoomIn, ZoomOut } from "@lucide/vue";
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, ref, watchEffect } from "vue";
 import type { MnemeWorkspace } from "../composables/useMnemeWorkspace";
 import type { GraphNodeData } from "../types";
 import { useI18n } from "../composables/useI18n";
@@ -14,7 +14,11 @@ const filtersOpen = ref(false);
 const zoom = ref(1);
 const graphViewBox = ref("0 0 760 680");
 const graphSvg = ref<SVGSVGElement | null>(null);
-let dragState: { nodeId: string; pointerId: number } | null = null;
+const hoveredNodeId = ref<string | null>(null);
+let dragState: { nodeId: string; pointerId: number; startX: number; startY: number; moved: boolean; started: boolean } | null = null;
+let suppressOpenUntil = 0;
+let lastNodePointerDown: { nodeId: string; at: number } | null = null;
+let selectionTimer: number | null = null;
 
 const graphNodes = computed(() => props.workspace.graphData.value?.nodes ?? []);
 const graphEdges = computed(() => props.workspace.graphData.value?.edges ?? []);
@@ -23,7 +27,7 @@ const positionedNodes = interaction.positionedNodes;
 const positionedEdges = interaction.positionedEdges;
 const previewNode = interaction.selectedNode;
 
-function nodeRadius(node: GraphNodeData) { return node.depth === 0 ? 24 : Math.max(8, 15 - node.depth * 2); }
+function nodeRadius(node: GraphNodeData) { return interaction.nodeRadius(node); }
 function nodeFill(node: GraphNodeData) { return node.depth === 0 ? "var(--accent-strong)" : node.node_type === "memory" ? "var(--accent)" : "var(--text-tertiary)"; }
 
 async function selectGraphNode(node: GraphNodeData) {
@@ -34,14 +38,37 @@ async function selectGraphNode(node: GraphNodeData) {
 
 function startGraphNodeDrag(node: GraphNodeData, event: PointerEvent) {
   event.stopPropagation();
-  dragState = { nodeId: node.id, pointerId: event.pointerId };
-  (event.currentTarget as SVGGElement).setPointerCapture(event.pointerId);
-  interaction.startDrag(node.id);
-  void selectGraphNode(node);
+  const now = performance.now();
+  const isDoubleActivation = lastNodePointerDown?.nodeId === node.id && now - lastNodePointerDown.at < 360;
+  lastNodePointerDown = { nodeId: node.id, at: now };
+  if (isDoubleActivation) {
+    if (selectionTimer !== null) window.clearTimeout(selectionTimer);
+    selectionTimer = null;
+    openGraphDocument(node);
+    return;
+  }
+  dragState = { nodeId: node.id, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, moved: false, started: false };
+  if (selectionTimer !== null) window.clearTimeout(selectionTimer);
+  selectionTimer = window.setTimeout(() => {
+    selectionTimer = null;
+    void selectGraphNode(node);
+  }, 240);
 }
 
 function moveGraphNodeDrag(event: PointerEvent) {
   if (!dragState || !graphSvg.value) return;
+  if (Math.hypot(event.clientX - dragState.startX, event.clientY - dragState.startY) > 6) {
+    dragState.moved = true;
+    if (!dragState.started) {
+      if (selectionTimer !== null) window.clearTimeout(selectionTimer);
+      selectionTimer = null;
+      const draggedNode = graphNodes.value.find((node) => node.id === dragState?.nodeId);
+      if (draggedNode) void selectGraphNode(draggedNode);
+      graphSvg.value.setPointerCapture(event.pointerId);
+      interaction.startDrag(dragState.nodeId);
+      dragState.started = true;
+    }
+  }
   const point = graphSvg.value.createSVGPoint();
   point.x = event.clientX;
   point.y = event.clientY;
@@ -53,7 +80,8 @@ function moveGraphNodeDrag(event: PointerEvent) {
 
 function endGraphNodeDrag(event?: PointerEvent) {
   if (!dragState || (event && event.pointerId !== dragState.pointerId)) return;
-  interaction.endDrag(dragState.nodeId);
+  if (dragState.moved) suppressOpenUntil = performance.now() + 400;
+  if (dragState.started) interaction.endDrag(dragState.nodeId);
   dragState = null;
 }
 
@@ -71,16 +99,38 @@ function setZoom(value: number) {
 function centerGraph() { zoom.value = 1; graphViewBox.value = "0 0 760 680"; }
 function restartGraphLayout() { interaction.restartLayout(); centerGraph(); }
 
+function openGraphDocument(node: GraphNodeData) {
+  if (node.node_type !== "document" || performance.now() < suppressOpenUntil) return;
+  void props.workspace.openDocument(node.entity_id);
+}
+
+function handleGraphNodeClick(node: GraphNodeData, event: MouseEvent) {
+  if (event.detail >= 2) openGraphDocument(node);
+}
+
 function openSelectedDocument() {
   if (!previewNode.value || previewNode.value.node_type !== "document") return;
-  props.workspace.view.value = "notes";
+  void props.workspace.openDocument(previewNode.value.entity_id);
 }
 
 function openDocumentFromRail(documentId: string) {
   const node = graphNodes.value.find((item) => item.node_type === "document" && item.entity_id === documentId);
-  if (node) void selectGraphNode(node);
-  else void props.workspace.loadDocumentPreview(documentId);
+  if (node) interaction.selectNode(node);
+  void props.workspace.openDocument(documentId);
 }
+
+watchEffect(() => {
+  const next = new Set(
+    positionedNodes.value
+      .filter((node) => interaction.labelVisible(node.id, zoom.value, hoveredNodeId.value))
+      .map((node) => node.id),
+  );
+  interaction.setVisibleLabelIds(next);
+});
+
+onBeforeUnmount(() => {
+  if (selectionTimer !== null) window.clearTimeout(selectionTimer);
+});
 
 function nodeTypeLabel(nodeType: string) {
   if (nodeType === "document") return t("graph.type.documents");
@@ -123,12 +173,12 @@ function nodeTypeLabel(nodeType: string) {
           <template #icon><Network class="size-5" /></template>
         </UiEmptyState>
         <svg v-else ref="graphSvg" :viewBox="graphViewBox" role="img" aria-label="Knowledge graph" @pointerdown="clearGraphSelection" @pointermove="moveGraphNodeDrag" @pointerup="endGraphNodeDrag" @pointercancel="endGraphNodeDrag" @pointerleave="endGraphNodeDrag">
-          <g stroke="var(--border-strong)" stroke-width="2">
-            <line v-for="edge in positionedEdges" :key="edge.id" :x1="edge.sourceNode!.x" :y1="edge.sourceNode!.y" :x2="edge.targetNode!.x" :y2="edge.targetNode!.y" />
+          <g class="graph-edges" stroke="var(--border-strong)" stroke-width="1">
+            <line v-for="edge in positionedEdges" :key="edge.id" :data-focus-state="interaction.edgeFocusState(edge.source, edge.target)" :x1="edge.sourceNode!.x" :y1="edge.sourceNode!.y" :x2="edge.targetNode!.x" :y2="edge.targetNode!.y" />
           </g>
-          <g v-for="node in positionedNodes" :key="node.id" data-testid="force-node" :data-node-id="node.id" class="graph-node" role="button" tabindex="0" :aria-label="node.label" @pointerdown="startGraphNodeDrag(node, $event)" @keydown.enter.prevent="selectGraphNode(node)" @keydown.space.prevent="selectGraphNode(node)">
+          <g v-for="node in positionedNodes" :key="node.id" data-testid="force-node" :data-node-id="node.id" :data-focus-state="interaction.focusState(node.id)" :data-label-visible="interaction.labelVisible(node.id, zoom, hoveredNodeId)" class="graph-node" role="button" tabindex="0" :aria-label="node.label" @pointerdown="startGraphNodeDrag(node, $event)" @click.stop="handleGraphNodeClick(node, $event)" @dblclick.stop="openGraphDocument(node)" @mouseenter="hoveredNodeId = node.id" @mouseleave="hoveredNodeId = null" @focus="hoveredNodeId = node.id" @blur="hoveredNodeId = null" @keydown.enter.prevent="openGraphDocument(node)" @keydown.space.prevent="selectGraphNode(node)">
             <circle :cx="node.x" :cy="node.y" :r="nodeRadius(node)" :fill="nodeFill(node)" :stroke="node.depth === 0 ? 'color-mix(in srgb, var(--accent) 55%, white)' : 'transparent'" :stroke-width="node.depth === 0 ? 4 : 0" />
-            <text :x="node.x" :y="node.y + nodeRadius(node) + 22" fill="var(--text-primary)" :font-size="node.depth === 0 ? 18 : 14" :font-weight="node.depth === 0 ? 600 : 500" text-anchor="middle">{{ node.label }}</text>
+            <text v-if="interaction.labelVisible(node.id, zoom, hoveredNodeId)" :x="node.x" :y="node.y + nodeRadius(node) + 22" fill="var(--text-primary)" :font-size="node.depth === 0 ? 18 : 14" :font-weight="node.depth === 0 ? 600 : 500" text-anchor="middle">{{ node.label }}</text>
           </g>
         </svg>
 
@@ -168,6 +218,13 @@ function nodeTypeLabel(nodeType: string) {
 .graph-canvas { position: relative; min-width: 0; overflow: hidden; background: var(--bg-canvas); }
 .graph-canvas > svg { width: 100%; height: 100%; min-height: 620px; touch-action: none; user-select: none; }
 .graph-node { cursor: grab; }
+.graph-node:focus { outline: none; }
+.graph-node:focus-visible circle { stroke: var(--accent); stroke-width: 3; }
+.graph-node, .graph-edges line { transition: opacity 140ms ease; }
+.graph-node[data-focus-state="dimmed"], .graph-edges line[data-focus-state="dimmed"] { opacity: 0.16; }
+.graph-node[data-focus-state="selected"] circle { stroke: var(--accent); stroke-width: 3; }
+.graph-node[data-focus-state="neighbor"] { opacity: 0.92; }
+.graph-edges line[data-focus-state="connected"] { opacity: 0.82; stroke: color-mix(in srgb, var(--text-tertiary) 78%, transparent); }
 .graph-toolbar { position: absolute; top: 1rem; left: 1rem; z-index: 10; display: flex; gap: 0.7rem; }
 .graph-title, .graph-toolbar form, .graph-tabs, .zoom-controls { display: flex; align-items: center; background: var(--bg-panel); border: 1px solid var(--border-muted); border-radius: 0.45rem; box-shadow: var(--shadow-float); }
 .graph-title { height: 3rem; gap: 0.5rem; padding: 0 0.8rem; font-size: 0.8rem; }
