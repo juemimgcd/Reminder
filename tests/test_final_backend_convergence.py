@@ -1,10 +1,34 @@
 import unittest
 from pathlib import Path
 
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
 from app.mneme.bootstrap.router_registry import ROUTER_MODULE_NAMES
 
 
 class FinalBackendConvergenceTest(unittest.TestCase):
+    def test_unhandled_exceptions_return_a_safe_request_id_envelope(self):
+        from app.mneme.bootstrap.app_factory import configure_exception_handlers
+
+        app = FastAPI()
+        configure_exception_handlers(app)
+
+        @app.get("/explode")
+        async def explode():
+            raise RuntimeError("provider secret and traceback detail")
+
+        response = TestClient(app, raise_server_exceptions=False).get("/explode")
+        payload = response.json()
+
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(payload["code"], 5000)
+        self.assertEqual(payload["message"], "服务暂时不可用，请稍后重试")
+        self.assertIsNone(payload["data"])
+        self.assertTrue(payload["request_id"])
+        self.assertNotIn("provider secret", response.text)
+        self.assertEqual(response.headers["x-request-id"], payload["request_id"])
+
     def test_router_registry_uses_only_domain_routers(self):
         self.assertTrue(ROUTER_MODULE_NAMES)
         for module_name in ROUTER_MODULE_NAMES:

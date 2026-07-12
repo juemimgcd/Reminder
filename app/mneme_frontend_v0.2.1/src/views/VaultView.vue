@@ -1,100 +1,232 @@
 <script setup lang="ts">
-import { File, FilePlus2, FolderOpen, LayoutGrid, List, Plus } from "@lucide/vue";
-import { computed, ref } from "vue";
+import { Download, Files, PanelRight, Trash2, WandSparkles, X } from "@lucide/vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import type { MnemeWorkspace } from "../composables/useMnemeWorkspace";
+import DocumentProperties from "../components/documents/DocumentProperties.vue";
+import DocumentReader from "../components/documents/DocumentReader.vue";
+import DocumentTree from "../components/documents/DocumentTree.vue";
 import { useI18n } from "../composables/useI18n";
-import UiEmptyState from "../components/ui/UiEmptyState.vue";
 
 const props = defineProps<{ workspace: MnemeWorkspace }>();
 const { t } = useI18n();
-const emit = defineEmits<{ create: [] }>();
-const statusFilter = ref<"all" | "indexed">("all");
-const compact = ref(false);
-const visibleDocuments = computed(() => props.workspace.selectedDocuments.value.filter((doc) => statusFilter.value === "all" || doc.status === "indexed"));
+defineEmits<{ create: [] }>();
+const treeOpen = ref(true);
+const propertiesOpen = ref(false);
+const treeError = ref("");
+const filesTrigger = ref<HTMLButtonElement | null>(null);
+const propertiesTrigger = ref<HTMLButtonElement | null>(null);
+const activeTab = computed(() => props.workspace.openDocumentTabs.value.find((tab) => tab.documentId === props.workspace.activeDocumentId.value));
+const blobUrl = computed(() => activeTab.value?.blobUrl ?? null);
+
+async function openDocument(documentId: string) {
+  await props.workspace.openDocument(documentId);
+  if (window.matchMedia("(max-width: 1100px)").matches) treeOpen.value = false;
+}
+
+async function createFolder(parentId: string, name: string) {
+  treeError.value = "";
+  try {
+    const folder = await props.workspace.createFolder(parentId, name);
+    props.workspace.selectedFolderId.value = folder.id;
+  } catch (error) {
+    treeError.value = error instanceof Error ? error.message : t("reader.createFolderError");
+  }
+}
+
+async function renameFolder(folderId: string, name: string) {
+  treeError.value = "";
+  try {
+    await props.workspace.updateFolder(folderId, { name });
+  } catch (error) {
+    treeError.value = error instanceof Error ? error.message : t("reader.renameFolderError");
+  }
+}
+
+async function deleteFolder(folderId: string) {
+  treeError.value = "";
+  const hasDocuments = props.workspace.selectedDocuments.value.some((document) => document.folder_id === folderId);
+  const hasChildren = props.workspace.documentFolders.value.some((folder) => folder.parent_id === folderId && folder.id !== folderId);
+  if (hasDocuments || hasChildren) {
+    treeError.value = t("reader.folderNotEmpty");
+    return;
+  }
+  try {
+    await props.workspace.deleteFolder(folderId);
+    props.workspace.selectedFolderId.value = "";
+  } catch (error) {
+    treeError.value = error instanceof Error ? error.message : t("reader.folderNotEmpty");
+  }
+}
+
+async function moveFolder(folderId: string, parentId: string) {
+  treeError.value = "";
+  try {
+    await props.workspace.updateFolder(folderId, { parent_id: parentId });
+  } catch (error) {
+    treeError.value = error instanceof Error ? error.message : t("reader.moveFolderError");
+  }
+}
+
+async function moveDocument(documentId: string, folderId: string) {
+  treeError.value = "";
+  try {
+    await props.workspace.moveDocument(documentId, folderId);
+    await props.workspace.loadKnowledgeBasePanels();
+  } catch (error) {
+    treeError.value = error instanceof Error ? error.message : t("reader.moveDocumentError");
+  }
+}
+
+watch(
+  () => [props.workspace.documentContent.value?.document_id, props.workspace.documentContent.value?.render_mode] as const,
+  ([documentId, renderMode]) => {
+    if (documentId && renderMode === "pdf") void props.workspace.ensureDocumentBlob(documentId);
+  },
+  { immediate: true },
+);
+watch(
+  () => props.workspace.activeDocumentId.value,
+  (documentId) => {
+    if (documentId && window.matchMedia("(max-width: 1100px)").matches) treeOpen.value = false;
+    if (documentId) void nextTick(() => document.querySelector<HTMLElement>('[data-testid="document-reader"]')?.focus());
+  },
+  { immediate: true },
+);
+
+function handleEscape(event: KeyboardEvent) {
+  if (event.key !== "Escape") return;
+  if (propertiesOpen.value) {
+    propertiesOpen.value = false;
+    void nextTick(() => propertiesTrigger.value?.focus());
+  } else if (treeOpen.value && window.matchMedia("(max-width: 1100px)").matches) {
+    treeOpen.value = false;
+    void nextTick(() => filesTrigger.value?.focus());
+  }
+}
+
+async function focusDrawerPane(id: string) {
+  await nextTick();
+  document.getElementById(id)?.focus();
+}
+
+async function toggleTree() {
+  const opening = !treeOpen.value;
+  treeOpen.value = opening;
+  if (opening) {
+    propertiesOpen.value = false;
+    await focusDrawerPane("document-tree-pane");
+  }
+}
+
+async function toggleProperties() {
+  const opening = !propertiesOpen.value;
+  propertiesOpen.value = opening;
+  if (opening) {
+    treeOpen.value = false;
+    await focusDrawerPane("document-properties-pane");
+  }
+}
+
+onMounted(() => window.addEventListener("keydown", handleEscape));
+onBeforeUnmount(() => window.removeEventListener("keydown", handleEscape));
 </script>
 
 <template>
-  <div data-testid="stitch-research-vault-layout" class="vault-layout">
-    <aside>
-      <header><div><small>{{ t("vault.spaces") }}</small><h2>{{ t("vault.title") }}</h2></div><button aria-label="Create vault" @click="emit('create')"><Plus class="size-4" /></button></header>
-      <nav>
-        <button v-for="vault in workspace.knowledgeBases.value" :key="vault.id" :class="{ active: workspace.selectedKnowledgeBaseId.value === vault.id }" @click="workspace.selectKnowledgeBase(vault.id)">
-          <FolderOpen class="size-4" /><span><strong>{{ vault.name }}</strong><small>{{ vault.description || "No description" }}</small></span>
-        </button>
-      </nav>
-      <section><small>{{ t("vault.savedTags") }}</small><div><span>#research</span><span>#memory</span><span>#graph</span></div></section>
-    </aside>
+  <section
+    data-testid="document-workspace"
+    class="document-workspace"
+    :class="{ 'tree-open': treeOpen, 'properties-open': propertiesOpen }"
+  >
+    <div class="reader-mobile-tools">
+      <button ref="filesTrigger" type="button" :aria-label="t('reader.files')" aria-controls="document-tree-pane" :aria-expanded="treeOpen" @click="toggleTree"><Files />{{ t("reader.files") }}</button>
+      <span>{{ workspace.documentContent.value?.file_name ?? workspace.selectedKnowledgeBase.value?.name }}</span>
+      <button ref="propertiesTrigger" type="button" :aria-label="t('reader.properties')" aria-controls="document-properties-pane" :aria-expanded="propertiesOpen" @click="toggleProperties"><PanelRight />{{ t("reader.properties") }}</button>
+    </div>
 
-    <section class="vault-content">
-      <header class="vault-heading">
-        <div><small>{{ workspace.selectedKnowledgeBase.value?.description || t("vault.active") }}</small><h1>{{ workspace.selectedKnowledgeBase.value?.name ?? t("vault.title") }}</h1></div>
-        <div class="vault-actions">
-          <input :key="workspace.uploadInputKey.value" data-testid="workspace-upload-input" class="sr-only" type="file" @change="workspace.uploadFile(($event.target as HTMLInputElement).files?.[0])" />
-          <button :aria-label="statusFilter === 'all' ? 'Show indexed files' : 'Show all files'" @click="statusFilter = statusFilter === 'all' ? 'indexed' : 'all'"><List class="size-4" /></button>
-          <button aria-label="Toggle document density" @click="compact = !compact"><component :is="compact ? LayoutGrid : List" class="size-4" /></button>
-          <label class="upload-button"><FilePlus2 class="size-4" />{{ t("vault.upload") }}<input class="sr-only" type="file" @change="workspace.uploadFile(($event.target as HTMLInputElement).files?.[0])" /></label>
-        </div>
-      </header>
+    <DocumentTree
+      :folders="workspace.documentFolders.value"
+      :documents="workspace.selectedDocuments.value"
+      :active-document-id="workspace.activeDocumentId.value"
+      :selected-folder-id="workspace.selectedFolderId.value"
+      :error="treeError"
+      @open-document="openDocument"
+      @create-folder="createFolder"
+      @rename-folder="renameFolder"
+      @delete-folder="deleteFolder"
+      @move-folder="moveFolder"
+      @interaction-error="treeError = $event"
+      @move-document="moveDocument"
+      @select-folder="workspace.selectedFolderId.value = $event"
+    />
 
-      <div class="document-list" :class="{ compact }">
-        <article v-for="doc in visibleDocuments" :key="doc.id" data-testid="document-card">
-          <File class="document-icon" />
-          <div class="document-copy"><strong>{{ doc.file_name }}</strong><small>{{ doc.file_type || "document" }} · {{ doc.status }}</small></div>
-          <div class="document-actions">
-            <button :disabled="doc.status === 'indexed'" @click="workspace.indexDocument(doc.id)">{{ t("vault.index") }}</button>
-            <button class="danger" @click="workspace.deleteDocument(doc.id)">{{ t("vault.delete") }}</button>
-          </div>
-        </article>
-        <UiEmptyState v-if="!visibleDocuments.length" :title="t('vault.emptyTitle')" :description="t('vault.emptyDescription')">
-          <template #icon><File class="size-5" /></template>
-        </UiEmptyState>
+    <section class="reader-center">
+      <div v-if="workspace.activeDocumentId.value" class="document-actions" :aria-label="t('reader.documentActions')">
+        <button type="button" @click="workspace.downloadDocument()"><Download />{{ t("reader.download") }}</button>
+        <button type="button" :disabled="workspace.documentPreview.value?.status === 'indexed'" @click="workspace.indexDocument(workspace.activeDocumentId.value)"><WandSparkles />{{ t("reader.index") }}</button>
+        <button type="button" class="danger" @click="workspace.deleteDocument(workspace.activeDocumentId.value)"><Trash2 />{{ t("reader.delete") }}</button>
       </div>
-
-      <section data-testid="memory-function-grid" class="memory-strip">
-        <header><div><small>Memory Output Workspace</small><h2>{{ t("vault.memory") }}</h2></div><span>{{ workspace.memoryLibrary.value?.timeline.length ?? 0 }} entries</span></header>
-        <div data-testid="memory-output-workspace">
-          <article v-for="entry in (workspace.memoryLibrary.value?.timeline ?? []).slice(0, 4)" :key="entry.entry_id"><strong>{{ entry.entry_name }}</strong><p>{{ entry.summary }}</p></article>
-          <p v-if="!(workspace.memoryLibrary.value?.timeline ?? []).length">No synthesized memory events yet.</p>
-        </div>
-      </section>
+      <DocumentReader
+        :tabs="workspace.openDocumentTabs.value"
+        :active-document-id="workspace.activeDocumentId.value"
+        :content="workspace.documentContent.value"
+        :phase="workspace.documentContentPhase.value"
+        :error="workspace.documentContentError.value"
+        :blob-url="blobUrl"
+        :blob-phase="workspace.documentBlobPhase.value"
+        :blob-error="workspace.documentBlobError.value"
+        @select-tab="openDocument"
+        @close-tab="workspace.closeDocument"
+        @download="workspace.downloadDocument()"
+        @retry="workspace.retryDocumentBlob()"
+      />
     </section>
-  </div>
+
+    <DocumentProperties
+      :preview="workspace.documentPreview.value"
+      :versions="workspace.documentVersions.value"
+      :active-document-id="workspace.activeDocumentId.value"
+      @select-version="openDocument"
+    />
+    <button v-if="treeOpen" class="overlay-dismiss tree-dismiss" :aria-label="t('reader.closeFiles')" @click="treeOpen = false; filesTrigger?.focus()"><X /></button>
+    <button v-if="propertiesOpen" class="overlay-dismiss properties-dismiss" :aria-label="t('reader.closeProperties')" @click="propertiesOpen = false; propertiesTrigger?.focus()"><X /></button>
+  </section>
 </template>
 
 <style scoped>
-.vault-layout { display: grid; height: 100%; min-height: 0; grid-template-columns: 250px minmax(0, 1fr); background: var(--bg-canvas); }
-.vault-layout > aside { min-width: 0; overflow: auto; padding: 1rem; background: var(--bg-sidebar); border-right: 1px solid var(--border-muted); }
-.vault-layout aside header, .vault-heading, .memory-strip header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-small { color: var(--text-tertiary); font: 500 0.66rem var(--font-mono); text-transform: uppercase; letter-spacing: 0.07em; }
-h1, h2 { margin: 0.2rem 0 0; font-weight: 600; }
-.vault-layout aside button, .vault-actions button { color: var(--text-secondary); background: transparent; border: 1px solid transparent; border-radius: 0.4rem; }
-.vault-layout aside header button { display: grid; width: 2rem; height: 2rem; place-items: center; }
-.vault-layout aside nav { display: grid; gap: 0.2rem; margin-top: 1rem; }
-.vault-layout aside nav button { display: flex; min-width: 0; gap: 0.6rem; padding: 0.65rem; text-align: left; }
-.vault-layout aside nav button.active { color: var(--text-primary); background: var(--accent-soft); box-shadow: inset 2px 0 var(--accent); }
-.vault-layout aside nav span, .vault-layout aside nav strong, .vault-layout aside nav small { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.vault-layout aside nav span { flex: 1; }
-.vault-layout aside section { margin-top: 2rem; }
-.vault-layout aside section div { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.6rem; }
-.vault-layout aside section span { padding: 0.25rem 0.45rem; color: var(--text-secondary); background: var(--bg-panel); border: 1px solid var(--border-muted); border-radius: 0.3rem; font-size: 0.7rem; }
-.vault-content { min-width: 0; overflow: auto; padding: 1.5rem 2rem; }
-.vault-heading h1 { font: 600 clamp(1.6rem, 4vw, 2.4rem) var(--font-serif); }
-.vault-actions { display: flex; gap: 0.35rem; }
-.vault-actions button, .upload-button { display: inline-flex; min-height: 2.3rem; align-items: center; justify-content: center; gap: 0.4rem; padding: 0.45rem 0.65rem; color: var(--text-secondary); background: var(--bg-panel); border: 1px solid var(--border-muted); border-radius: 0.4rem; font-size: 0.78rem; }
-.document-list { display: grid; gap: 0; margin-top: 1.5rem; border-top: 1px solid var(--border-muted); }
-.document-list article { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 0.8rem; padding: 0.9rem 0.4rem; border-bottom: 1px solid var(--border-muted); }
-.document-list.compact article { padding-block: 0.55rem; }
-.document-icon { color: var(--accent); }
-.document-copy strong, .document-copy small { display: block; }
-.document-copy small { margin-top: 0.2rem; text-transform: none; }
-.document-actions { display: flex; gap: 0.3rem; }
-.document-actions button { padding: 0.35rem 0.55rem; color: var(--text-secondary); background: transparent; border: 1px solid var(--border-muted); border-radius: 0.35rem; font-size: 0.72rem; }
-.document-actions .danger { color: var(--danger); }
-.document-actions button:disabled { opacity: 0.4; }
-.memory-strip { margin-top: 2.5rem; padding-top: 1.2rem; border-top: 1px solid var(--border-muted); }
-.memory-strip header > span { color: var(--text-tertiary); font: 0.7rem var(--font-mono); }
-.memory-strip > div { display: grid; gap: 0.75rem; margin-top: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.memory-strip article { padding-left: 0.8rem; border-left: 2px solid var(--accent); }
-.memory-strip p { margin: 0.25rem 0 0; color: var(--text-secondary); font-size: 0.82rem; line-height: 1.55; }
-@media (max-width: 767px) { .vault-layout { grid-template-columns: 1fr; } .vault-layout > aside { display: none; } .vault-content { padding: 1rem; } .vault-heading { align-items: flex-start; } .vault-actions button { display: none; } .document-list article { grid-template-columns: auto minmax(0, 1fr); } .document-actions { grid-column: 2; } .memory-strip > div { grid-template-columns: 1fr; } }
+.document-workspace { position: relative; display: grid; width: 100%; height: 100%; min-height: 0; grid-template-columns: 230px minmax(0, 1fr) 270px; overflow: hidden; background: var(--bg-canvas); }
+.reader-center { display: grid; min-width: 0; min-height: 0; grid-template-rows: auto minmax(0, 1fr); }
+.document-actions { display: flex; min-height: 2.2rem; align-items: center; justify-content: flex-end; gap: 0.25rem; padding: 0.25rem 0.55rem; background: var(--bg-sidebar); border-bottom: 1px solid var(--border-muted); }
+.document-actions button { display: inline-flex; min-height: 1.7rem; align-items: center; gap: 0.3rem; padding: 0 0.45rem; color: var(--text-secondary); background: transparent; border: 1px solid transparent; border-radius: 0.3rem; font-size: 0.65rem; }
+.document-actions button:hover:not(:disabled) { color: var(--text-primary); background: var(--bg-elevated); border-color: var(--border-muted); }
+.document-actions button:disabled { opacity: 0.36; }
+.document-actions button.danger { color: var(--danger); }
+.document-actions svg { width: 0.75rem; }
+.reader-mobile-tools, .overlay-dismiss { display: none; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+@media (max-width: 1100px) {
+  .document-workspace { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .reader-mobile-tools { display: grid; z-index: 3; min-height: 2.6rem; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 0.5rem; padding: 0 0.55rem; background: var(--bg-sidebar); border-bottom: 1px solid var(--border-muted); }
+  .reader-mobile-tools button { display: flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.45rem; color: var(--text-secondary); background: transparent; border: 1px solid var(--border-muted); border-radius: 0.35rem; font-size: 0.68rem; }
+  .reader-mobile-tools svg { width: 0.8rem; }
+  .reader-mobile-tools span { overflow: hidden; color: var(--text-tertiary); text-align: center; text-overflow: ellipsis; white-space: nowrap; font: 0.62rem var(--font-mono); }
+  .reader-center { grid-row: 2; grid-column: 1; }
+  :deep([data-testid="document-tree-pane"]), :deep([data-testid="document-properties"]) { position: absolute; z-index: 12; top: 2.6rem; bottom: 0; display: none; width: min(86vw, 280px); box-shadow: var(--shadow-float); }
+  :deep([data-testid="document-tree-pane"]) { left: 0; }
+  :deep([data-testid="document-properties"]) { right: 0; }
+  .tree-open :deep([data-testid="document-tree-pane"]), .properties-open :deep([data-testid="document-properties"]) { display: block; }
+  .overlay-dismiss { position: absolute; z-index: 13; top: 3rem; display: grid; width: 1.8rem; height: 1.8rem; place-items: center; color: var(--text-secondary); background: var(--bg-elevated); border: 1px solid var(--border-muted); border-radius: 50%; box-shadow: var(--shadow-float); }
+  .overlay-dismiss svg { width: 0.8rem; }
+  .tree-dismiss { left: min(calc(86vw - 2.2rem), 240px); }
+  .properties-dismiss { right: min(calc(86vw - 2.2rem), 240px); }
+}
+
+@media (max-width: 767px) {
+  .document-actions { justify-content: space-between; }
+  .document-actions button { flex: 1; justify-content: center; }
+  .reader-mobile-tools { grid-template-columns: 1fr 1fr; }
+  .reader-mobile-tools button { font-size: 0.62rem; }
+  .reader-mobile-tools button svg { width: 1rem; }
+  .reader-mobile-tools span { display: none; }
+}
 </style>

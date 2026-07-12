@@ -1,16 +1,23 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
 class DocumentUploadData(BaseModel):
+    disposition: Literal["created", "duplicate"]
     document_id: str = Field(..., description="Document ID after upload")
+    canonical_document_id: str
     user_id: int = Field(..., description="Owner user ID")
     knowledge_base_id: str | None = Field(..., description="Knowledge base ID")
+    folder_id: str
+    folder_path: list[str]
     file_name: str
     file_type: str
     file_size: int
     status: str
+    version_group_id: str
+    version_number: int
 
 
 class DocumentListItem(BaseModel):
@@ -19,9 +26,13 @@ class DocumentListItem(BaseModel):
     id: str
     user_id: int
     knowledge_base_id: str
+    folder_id: str
     file_name: str
     file_type: str
     status: str
+    version_group_id: str
+    version_number: int
+    duplicate_of_document_id: str | None
     created_at: datetime
 
 
@@ -107,3 +118,55 @@ class DocumentDeleteData(BaseModel):
     deleted_memory_entry_count: int
     deleted_task_count: int
     deleted_vector_count: int
+
+
+class DocumentFolderCreate(BaseModel):
+    knowledge_base_id: str
+    parent_id: str
+    name: str = Field(min_length=1, max_length=255)
+
+
+class DocumentFolderUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    parent_id: str | None = None
+
+
+class DocumentFolderItem(BaseModel):
+    id: str
+    parent_id: str
+    name: str
+    is_root: bool
+    children: list["DocumentFolderItem"] = Field(default_factory=list)
+
+
+class DocumentMoveRequest(BaseModel):
+    folder_id: str
+
+
+class DocumentContentSection(BaseModel):
+    title: str | None
+    text: str
+
+
+class DocumentContentData(BaseModel):
+    document_id: str
+    folder_id: str
+    file_name: str
+    render_mode: Literal["markdown", "text", "structured", "office", "pdf", "unsupported"]
+    mime_type: str
+    text: str | None
+    sections: list[DocumentContentSection]
+    parse_warning: str | None
+
+
+class DocumentVersionData(BaseModel):
+    document_id: str
+    version_group_id: str
+    version_number: int
+    file_name: str
+    created_at: datetime
+
+
+class DocumentVersionListData(BaseModel):
+    items: list[DocumentVersionData]
+    total: int

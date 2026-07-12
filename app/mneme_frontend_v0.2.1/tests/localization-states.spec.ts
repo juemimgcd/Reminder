@@ -16,7 +16,7 @@ test('Chinese locale updates navigation and graph tools without losing the activ
   await expect(page.getByTestId('stitch-graph-layout')).toBeVisible();
 
   await page.getByRole('button', { name: '研究库' }).click();
-  await expect(page.getByText('上传文件', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('上传文档')).toHaveCount(1);
 
   await page.getByRole('button', { name: 'AI 实验室' }).click();
   await expect(page.getByPlaceholder('向 Mneme 提问…')).toBeVisible();

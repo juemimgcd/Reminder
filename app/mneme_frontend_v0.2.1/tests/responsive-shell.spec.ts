@@ -18,7 +18,7 @@ test('tablet keeps activity navigation and starts with the resource drawer close
   await expect(page.getByTestId('resource-sidebar')).not.toHaveClass(/resource-sidebar--open/);
 
   await page.getByTestId('activity-bar').getByRole('button', { name: 'Research Vault' }).click();
-  await expect(page.getByTestId('stitch-research-vault-layout')).toBeVisible();
+  await expect(page.getByTestId('document-workspace')).toBeVisible();
   const statusBarBox = await page.locator('.status-bar').boundingBox();
   expect(statusBarBox).not.toBeNull();
   expect(statusBarBox!.y + statusBarBox!.height).toBeGreaterThan(1090);

@@ -1,0 +1,325 @@
+import { onBeforeUnmount, ref, watch, type ComputedRef, type Ref } from "vue";
+import { api } from "../lib/api";
+import type {
+  DocumentContentData,
+  DocumentFolderData,
+  DocumentPreviewData,
+  DocumentTab,
+  DocumentUploadData,
+  DocumentVersionData,
+  WorkspaceView,
+} from "../types";
+
+type ContentPhase = "idle" | "loading" | "ready" | "empty" | "error";
+
+export function useDocumentWorkspace(params: {
+  token: Ref<string>;
+  activeKnowledgeBaseId: ComputedRef<string>;
+  view: Ref<WorkspaceView>;
+  invalidateWorkspace: () => void;
+}) {
+  const activeDocumentId = ref("");
+  const selectedFolderId = ref("");
+  const openDocumentTabs = ref<DocumentTab[]>([]);
+  const documentFolders = ref<DocumentFolderData[]>([]);
+  const documentContent = ref<DocumentContentData | null>(null);
+  const documentPreview = ref<DocumentPreviewData | null>(null);
+  const documentVersions = ref<DocumentVersionData[]>([]);
+  const documentContentPhase = ref<ContentPhase>("idle");
+  const documentContentError = ref("");
+  const documentBlobPhase = ref<"idle" | "loading" | "ready" | "error">("idle");
+  const documentBlobError = ref("");
+  const duplicateUpload = ref<DocumentUploadData | null>(null);
+  const contentCache = new Map<string, DocumentContentData>();
+  const rawRequests = new Map<string, { controller: AbortController; generation: number; tab: DocumentTab }>();
+  let contentAbort: AbortController | null = null;
+  let openGeneration = 0;
+  let rawGeneration = 0;
+
+  function cancelRawRequests() {
+    rawGeneration += 1;
+    rawRequests.forEach((request) => request.controller.abort());
+    rawRequests.clear();
+  }
+
+  function revokeTabBlob(documentId: string) {
+    const tab = openDocumentTabs.value.find((item) => item.documentId === documentId);
+    if (!tab?.blobUrl) return;
+    URL.revokeObjectURL(tab.blobUrl);
+    tab.blobUrl = null;
+  }
+
+  function clearDocumentSession() {
+    openGeneration += 1;
+    contentAbort?.abort();
+    contentAbort = null;
+    cancelRawRequests();
+    openDocumentTabs.value.forEach((tab) => {
+      if (tab.blobUrl) URL.revokeObjectURL(tab.blobUrl);
+    });
+    openDocumentTabs.value = [];
+    documentFolders.value = [];
+    activeDocumentId.value = "";
+    selectedFolderId.value = "";
+    documentContent.value = null;
+    documentPreview.value = null;
+    documentVersions.value = [];
+    documentContentPhase.value = "idle";
+    documentContentError.value = "";
+    documentBlobPhase.value = "idle";
+    documentBlobError.value = "";
+    duplicateUpload.value = null;
+    contentCache.clear();
+  }
+
+  async function openDocument(documentId: string) {
+    if (!documentId || !params.token.value) return;
+
+    const previousDocumentId = activeDocumentId.value;
+    if (previousDocumentId && previousDocumentId !== documentId) {
+      cancelRawRequests();
+      revokeTabBlob(previousDocumentId);
+    }
+    activeDocumentId.value = documentId;
+    params.view.value = "notes";
+    contentAbort?.abort();
+    const controller = new AbortController();
+    contentAbort = controller;
+    const generation = ++openGeneration;
+    documentContentPhase.value = "loading";
+    documentContentError.value = "";
+    documentBlobPhase.value = "idle";
+    documentBlobError.value = "";
+
+    try {
+      const cachedContent = contentCache.get(documentId);
+      const [content, preview, versions] = await Promise.all([
+        cachedContent ?? api.documentContent(params.token.value, documentId, { signal: controller.signal }),
+        api.documentPreview(params.token.value, documentId),
+        api.documentVersions(params.token.value, documentId),
+      ]);
+      if (generation !== openGeneration || controller.signal.aborted || activeDocumentId.value !== documentId) return;
+
+      contentCache.set(documentId, content);
+      documentContent.value = content;
+      documentPreview.value = preview;
+      documentVersions.value = versions.items;
+      selectedFolderId.value = content.folder_id;
+      documentContentPhase.value = content.text || content.sections.length || content.render_mode === "pdf" || content.render_mode === "unsupported" || content.parse_warning ? "ready" : "empty";
+      if (!openDocumentTabs.value.some((tab) => tab.documentId === documentId)) {
+        openDocumentTabs.value = [
+          ...openDocumentTabs.value,
+          { documentId, title: content.file_name, blobUrl: null },
+        ];
+      }
+    } catch (error) {
+      if (generation !== openGeneration || (error instanceof Error && error.name === "AbortError")) return;
+      documentContent.value = null;
+      documentPreview.value = null;
+      documentVersions.value = [];
+      documentContentPhase.value = "error";
+      documentContentError.value = error instanceof Error ? error.message : "Unable to open this document.";
+    } finally {
+      if (contentAbort === controller) contentAbort = null;
+    }
+  }
+
+  async function ensureDocumentBlob(documentId = activeDocumentId.value) {
+    const tab = openDocumentTabs.value.find((item) => item.documentId === documentId);
+    if (!tab) return null;
+    if (tab.blobUrl) {
+      documentBlobPhase.value = "ready";
+      documentBlobError.value = "";
+      return tab.blobUrl;
+    }
+    rawRequests.get(documentId)?.controller.abort();
+    const controller = new AbortController();
+    const generation = ++rawGeneration;
+    const token = params.token.value;
+    const request = { controller, generation, tab };
+    rawRequests.set(documentId, request);
+    documentBlobPhase.value = "loading";
+    documentBlobError.value = "";
+    try {
+      const blob = await api.documentRawBlob(token, documentId, "inline", { signal: controller.signal });
+      const currentTab = openDocumentTabs.value.find((item) => item.documentId === documentId);
+      if (
+        controller.signal.aborted ||
+        rawRequests.get(documentId) !== request ||
+        generation !== rawGeneration ||
+        params.token.value !== token ||
+        activeDocumentId.value !== documentId ||
+        currentTab !== tab
+      ) return null;
+      if (currentTab.blobUrl) return currentTab.blobUrl;
+      currentTab.blobUrl = URL.createObjectURL(blob);
+      documentBlobPhase.value = "ready";
+      return currentTab.blobUrl;
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        if (activeDocumentId.value === documentId) documentBlobPhase.value = "idle";
+        return null;
+      }
+      if (rawRequests.get(documentId) === request && activeDocumentId.value === documentId) {
+        documentBlobPhase.value = "error";
+        documentBlobError.value = error instanceof Error ? error.message : "Unable to load secured PDF.";
+      }
+      return null;
+    } finally {
+      if (rawRequests.get(documentId) === request) rawRequests.delete(documentId);
+    }
+  }
+
+  async function retryDocumentBlob(documentId = activeDocumentId.value) {
+    if (!documentId) return null;
+    revokeTabBlob(documentId);
+    return ensureDocumentBlob(documentId);
+  }
+
+  async function downloadDocument(documentId = activeDocumentId.value) {
+    if (!documentId || !params.token.value) return;
+    try {
+      const blob = await api.documentRawBlob(params.token.value, documentId, "attachment");
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = documentContent.value?.file_name ?? "document";
+      anchor.rel = "noopener";
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch (error) {
+      documentBlobPhase.value = "error";
+      documentBlobError.value = error instanceof Error ? error.message : "Unable to download original file.";
+    }
+  }
+
+  function closeDocument(documentId: string) {
+    const rawRequest = rawRequests.get(documentId);
+    if (rawRequest) {
+      rawGeneration += 1;
+      rawRequest.controller.abort();
+      rawRequests.delete(documentId);
+    }
+    revokeTabBlob(documentId);
+    const remaining = openDocumentTabs.value.filter((item) => item.documentId !== documentId);
+    openDocumentTabs.value = remaining;
+    if (activeDocumentId.value !== documentId) return;
+    const next = remaining.at(-1);
+    if (next) {
+      void openDocument(next.documentId);
+      return;
+    }
+    openGeneration += 1;
+    contentAbort?.abort();
+    activeDocumentId.value = "";
+    documentContent.value = null;
+    documentPreview.value = null;
+    documentVersions.value = [];
+    documentContentPhase.value = "idle";
+    documentContentError.value = "";
+    documentBlobPhase.value = "idle";
+    documentBlobError.value = "";
+  }
+
+  async function refreshDocumentFolders() {
+    if (!params.token.value || !params.activeKnowledgeBaseId.value) {
+      documentFolders.value = [];
+      return;
+    }
+    documentFolders.value = await api.listDocumentFolders(params.token.value, params.activeKnowledgeBaseId.value);
+  }
+
+  async function createFolder(parentId: string, name: string) {
+    const created = await api.createDocumentFolder(params.token.value, {
+      knowledge_base_id: params.activeKnowledgeBaseId.value,
+      parent_id: parentId,
+      name,
+    });
+    params.invalidateWorkspace();
+    await refreshDocumentFolders();
+    return created;
+  }
+
+  async function updateFolder(folderId: string, payload: { name?: string; parent_id?: string }) {
+    const updated = await api.updateDocumentFolder(params.token.value, folderId, payload);
+    params.invalidateWorkspace();
+    await refreshDocumentFolders();
+    return updated;
+  }
+
+  async function deleteFolder(folderId: string) {
+    const deleted = await api.deleteDocumentFolder(params.token.value, folderId);
+    params.invalidateWorkspace();
+    await refreshDocumentFolders();
+    return deleted;
+  }
+
+  async function moveDocument(documentId: string, folderId: string) {
+    const moved = await api.moveDocument(params.token.value, documentId, folderId);
+    params.invalidateWorkspace();
+    selectedFolderId.value = folderId;
+    return moved;
+  }
+
+  async function uploadDocument(file: File, userId: number | null, folderId?: string | null) {
+    const result = await api.uploadDocument(params.token.value, {
+      file,
+      userId,
+      knowledgeBaseId: params.activeKnowledgeBaseId.value,
+      ...(folderId ? { folderId } : {}),
+    });
+    if (result.disposition === "duplicate") {
+      duplicateUpload.value = result;
+      return result;
+    }
+    duplicateUpload.value = null;
+    params.invalidateWorkspace();
+    await openDocument(result.canonical_document_id);
+    return result;
+  }
+
+  function openDuplicateUpload() {
+    const canonicalId = duplicateUpload.value?.canonical_document_id;
+    if (canonicalId) void openDocument(canonicalId);
+  }
+
+  function dismissDuplicateUpload() {
+    duplicateUpload.value = null;
+  }
+
+  watch(params.token, (nextToken, previousToken) => {
+    if (!nextToken && previousToken) clearDocumentSession();
+  });
+  watch(params.activeKnowledgeBaseId, () => {
+    clearDocumentSession();
+  });
+  onBeforeUnmount(clearDocumentSession);
+
+  return {
+    activeDocumentId,
+    closeDocument,
+    createFolder,
+    deleteFolder,
+    dismissDuplicateUpload,
+    documentContent,
+    documentBlobError,
+    documentBlobPhase,
+    documentContentError,
+    documentContentPhase,
+    documentFolders,
+    documentPreview,
+    documentVersions,
+    downloadDocument,
+    duplicateUpload,
+    ensureDocumentBlob,
+    moveDocument,
+    openDocument,
+    openDocumentTabs,
+    openDuplicateUpload,
+    refreshDocumentFolders,
+    retryDocumentBlob,
+    selectedFolderId,
+    updateFolder,
+    uploadDocument,
+  };
+}

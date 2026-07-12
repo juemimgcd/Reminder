@@ -4,15 +4,20 @@ const mobileQuery = window.matchMedia("(max-width: 767px)");
 const tabletQuery = window.matchMedia("(min-width: 768px) and (max-width: 1023px)");
 
 export function useResponsiveShell() {
+  type ShellMode = "desktop" | "tablet" | "mobile";
+  const currentMode = (): ShellMode => mobileQuery.matches ? "mobile" : tabletQuery.matches ? "tablet" : "desktop";
+  let lastMode = currentMode();
   const isMobile = ref(mobileQuery.matches);
   const isTablet = ref(tabletQuery.matches);
   const resourceOpen = ref(!(mobileQuery.matches || tabletQuery.matches));
   const contextOpen = ref(false);
 
   function syncBreakpoints() {
+    const nextMode = currentMode();
     isMobile.value = mobileQuery.matches;
     isTablet.value = tabletQuery.matches;
-    resourceOpen.value = !(isMobile.value || isTablet.value);
+    if (nextMode !== lastMode) resourceOpen.value = nextMode === "desktop";
+    lastMode = nextMode;
     if (isMobile.value) contextOpen.value = false;
   }
 

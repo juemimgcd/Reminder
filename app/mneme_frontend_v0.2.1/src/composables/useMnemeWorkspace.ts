@@ -1,14 +1,18 @@
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useI18n } from "./useI18n";
+import { useDocumentWorkspace } from "./useDocumentWorkspace";
+import { useWorkspaceLoaders, type ViewLoadResult } from "./useWorkspaceLoaders";
 import { api, API_BASE_URL, IS_PREVIEW_MODE, PREVIEW_TOKEN } from "../lib/api";
+import { safeStorageGet, safeStorageRemove, safeStorageSet } from "../lib/safeStorage";
 import type {
   AiModelConfigData,
   AiModelProviderPreset,
+  AuthMode,
   ChatQueryData,
   ChatMessageData,
   ChatSessionData,
   CompanionAnswerResult,
   DocumentListItem,
-  DocumentPreviewData,
   EvidenceProfileData,
   GraphData,
   GrowthAdviceResult,
@@ -31,35 +35,26 @@ const SELECTED_KB_KEY = "mneme.selected_knowledge_base_id";
 export type AuthStatus = "checking" | "guest" | "authenticated";
 export type WorkspaceCommandTab = "create" | "upload" | "ask" | "companion";
 
-function storageGet(key: string) {
-  if (typeof window === "undefined") {
-    return "";
-  }
-  return window.localStorage.getItem(key) ?? "";
-}
-
-function storageSet(key: string, value: string) {
-  if (typeof window !== "undefined") {
-    window.localStorage.setItem(key, value);
-  }
-}
-
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
 export function useMnemeWorkspace() {
-  const token = ref(IS_PREVIEW_MODE ? PREVIEW_TOKEN : storageGet(TOKEN_KEY));
+  const { t } = useI18n();
+  const token = ref(IS_PREVIEW_MODE ? PREVIEW_TOKEN : safeStorageGet(TOKEN_KEY));
   const authStatus = ref<AuthStatus>(IS_PREVIEW_MODE || token.value ? "checking" : "guest");
   const authError = ref("");
+  const authMode = ref<AuthMode>("login");
+  const authPending = ref(false);
+  const authNotice = ref("");
   const banner = ref("");
   const isLoading = ref(false);
 
-  const view = ref<WorkspaceView>("graph");
+  const view = ref<WorkspaceView>(IS_PREVIEW_MODE ? "graph" : "dashboard");
   const workspaceCommandTab = ref<WorkspaceCommandTab>("ask");
   const user = ref<UserPublic | null>(null);
   const knowledgeBases = ref<KnowledgeBaseData[]>([]);
-  const selectedKnowledgeBaseId = ref(storageGet(SELECTED_KB_KEY));
+  const selectedKnowledgeBaseId = ref(safeStorageGet(SELECTED_KB_KEY));
   const documents = ref<DocumentListItem[]>([]);
 
   const serviceHealth = ref<ServiceHealthData | null>(null);
@@ -81,7 +76,6 @@ export function useMnemeWorkspace() {
   const aiModelConfigs = ref<AiModelConfigData[]>([]);
   const aiModelProviderPresets = ref<AiModelProviderPreset[]>([]);
   const activeAiModelConfigId = ref("");
-  const documentPreview = ref<DocumentPreviewData | null>(null);
   const syncStatus = ref("");
   const syncBusyTarget = ref<"graph" | "memory" | "">("");
   const uploadInputKey = ref(0);
@@ -90,8 +84,11 @@ export function useMnemeWorkspace() {
   const graphRagStatus = ref("");
   const aiModelActionStatus = ref("");
   const chatSessionFilter = ref("");
+  const indexTaskMonitors = new Map<string, AbortController>();
+  let documentPreviewGeneration = 0;
 
   const loginForm = ref({ username: "", password: "" });
+  const registerForm = ref({ username: "", displayName: "", password: "", confirmPassword: "" });
   const knowledgeBaseForm = ref({ name: "", description: "" });
   const chatQuestion = ref("How should I review this vault?");
   const companionQuestion = ref("What should I focus on next?");
@@ -114,23 +111,112 @@ export function useMnemeWorkspace() {
     return chatSessions.value.filter((session) => (session.title || "Untitled Chat").toLowerCase().includes(query));
   });
 
+  const workspaceLoaders = useWorkspaceLoaders({
+    dashboard: loadDashboardView,
+    notes: loadNotesView,
+    graph: loadGraphView,
+    ai: loadAiView,
+    settings: loadSettingsView,
+  });
+  const { ensureViewLoaded, viewLoadStates } = workspaceLoaders;
+  const documentWorkspace = useDocumentWorkspace({
+    token,
+    activeKnowledgeBaseId,
+    view,
+    invalidateWorkspace: workspaceLoaders.invalidate,
+  });
+
+  async function applyRequest<T>(generation: number, request: Promise<T>, apply: (value: T) => void): Promise<boolean> {
+    try {
+      const value = await request;
+      if (workspaceLoaders.isCurrent(generation)) apply(value);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function loadResult(outcomes: boolean[], empty = false): ViewLoadResult {
+    return {
+      empty,
+      message: outcomes.every(Boolean) ? "" : t("load.temporarilyUnavailable"),
+    };
+  }
+
+  async function loadDashboardView(): Promise<ViewLoadResult> {
+    return { empty: false };
+  }
+
+  async function loadNotesView(generation: number): Promise<ViewLoadResult> {
+    if (!token.value || !activeKnowledgeBaseId.value) return { empty: true };
+    const kbId = activeKnowledgeBaseId.value;
+    const documentsRequest = applyRequest(generation, api.listDocuments(token.value, { userId: user.value?.id ?? null, knowledgeBaseId: kbId }), (data) => { documents.value = data.items; });
+    const foldersRequest = applyRequest(generation, api.listDocumentFolders(token.value, kbId), (data) => { documentWorkspace.documentFolders.value = data; });
+    const memoryRequest = applyRequest(generation, api.memoryLibrary(token.value, kbId), (data) => { memoryLibrary.value = data; });
+    const outcomes = await Promise.all([documentsRequest, foldersRequest, memoryRequest]);
+    return loadResult(outcomes, !selectedDocuments.value.length);
+  }
+
+  async function loadGraphView(generation: number): Promise<ViewLoadResult> {
+    if (!token.value || !activeKnowledgeBaseId.value) return { empty: true };
+    const kbId = activeKnowledgeBaseId.value;
+    const documentsRequest = applyRequest(generation, api.listDocuments(token.value, { userId: user.value?.id ?? null, knowledgeBaseId: kbId }), (data) => { documents.value = data.items; });
+    const graphRequest = applyRequest(generation, api.getKnowledgeBaseGraph(token.value, kbId, { include_memory: true, include_relationships: true }), (data) => { graphData.value = data; });
+    const outcomes = [await documentsRequest, await graphRequest];
+    return loadResult(outcomes, !graphData.value?.nodes.length);
+  }
+
+  async function loadAiView(generation: number): Promise<ViewLoadResult> {
+    if (!token.value || !activeKnowledgeBaseId.value) return { empty: true };
+    const sessionsRequest = (async () => {
+      try {
+        const data = await api.listChatSessions(token.value, activeKnowledgeBaseId.value);
+        const sessionId = data.items[0]?.id ?? "";
+        const detail = sessionId ? await api.getChatSession(token.value, sessionId) : null;
+        if (workspaceLoaders.isCurrent(generation)) {
+          chatSessions.value = data.items;
+          activeChatSessionId.value = sessionId;
+          chatMessages.value = detail?.messages ?? [];
+        }
+        return true;
+      } catch {
+        return false;
+      }
+    })();
+    const modelsRequest = applyRequest(generation, api.listAiModelConfigs(token.value), (data) => {
+      aiModelProviderPresets.value = data.provider_presets;
+      aiModelConfigs.value = data.items;
+      activeAiModelConfigId.value = data.default_config_id ?? data.items[0]?.id ?? "";
+    });
+    const outcomes = [await sessionsRequest, await modelsRequest];
+    return loadResult(outcomes, !chatSessions.value.length);
+  }
+
+  async function loadSettingsView(generation: number): Promise<ViewLoadResult> {
+    if (!token.value) return { empty: true };
+    const modelRequest = applyRequest(generation, api.listAiModelConfigs(token.value), (data) => {
+      aiModelProviderPresets.value = data.provider_presets;
+      aiModelConfigs.value = data.items;
+      activeAiModelConfigId.value = data.default_config_id ?? data.items[0]?.id ?? "";
+    });
+    const neo4jRequest = applyRequest(generation, api.neo4jHealth(), (data) => { neo4jHealth.value = data; });
+    const graphRequest = activeKnowledgeBaseId.value
+      ? applyRequest(generation, api.getKnowledgeBaseGraph(token.value, activeKnowledgeBaseId.value, { include_memory: true, include_relationships: true }), (data) => { graphData.value = data; })
+      : Promise.resolve(true);
+    const outcomes = [await modelRequest, await neo4jRequest, await graphRequest];
+    return loadResult(outcomes);
+  }
+
   async function loadWorkspace() {
     if (!token.value || !user.value) {
       return;
     }
 
     isLoading.value = true;
+    const healthRequest = api.health().then((data) => { serviceHealth.value = data; }).catch(() => undefined);
+    const readinessRequest = api.readiness().then((data) => { readiness.value = data; }).catch(() => undefined);
     try {
-      const [healthData, neo4jData, readinessData, kbData] = await Promise.all([
-        api.health(),
-        api.neo4jHealth(),
-        api.readiness(),
-        api.listKnowledgeBases(user.value.id, token.value),
-      ]);
-
-      serviceHealth.value = healthData;
-      neo4jHealth.value = neo4jData;
-      readiness.value = readinessData;
+      const kbData = await api.listKnowledgeBases(user.value.id, token.value);
       knowledgeBases.value = kbData.items;
 
       if (!selectedKnowledgeBaseId.value || !kbData.items.some((item) => item.id === selectedKnowledgeBaseId.value)) {
@@ -138,47 +224,22 @@ export function useMnemeWorkspace() {
       }
 
       if (selectedKnowledgeBaseId.value) {
-        storageSet(SELECTED_KB_KEY, selectedKnowledgeBaseId.value);
+        safeStorageSet(SELECTED_KB_KEY, selectedKnowledgeBaseId.value);
       }
 
-      await loadKnowledgeBasePanels();
-      await loadAiModelConfigs();
-    } catch (error) {
-      banner.value = errorMessage(error, "Unable to load workspace.");
+      void ensureViewLoaded(view.value, true);
+
+      void healthRequest;
+      void readinessRequest;
+    } catch {
+      banner.value = t("load.temporarilyUnavailable");
     } finally {
       isLoading.value = false;
     }
   }
 
   async function loadKnowledgeBasePanels() {
-    if (!token.value || !activeKnowledgeBaseId.value) {
-      return;
-    }
-
-    const kbId = activeKnowledgeBaseId.value;
-    const [documentData, graph, memory, governance, profileData, evidenceData, growthData, analyticsData, adviceData] =
-      await Promise.all([
-        api.listDocuments(token.value, { userId: user.value?.id ?? null, knowledgeBaseId: kbId }),
-        api.getKnowledgeBaseGraph(token.value, kbId, { include_memory: true, include_relationships: true }),
-        api.memoryLibrary(token.value, kbId),
-        api.memoryGovernance(token.value, kbId),
-        api.profile(token.value, kbId),
-        api.profileEvidence(token.value, kbId, 30),
-        api.growth(token.value, kbId, 30),
-        api.analytics(token.value, kbId),
-        api.advice(token.value, kbId, adviceGoal.value),
-      ]);
-
-    documents.value = documentData.items;
-    graphData.value = graph;
-    memoryLibrary.value = memory;
-    memoryGovernance.value = governance;
-    profile.value = profileData;
-    profileEvidence.value = evidenceData;
-    growth.value = growthData;
-    analytics.value = analyticsData;
-    advice.value = adviceData;
-    await loadChatSessions();
+    await ensureViewLoaded(view.value, true);
   }
 
   async function authenticateWithToken() {
@@ -191,26 +252,64 @@ export function useMnemeWorkspace() {
     try {
       user.value = await api.me(token.value);
       authStatus.value = "authenticated";
-      await loadWorkspace();
+      void loadWorkspace();
     } catch (error) {
       authStatus.value = "guest";
       authError.value = errorMessage(error, "Session expired. Please sign in again.");
       token.value = "";
+      safeStorageRemove(TOKEN_KEY);
     }
+  }
+
+  async function establishSession(accessToken: string) {
+    token.value = accessToken;
+    if (!safeStorageSet(TOKEN_KEY, accessToken)) {
+      authNotice.value = t("auth.sessionOnly");
+    }
+    await authenticateWithToken();
+  }
+
+  function setAuthMode(mode: AuthMode) {
+    authMode.value = mode;
+    authError.value = "";
   }
 
   async function login() {
     authError.value = "";
-    isLoading.value = true;
+    authPending.value = true;
     try {
       const auth = await api.login(loginForm.value);
-      token.value = auth.access_token;
-      storageSet(TOKEN_KEY, token.value);
-      await authenticateWithToken();
+      await establishSession(auth.access_token);
     } catch (error) {
-      authError.value = errorMessage(error, "Unable to sign in.");
+      authError.value = errorMessage(error, t("auth.loginFailed"));
     } finally {
-      isLoading.value = false;
+      authPending.value = false;
+    }
+  }
+
+  async function register() {
+    authError.value = "";
+    if (registerForm.value.password !== registerForm.value.confirmPassword) {
+      authError.value = t("auth.passwordMismatch");
+      return;
+    }
+
+    authPending.value = true;
+    try {
+      await api.register({
+        username: registerForm.value.username,
+        display_name: registerForm.value.displayName.trim() || null,
+        password: registerForm.value.password,
+      });
+      const auth = await api.login({
+        username: registerForm.value.username,
+        password: registerForm.value.password,
+      });
+      await establishSession(auth.access_token);
+    } catch (error) {
+      authError.value = errorMessage(error, t("auth.registerFailed"));
+    } finally {
+      authPending.value = false;
     }
   }
 
@@ -245,14 +344,14 @@ export function useMnemeWorkspace() {
       return;
     }
 
-    const result = await api.uploadDocument(token.value, {
+    const result = await documentWorkspace.uploadDocument(
       file,
-      userId: user.value?.id ?? null,
-      knowledgeBaseId: activeKnowledgeBaseId.value,
-    });
-    banner.value = `Uploaded ${result.file_name}`;
+      user.value?.id ?? null,
+      documentWorkspace.selectedFolderId.value || null,
+    );
+    banner.value = result.disposition === "duplicate" ? `${result.file_name} already exists` : `Uploaded ${result.file_name}`;
     uploadInputKey.value += 1;
-    await loadKnowledgeBasePanels();
+    if (result.disposition === "created") await ensureViewLoaded("notes", true);
   }
 
   async function indexDocument(documentId: string) {
@@ -262,7 +361,76 @@ export function useMnemeWorkspace() {
 
     const result = await api.indexDocument(documentId, token.value);
     documentActionStatus.value = result.message;
-    await loadKnowledgeBasePanels();
+    workspaceLoaders.invalidate();
+    void ensureViewLoaded(view.value, true);
+    void monitorIndexTask(result.task_id);
+  }
+
+  function normalizedTaskStatus(status: string) {
+    if (["queued"].includes(status)) return "pending";
+    if (["completed"].includes(status)) return "succeeded";
+    if (["canceled"].includes(status)) return "cancelled";
+    if (["parsing", "chunking", "memory_extracting", "embedding", "vector_upserting", "graph_projecting", "eval_running"].includes(status)) return "running";
+    return status;
+  }
+
+  function pollDelay(milliseconds: number, signal: AbortSignal) {
+    return new Promise<void>((resolve, reject) => {
+      if (signal.aborted) {
+        reject(new DOMException("Aborted", "AbortError"));
+        return;
+      }
+      const onAbort = () => {
+        window.clearTimeout(timer);
+        reject(new DOMException("Aborted", "AbortError"));
+      };
+      const timer = window.setTimeout(() => {
+        signal.removeEventListener("abort", onAbort);
+        resolve();
+      }, milliseconds);
+      signal.addEventListener("abort", onAbort, { once: true });
+    });
+  }
+
+  async function monitorIndexTask(taskId: string) {
+    indexTaskMonitors.get(taskId)?.abort();
+    const controller = new AbortController();
+    indexTaskMonitors.set(taskId, controller);
+    const maximumPolls = IS_PREVIEW_MODE ? 8 : 80;
+    const interval = IS_PREVIEW_MODE ? 0 : 250;
+    try {
+      for (let attempt = 0; attempt < maximumPolls; attempt += 1) {
+        const task = await api.getTask(taskId, token.value, { signal: controller.signal });
+        const status = normalizedTaskStatus(task.status);
+        if (status === "succeeded") {
+          documentActionStatus.value = "Indexing completed";
+          workspaceLoaders.invalidate();
+          await ensureViewLoaded(view.value, true);
+          if (documentWorkspace.activeDocumentId.value) {
+            await loadDocumentPreview(documentWorkspace.activeDocumentId.value);
+          }
+          return;
+        }
+        if (status === "failed" || status === "cancelled") {
+          const detail = task.error_message || task.result_summary || status;
+          documentActionStatus.value = `Indexing ${status}: ${detail}`;
+          return;
+        }
+        await pollDelay(interval, controller.signal);
+      }
+      documentActionStatus.value = "Indexing is still running. Refresh to check again.";
+    } catch (error) {
+      if (!(error instanceof Error && error.name === "AbortError")) {
+        documentActionStatus.value = errorMessage(error, "Unable to monitor indexing status.");
+      }
+    } finally {
+      if (indexTaskMonitors.get(taskId) === controller) indexTaskMonitors.delete(taskId);
+    }
+  }
+
+  function cancelIndexTaskMonitors() {
+    indexTaskMonitors.forEach((controller) => controller.abort());
+    indexTaskMonitors.clear();
   }
 
   async function deleteDocument(documentId: string) {
@@ -272,7 +440,9 @@ export function useMnemeWorkspace() {
 
     const result = await api.deleteDocument(documentId, token.value);
     documentActionStatus.value = `Deleted ${result.document_id}`;
-    await loadKnowledgeBasePanels();
+    documentWorkspace.closeDocument(documentId);
+    workspaceLoaders.invalidate();
+    await ensureViewLoaded(view.value, true);
   }
 
   async function askVault() {
@@ -415,15 +585,20 @@ export function useMnemeWorkspace() {
   }
 
   async function loadDocumentPreview(documentId: string) {
+    const generation = ++documentPreviewGeneration;
     if (!token.value || !documentId) {
-      documentPreview.value = null;
+      if (generation === documentPreviewGeneration) documentWorkspace.documentPreview.value = null;
       return;
     }
-    documentPreview.value = await api.documentPreview(token.value, documentId);
+    const requestToken = token.value;
+    const preview = await api.documentPreview(requestToken, documentId);
+    if (generation !== documentPreviewGeneration || token.value !== requestToken) return;
+    documentWorkspace.documentPreview.value = preview;
   }
 
   function clearDocumentPreview() {
-    documentPreview.value = null;
+    documentPreviewGeneration += 1;
+    documentWorkspace.documentPreview.value = null;
   }
 
   async function rebuildActiveGraph() {
@@ -478,21 +653,34 @@ export function useMnemeWorkspace() {
 
   function selectKnowledgeBase(id: string) {
     selectedKnowledgeBaseId.value = id;
-    storageSet(SELECTED_KB_KEY, id);
-    void loadKnowledgeBasePanels();
+    safeStorageSet(SELECTED_KB_KEY, id);
+    workspaceLoaders.invalidate();
+    void ensureViewLoaded(view.value);
+  }
+
+  function dismissBanner() {
+    banner.value = "";
   }
 
   function logout() {
+    cancelIndexTaskMonitors();
+    documentActionStatus.value = "";
     token.value = "";
     user.value = null;
     authStatus.value = "guest";
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem(TOKEN_KEY);
-    }
+    safeStorageRemove(TOKEN_KEY);
   }
 
   onMounted(() => {
     void authenticateWithToken();
+  });
+  onBeforeUnmount(cancelIndexTaskMonitors);
+
+  watch([isAuthenticated, view, activeKnowledgeBaseId], ([authenticated]) => {
+    if (authenticated) void ensureViewLoaded(view.value);
+  }, { immediate: true });
+  watch(token, (nextToken) => {
+    if (!nextToken) cancelIndexTaskMonitors();
   });
 
   return {
@@ -510,6 +698,9 @@ export function useMnemeWorkspace() {
     askCompanion,
     askVault,
     authError,
+    authMode,
+    authNotice,
+    authPending,
     authStatus,
     banner,
     chatQuestion,
@@ -524,8 +715,9 @@ export function useMnemeWorkspace() {
     clearDocumentPreview,
     deleteActiveChatSession,
     deleteDocument,
+    dismissBanner,
     documentActionStatus,
-    documentPreview,
+    ...documentWorkspace,
     documents,
     filteredChatSessions,
     graphData,
@@ -550,6 +742,8 @@ export function useMnemeWorkspace() {
     profile,
     profileEvidence,
     readiness,
+    register,
+    registerForm,
     rebuildActiveGraph,
     rebuildActiveMemory,
     refreshAdvice,
@@ -561,6 +755,7 @@ export function useMnemeWorkspace() {
     selectChatSession,
     sendChatMessage,
     serviceHealth,
+    setAuthMode,
     setDefaultAiModelConfig,
     showDocumentationStatus,
     showSupportStatus,
@@ -572,6 +767,7 @@ export function useMnemeWorkspace() {
     uploadInputKey,
     user,
     view,
+    viewLoadStates,
     workspaceCommandTab,
     growth,
   };

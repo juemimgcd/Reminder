@@ -9,6 +9,7 @@ const cssSource = readFileSync(path.join(root, 'src', 'index.css'), 'utf8');
 const apiSource = readFileSync(path.join(root, 'src', 'lib', 'api.ts'), 'utf8');
 const previewApiSource = readFileSync(path.join(root, 'src', 'lib', 'previewApi.ts'), 'utf8');
 const workspaceSource = readFileSync(path.join(root, 'src', 'composables', 'useMnemeWorkspace.ts'), 'utf8');
+const graphInteractionSource = readFileSync(path.join(root, 'src', 'composables', 'useGraphInteraction.ts'), 'utf8');
 const messagesSource = readFileSync(path.join(root, 'src', 'i18n', 'messages.ts'), 'utf8');
 
 function collectVueSources(directory) {
@@ -27,7 +28,7 @@ for (const testId of [
   'data-testid="sanctuary-topbar"',
   'data-testid="obsidian-editor-pane"',
   'data-testid="stitch-dashboard-grid"',
-  'data-testid="stitch-research-vault-layout"',
+  'data-testid="document-workspace"',
   'data-testid="stitch-graph-layout"',
   'data-testid="stitch-ai-laboratory-layout"',
   'data-testid="stitch-settings-layout"',
@@ -56,11 +57,9 @@ assert.ok(cssSource.includes('prefers-reduced-motion'), 'Expected reduced-motion
 assert.ok(!vueSource.includes('bg-[#070708]') && !vueSource.includes('bg-[#08080a]'), 'Expected views to use semantic surfaces');
 
 for (const referenceText of [
-  'Machine Learning',
-  'Neural Networks',
   'All Nodes',
   'Orphans',
-  'Long press to preview',
+  'Click a node to preview',
   'Backlinks',
   'Laboratory Sessions',
   'Referenced Context Nodes',
@@ -71,7 +70,9 @@ for (const referenceText of [
   assert.ok(localizedSource.includes(referenceText), `Expected polished workspace reference text: ${referenceText}`);
 }
 
-assert.ok(workspaceSource.includes('ref<WorkspaceView>("graph")'), 'Expected preview/default workspace to open the graph');
+assert.ok(!vueSource.includes('Machine Learning') && !vueSource.includes('Neural Networks'), 'Expected graph rails to render API-backed documents without placeholder folders');
+
+assert.ok(workspaceSource.includes('ref<WorkspaceView>(IS_PREVIEW_MODE ? "graph" : "dashboard")'), 'Expected preview to open Graph while authenticated production starts on the lightweight dashboard');
 assert.ok(previewApiSource.includes('import.meta.env.MODE === "preview"'), 'Expected explicit preview mode');
 assert.ok(previewApiSource.includes('window.location.hash'), 'Expected hash preview detection');
 
@@ -82,3 +83,10 @@ for (const apiMethod of ['uploadDocument', 'indexDocument', 'deleteDocument', 't
 for (const workspaceMethod of ['showDocumentationStatus', 'showSupportStatus', 'uploadFile', 'indexDocument', 'deleteDocument', 'runGraphRag', 'deleteActiveChatSession', 'testAiModelConfig', 'setDefaultAiModelConfig', 'updateActiveModelContextWindow']) {
   assert.ok(workspaceSource.includes(workspaceMethod), `Expected workspace method ${workspaceMethod}`);
 }
+
+for (const forceApi of ['forceSimulation', 'forceLink', 'forceManyBody', 'forceCollide', 'forceCenter']) {
+  assert.ok(graphInteractionSource.includes(forceApi), `Expected graph physics to use ${forceApi}`);
+}
+assert.ok(graphInteractionSource.includes('requestAnimationFrame'), 'Expected graph positions to be frame-batched');
+assert.ok(graphInteractionSource.includes('simulation.stop()'), 'Expected force timers to stop during teardown');
+assert.ok(graphInteractionSource.includes('visibilitychange'), 'Expected hidden tabs to pause graph physics');
