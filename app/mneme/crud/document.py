@@ -15,7 +15,13 @@ async def create_document(
         file_path: str,
         file_type: str,
         file_size: int,
-        status: str = "uploaded"
+        status: str = "uploaded",
+        content_sha256: str | None = None,
+        normalized_file_name: str = "",
+        version_group_id: str = "",
+        version_number: int = 1,
+        previous_document_id: str | None = None,
+        duplicate_of_document_id: str | None = None,
 ) -> Document:
     document = Document(
         id=document_id,
@@ -27,7 +33,13 @@ async def create_document(
         file_path=file_path,
         file_type=file_type,
         file_size=file_size,
-        status=status
+        status=status,
+        content_sha256=content_sha256,
+        normalized_file_name=normalized_file_name,
+        version_group_id=version_group_id,
+        version_number=version_number,
+        previous_document_id=previous_document_id,
+        duplicate_of_document_id=duplicate_of_document_id,
     )
 
     db.add(document)
@@ -115,3 +127,55 @@ async def move_document_to_folder(
     document.folder_pk = folder_pk
     await db.flush()
     return document
+
+
+async def find_canonical_by_hash(
+        db: AsyncSession,
+        *,
+        knowledge_base_pk: int,
+        content_sha256: str,
+) -> Document | None:
+    return await db.scalar(
+        select(Document)
+        .where(
+            Document.knowledge_base_pk == knowledge_base_pk,
+            Document.content_sha256 == content_sha256,
+            Document.duplicate_of_document_id.is_(None),
+        )
+        .order_by(Document.pk.asc())
+        .limit(1)
+    )
+
+
+async def find_latest_version(
+        db: AsyncSession,
+        *,
+        knowledge_base_pk: int,
+        folder_pk: int,
+        normalized_file_name: str,
+) -> Document | None:
+    return await db.scalar(
+        select(Document)
+        .where(
+            Document.knowledge_base_pk == knowledge_base_pk,
+            Document.folder_pk == folder_pk,
+            Document.normalized_file_name == normalized_file_name,
+        )
+        .order_by(Document.version_number.desc(), Document.pk.desc())
+        .limit(1)
+    )
+
+
+async def list_unhashed_documents(
+        db: AsyncSession,
+        *,
+        after_pk: int = 0,
+        limit: int = 100,
+) -> list[Document]:
+    result = await db.execute(
+        select(Document)
+        .where(Document.pk > after_pk, Document.content_sha256.is_(None))
+        .order_by(Document.pk.asc())
+        .limit(limit)
+    )
+    return list(result.scalars().all())

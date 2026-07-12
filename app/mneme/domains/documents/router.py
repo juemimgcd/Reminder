@@ -1,7 +1,4 @@
-from datetime import datetime
 from pathlib import Path
-import shutil
-import uuid
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from sqlalchemy import select
@@ -10,8 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.mneme.conf.config import settings
 from app.mneme.conf.database import get_database, get_write_database
 from app.mneme.conf.logging import app_logger
-from app.mneme.crud.document import create_document, get_document_by_id, list_documents
-from app.mneme.crud.document_folder import ensure_root_folder
+from app.mneme.crud.document import get_document_by_id, list_documents
+from app.mneme.crud.document_folder import ensure_root_folder, get_folder_by_id
 from app.mneme.crud.knowledge_base import get_knowledge_base_by_id, get_or_create_default_knowledge_base
 from app.mneme.infra.rate_limit import enforce_fixed_window_rate_limit
 from app.mneme.infra.task_queue import enqueue_index_document_task
@@ -26,10 +23,10 @@ from app.mneme.schemas.document import (
     DocumentPreviewChunk,
     DocumentPreviewData,
     DocumentPreviewMemoryEntry,
-    DocumentUploadData,
 )
 from app.mneme.domains.documents.service import submit_document_index_task
 from app.mneme.domains.documents.resources import delete_document_resources
+from app.mneme.domains.documents.upload_service import store_uploaded_document
 from app.mneme.domains.graph.projection import sync_document_projection
 from app.mneme.utils.auth import get_current_user
 from app.mneme.utils.exceptions import BusinessException
@@ -37,16 +34,6 @@ from app.mneme.utils.response import success_response
 
 
 router = APIRouter(prefix="/kb/documents", tags=["documents"])
-
-
-async def build_document_id() -> str:
-    return f"doc_{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:6]}"
-
-
-async def ensure_storage_dir() -> Path:
-    raw_dir = settings.RAW_FILE_DIR
-    raw_dir.mkdir(parents=True, exist_ok=True)
-    return raw_dir
 
 
 def ensure_user_context_matches(current_user: User, raw_user_id: int | None) -> int:
@@ -70,6 +57,7 @@ def summarize_document_preview(chunks: list[Chunk], memory_entries: list[MemoryE
 async def upload_document(
         user_id: int | None = Form(default=None),
         knowledge_base_id: str | None = Form(default=None),
+        folder_id: str | None = Form(default=None),
         file: UploadFile = File(...),
         current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_write_database),
@@ -102,82 +90,52 @@ async def upload_document(
         knowledge_base_id=knowledge_base.id,
         knowledge_base_pk=knowledge_base.pk,
     )
+    folder = root
+    if folder_id is not None:
+        folder = await get_folder_by_id(db, folder_id=folder_id, user_id=resolved_user_id)
+        if folder is None or folder.knowledge_base_pk != knowledge_base.pk:
+            raise BusinessException(message="folder not found in knowledge base", code=4045, status_code=404)
 
-    if not file.filename:
-        raise BusinessException(message="uploaded file name cannot be empty", code=4001)
-
-    file_name = Path(file.filename).name
-    file_ext = Path(file_name).suffix.lower()
-
-    if file_ext not in settings.ALLOWED_EXTENSIONS:
-        allowed = ", ".join(sorted(settings.ALLOWED_EXTENSIONS))
-        raise BusinessException(message=f"unsupported file type, allowed: {allowed}")
-
-    file_size = file.size
-    if file_size is None:
-        file.file.seek(0, 2)
-        file_size = file.file.tell()
-        file.file.seek(0)
-
-    if file_size == 0:
-        raise BusinessException(message="uploaded file cannot be empty", code=4003)
-
-    if file_size > settings.MAX_FILE_SIZE:
-        raise BusinessException(message=f"The uploaded size of the file must be less than {settings.MAX_FILE_SIZE}")
-
-    document_id = await build_document_id()
-    raw_dir = await ensure_storage_dir()
-    safe_name = file_name.replace(" ", "_")
-    save_path = raw_dir / f"{document_id}__{safe_name}"
-
+    # Legacy uploads with no folder_id continue to resolve folder_pk=root.pk.
+    upload_data = await store_uploaded_document(
+        db,
+        file=file,
+        current_user=current_user,
+        knowledge_base=knowledge_base,
+        folder=folder,
+    )
+    document = None
     try:
-        with save_path.open("wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-
-        document = await create_document(
-            db,
-            document_id=document_id,
-            user_id=resolved_user_id,
-            knowledge_base_id=knowledge_base.id,
-            knowledge_base_pk=knowledge_base.pk,
-            folder_pk=root.pk,
-            file_name=file_name,
-            file_path=str(save_path),
-            file_type=file_ext.lstrip("."),
-            file_size=file_size,
-            status="uploaded",
-        )
-        await sync_document_projection(
-            user=current_user,
-            knowledge_base=knowledge_base,
-            document=document,
-        )
+        if upload_data.disposition == "created":
+            document = await get_document_by_id(
+                db,
+                upload_data.document_id,
+                user_id=resolved_user_id,
+                knowledge_base_pk=knowledge_base.pk,
+            )
+            if document is None:
+                raise RuntimeError("created document could not be resolved")
+            await sync_document_projection(
+                user=current_user,
+                knowledge_base=knowledge_base,
+                document=document,
+            )
     except Exception as exc:
-        if save_path.exists():
-            save_path.unlink()
+        if document is not None:
+            Path(document.file_path).unlink(missing_ok=True)
         app_logger.bind(module="documents_router").exception(
-            f"upload failed user_id={resolved_user_id} knowledge_base_id={knowledge_base.id} "
-            f"filename={file_name} error={exc}"
+            f"upload projection failed user_id={resolved_user_id} knowledge_base_id={knowledge_base.id} "
+            f"document_id={upload_data.document_id} error={exc}"
         )
-        raise BusinessException(message=f"upload failed: {exc}", code=5001, status_code=500)
+        raise BusinessException(message="upload projection failed", code=5001, status_code=500) from exc
 
     app_logger.bind(module="documents_router").info(
-        f"upload success document_id={document.id} user_id={document.user_id} "
-        f"knowledge_base_id={document.knowledge_base_id} file_type={document.file_type} "
-        f"file_size={document.file_size}"
+        f"upload success disposition={upload_data.disposition} document_id={upload_data.document_id} "
+        f"user_id={resolved_user_id} knowledge_base_id={knowledge_base.id}"
     )
-
     return success_response(
-        data=DocumentUploadData(
-            document_id=document.id,
-            user_id=document.user_id,
-            knowledge_base_id=document.knowledge_base_id,
-            file_name=document.file_name,
-            file_type=document.file_type,
-            file_size=document.file_size,
-            status=document.status,
-        ),
-        message="upload success",
+        data=upload_data,
+        message="upload success" if upload_data.disposition == "created" else "file already exists",
     )
 
 

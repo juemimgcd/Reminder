@@ -1,16 +1,23 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
 class DocumentUploadData(BaseModel):
+    disposition: Literal["created", "duplicate"]
     document_id: str = Field(..., description="Document ID after upload")
+    canonical_document_id: str
     user_id: int = Field(..., description="Owner user ID")
     knowledge_base_id: str | None = Field(..., description="Knowledge base ID")
+    folder_id: str
+    folder_path: list[str]
     file_name: str
     file_type: str
     file_size: int
     status: str
+    version_group_id: str
+    version_number: int
 
 
 class DocumentListItem(BaseModel):
