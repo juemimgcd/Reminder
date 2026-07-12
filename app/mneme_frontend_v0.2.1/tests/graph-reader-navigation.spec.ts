@@ -19,6 +19,57 @@ test('graph focus keeps one-hop neighbors visible and canvas clears focus', asyn
   await expect(selected).toHaveAttribute('data-focus-state', 'normal');
 });
 
+test('pending single-click intent is cancelled by canvas clear and filters', async ({ page }) => {
+  const node = page.locator('[data-node-id="node-doc-zettel"]');
+  await node.dispatchEvent('pointerdown', { pointerId: 31, clientX: 500, clientY: 400 });
+  const canvas = page.locator('svg[aria-label="Knowledge graph"]');
+  await canvas.dispatchEvent('pointerdown', { pointerId: 32 });
+  await page.waitForTimeout(320);
+  await expect(page.getByTestId('graph-document-preview-panel')).toHaveCount(0);
+
+  await node.dispatchEvent('pointerdown', { pointerId: 33, clientX: 500, clientY: 400 });
+  await page.getByRole('button', { name: 'Tags' }).click();
+  await page.waitForTimeout(320);
+  await expect(page.getByTestId('graph-document-preview-panel')).toHaveCount(0);
+});
+
+test('pending single-click intent is cancelled on view unmount', async ({ page }) => {
+  await page.locator('[data-node-id="node-doc-zettel"]').dispatchEvent('pointerdown', { pointerId: 41, clientX: 500, clientY: 400 });
+  const desktopVault = page.getByTestId('activity-bar').getByRole('button', { name: 'Research Vault' });
+  const vaultButton = await desktopVault.isVisible()
+    ? desktopVault
+    : page.getByTestId('mobile-navigation').getByRole('button', { name: 'Research Vault' });
+  await vaultButton.click();
+  await page.waitForTimeout(320);
+  await expect(page.getByTestId('graph-document-preview-panel')).toHaveCount(0);
+});
+
+test('late preview responses cannot overwrite the newer graph selection', async ({ page }) => {
+  await page.evaluate(async () => {
+    const importModule = (path: string) => import(/* @vite-ignore */ path);
+    const { api } = await importModule('/src/lib/api.ts');
+    const original = api.documentPreview.bind(api);
+    api.documentPreview = async (token: string, documentId: string) => {
+      if (documentId === 'doc-zettelkasten') await new Promise((resolve) => window.setTimeout(resolve, 650));
+      return original(token, documentId);
+    };
+  });
+  await page.locator('[data-node-id="node-doc-zettel"]').click();
+  await page.waitForTimeout(280);
+  await page.locator('[data-node-id="node-doc-graph"]').click();
+  await expect(page.getByTestId('graph-document-preview-panel')).toContainText('memory-graph-design.pdf');
+  await page.waitForTimeout(700);
+  await expect(page.getByTestId('graph-document-preview-panel')).toContainText('memory-graph-design.pdf');
+  await expect(page.getByTestId('graph-document-preview-panel')).not.toContainText('zettelkasten-principles.md');
+});
+
+test('a newer graph selection owns the delayed preview intent', async ({ page }) => {
+  await page.locator('[data-node-id="node-doc-zettel"]').dispatchEvent('pointerdown', { pointerId: 51, clientX: 500, clientY: 400 });
+  await page.locator('[data-node-id="node-doc-graph"]').dispatchEvent('pointerdown', { pointerId: 52, clientX: 650, clientY: 400 });
+  await expect(page.getByTestId('graph-document-preview-panel')).toContainText('memory-graph-design.pdf');
+  await expect(page.getByTestId('graph-document-preview-panel')).not.toContainText('zettelkasten-principles.md');
+});
+
 test('double-click opens a document by entity id in the unified reader', async ({ page }) => {
   await expect(page.getByTestId('graph-output-workspace')).toHaveAttribute('data-simulation-phase', 'settled');
   await page.locator('[data-node-id="node-doc-graph"] circle').dblclick();

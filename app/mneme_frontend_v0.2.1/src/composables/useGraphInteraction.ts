@@ -212,19 +212,20 @@ export function useGraphInteraction(
     return priorityLabelIds(zoom).has(nodeId);
   }
 
-  function setVisibleLabelIds(next: Set<string>) {
+  function setVisibleLabelIds(next: Set<string>, applyCollision = true) {
     if (next.size === visibleLabelIds.size && [...next].every((id) => visibleLabelIds.has(id))) return;
     visibleLabelIds = new Set(next);
     collisionForce?.radius((node) => {
       const labelAllowance = visibleLabelIds.has(node.id) ? Math.min(44, node.label.length * 2.4) : 0;
       return nodeRadius(node) + 9 + labelAllowance;
     });
-    if (!simulation || simulationPhase.value === "settled" || simulationPhase.value === "reduced") return;
+    if (!applyCollision) return;
+    if (!simulation) return;
     if (reducedMotionActive) {
       settleReducedMotion(0.12);
       return;
     }
-    simulation.alpha(Math.max(simulation.alpha(), 0.12)).restart();
+    simulation.alphaTarget(0).alpha(Math.max(simulation.alpha(), 0.12)).restart();
     simulationPhase.value = "running";
   }
 

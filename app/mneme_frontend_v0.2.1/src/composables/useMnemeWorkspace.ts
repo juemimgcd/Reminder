@@ -85,6 +85,7 @@ export function useMnemeWorkspace() {
   const aiModelActionStatus = ref("");
   const chatSessionFilter = ref("");
   const indexTaskMonitors = new Map<string, AbortController>();
+  let documentPreviewGeneration = 0;
 
   const loginForm = ref({ username: "", password: "" });
   const registerForm = ref({ username: "", displayName: "", password: "", confirmPassword: "" });
@@ -581,14 +582,19 @@ export function useMnemeWorkspace() {
   }
 
   async function loadDocumentPreview(documentId: string) {
+    const generation = ++documentPreviewGeneration;
     if (!token.value || !documentId) {
-      documentWorkspace.documentPreview.value = null;
+      if (generation === documentPreviewGeneration) documentWorkspace.documentPreview.value = null;
       return;
     }
-    documentWorkspace.documentPreview.value = await api.documentPreview(token.value, documentId);
+    const requestToken = token.value;
+    const preview = await api.documentPreview(requestToken, documentId);
+    if (generation !== documentPreviewGeneration || token.value !== requestToken) return;
+    documentWorkspace.documentPreview.value = preview;
   }
 
   function clearDocumentPreview() {
+    documentPreviewGeneration += 1;
     documentWorkspace.documentPreview.value = null;
   }
 

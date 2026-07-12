@@ -99,6 +99,55 @@ test('drag reheats the graph and release allows it to settle', async ({ page }) 
   await expect(graph).toHaveAttribute('data-simulation-phase', 'settled', { timeout: 5000 });
 });
 
+test('sub-threshold pointer jitter never moves or pins a settled node', async ({ page }) => {
+  await page.goto('/?preview=1', { waitUntil: 'domcontentloaded' });
+  const graph = page.getByTestId('graph-output-workspace');
+  const node = page.locator('[data-node-id="node-doc-graph"]');
+  await expect(graph).toHaveAttribute('data-simulation-phase', 'settled');
+  const before = await coordinate(node);
+  const box = await node.boundingBox();
+  await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box!.x + box!.width / 2 + 3, box!.y + box!.height / 2 + 2);
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+  expect(await coordinate(node)).toEqual(before);
+  await expect(graph).toHaveAttribute('data-simulation-phase', 'settled');
+});
+
+test('label collision reheats once per changed set and repeated sets do not restart', async ({ page }) => {
+  await page.goto('/?preview=1', { waitUntil: 'domcontentloaded' });
+  const graph = page.getByTestId('graph-output-workspace');
+  await expect(graph).toHaveAttribute('data-simulation-phase', 'settled');
+
+  await page.getByRole('button', { name: 'Zoom in graph' }).click();
+  await expect(graph).toHaveAttribute('data-simulation-phase', 'running');
+  await expect(graph).toHaveAttribute('data-simulation-phase', 'settled');
+
+  await page.getByRole('button', { name: 'Zoom in graph' }).click();
+  await page.getByRole('button', { name: 'Zoom in graph' }).click();
+  await expect(graph).toHaveAttribute('data-simulation-phase', 'running');
+  await expect(graph).toHaveAttribute('data-simulation-phase', 'settled');
+  await page.getByRole('button', { name: 'Zoom in graph' }).click();
+  await page.waitForTimeout(120);
+  await expect(graph).toHaveAttribute('data-simulation-phase', 'settled');
+});
+
+test('reduced motion applies changed label collision with finite synchronous ticks', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/?preview=1', { waitUntil: 'domcontentloaded' });
+  const graph = page.getByTestId('graph-output-workspace');
+  const node = page.locator('[data-node-id="node-memory-context"]');
+  await expect(graph).toHaveAttribute('data-simulation-phase', 'reduced');
+  const before = await coordinate(node);
+  await page.getByRole('button', { name: 'Zoom in graph' }).click();
+  const after = await coordinate(node);
+  expect(after).not.toEqual(before);
+  await expect(graph).toHaveAttribute('data-simulation-phase', 'reduced');
+  await page.waitForTimeout(250);
+  expect(await coordinate(node)).toEqual(after);
+});
+
 test('filters preserve settled positions and restart reheats', async ({ page }) => {
   await page.goto('/?preview=1', { waitUntil: 'domcontentloaded' });
   const graph = page.getByTestId('graph-output-workspace');

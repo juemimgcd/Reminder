@@ -20,6 +20,35 @@ test("opening a recent file reaches the unified reader", async ({ page }) => {
   );
 });
 
+test("legacy document previews publish only the latest request and clear invalidates late responses", async ({ page }) => {
+  await page.goto("/?preview=1", { waitUntil: "domcontentloaded" });
+  const result = await page.evaluate(async () => {
+    const importModule = (path: string) => import(/* @vite-ignore */ path);
+    const { api } = await importModule("/src/lib/api.ts");
+    const { useMnemeWorkspace } = await importModule("/src/composables/useMnemeWorkspace.ts");
+    const resolvers = new Map<string, (value: unknown) => void>();
+    api.documentPreview = (_token: string, documentId: string) => new Promise((resolve) => resolvers.set(documentId, resolve));
+    const workspace = useMnemeWorkspace();
+    const preview = (id: string) => ({ document_id: id, knowledge_base_id: "kb-demo-research", file_name: `${id}.md`, file_type: "md", status: "indexed", summary: id, chunks: [], memory_entries: [] });
+
+    const requestA = workspace.loadDocumentPreview("doc-a");
+    const requestB = workspace.loadDocumentPreview("doc-b");
+    resolvers.get("doc-b")!(preview("doc-b"));
+    await requestB;
+    resolvers.get("doc-a")!(preview("doc-a"));
+    await requestA;
+    const afterRace = workspace.documentPreview.value?.document_id ?? null;
+
+    const requestC = workspace.loadDocumentPreview("doc-c");
+    workspace.clearDocumentPreview();
+    resolvers.get("doc-c")!(preview("doc-c"));
+    await requestC;
+    return { afterRace, afterClear: workspace.documentPreview.value?.document_id ?? null };
+  });
+
+  expect(result).toEqual({ afterRace: "doc-b", afterClear: null });
+});
+
 test("duplicate upload exposes the canonical open action", async ({ page }) => {
   await page.goto("/?preview=1", { waitUntil: "domcontentloaded" });
   const recentFiles = page.getByTestId("sidebar-group-files").getByRole("button");

@@ -19,6 +19,9 @@ let dragState: { nodeId: string; pointerId: number; startX: number; startY: numb
 let suppressOpenUntil = 0;
 let lastNodePointerDown: { nodeId: string; at: number } | null = null;
 let selectionTimer: number | null = null;
+let selectionIntentGeneration = 0;
+let pendingSelectionNodeId: string | null = null;
+let preservePositionsForLabelUpdate = false;
 
 const graphNodes = computed(() => props.workspace.graphData.value?.nodes ?? []);
 const graphEdges = computed(() => props.workspace.graphData.value?.edges ?? []);
@@ -31,9 +34,17 @@ function nodeRadius(node: GraphNodeData) { return interaction.nodeRadius(node); 
 function nodeFill(node: GraphNodeData) { return node.depth === 0 ? "var(--accent-strong)" : node.node_type === "memory" ? "var(--accent)" : "var(--text-tertiary)"; }
 
 async function selectGraphNode(node: GraphNodeData) {
+  cancelPendingSelection();
   interaction.selectNode(node);
   if (node.node_type === "document") await props.workspace.loadDocumentPreview(node.entity_id);
   else props.workspace.clearDocumentPreview();
+}
+
+function cancelPendingSelection() {
+  selectionIntentGeneration += 1;
+  pendingSelectionNodeId = null;
+  if (selectionTimer !== null) window.clearTimeout(selectionTimer);
+  selectionTimer = null;
 }
 
 function startGraphNodeDrag(node: GraphNodeData, event: PointerEvent) {
@@ -42,32 +53,37 @@ function startGraphNodeDrag(node: GraphNodeData, event: PointerEvent) {
   const isDoubleActivation = lastNodePointerDown?.nodeId === node.id && now - lastNodePointerDown.at < 360;
   lastNodePointerDown = { nodeId: node.id, at: now };
   if (isDoubleActivation) {
-    if (selectionTimer !== null) window.clearTimeout(selectionTimer);
-    selectionTimer = null;
+    cancelPendingSelection();
     openGraphDocument(node);
     return;
   }
   dragState = { nodeId: node.id, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, moved: false, started: false };
-  if (selectionTimer !== null) window.clearTimeout(selectionTimer);
+  cancelPendingSelection();
+  const intentGeneration = selectionIntentGeneration;
+  pendingSelectionNodeId = node.id;
   selectionTimer = window.setTimeout(() => {
     selectionTimer = null;
+    if (
+      intentGeneration !== selectionIntentGeneration
+      || pendingSelectionNodeId !== node.id
+      || !interaction.visibleNodes.value.some((item) => item.id === node.id)
+    ) return;
+    pendingSelectionNodeId = null;
     void selectGraphNode(node);
   }, 240);
 }
 
 function moveGraphNodeDrag(event: PointerEvent) {
   if (!dragState || !graphSvg.value) return;
-  if (Math.hypot(event.clientX - dragState.startX, event.clientY - dragState.startY) > 6) {
-    dragState.moved = true;
-    if (!dragState.started) {
-      if (selectionTimer !== null) window.clearTimeout(selectionTimer);
-      selectionTimer = null;
-      const draggedNode = graphNodes.value.find((node) => node.id === dragState?.nodeId);
-      if (draggedNode) void selectGraphNode(draggedNode);
-      graphSvg.value.setPointerCapture(event.pointerId);
-      interaction.startDrag(dragState.nodeId);
-      dragState.started = true;
-    }
+  if (Math.hypot(event.clientX - dragState.startX, event.clientY - dragState.startY) <= 6) return;
+  dragState.moved = true;
+  if (!dragState.started) {
+    cancelPendingSelection();
+    const draggedNode = graphNodes.value.find((node) => node.id === dragState?.nodeId);
+    if (draggedNode) void selectGraphNode(draggedNode);
+    graphSvg.value.setPointerCapture(event.pointerId);
+    interaction.startDrag(dragState.nodeId);
+    dragState.started = true;
   }
   const point = graphSvg.value.createSVGPoint();
   point.x = event.clientX;
@@ -89,7 +105,27 @@ function clearGraphSelection(event: PointerEvent) {
   if (event.target === graphSvg.value) hideGraphDocumentPreview();
 }
 
-function hideGraphDocumentPreview() { interaction.selectNode(null); props.workspace.clearDocumentPreview(); }
+function hideGraphDocumentPreview() {
+  cancelPendingSelection();
+  interaction.selectNode(null);
+  props.workspace.clearDocumentPreview();
+}
+function setGraphFilter(filter: "all" | "tags" | "orphans") {
+  cancelPendingSelection();
+  preservePositionsForLabelUpdate = true;
+  interaction.setActiveFilter(filter);
+  if (!interaction.selectedNode.value) props.workspace.clearDocumentPreview();
+}
+function toggleGraphNodeType(nodeType: string) {
+  cancelPendingSelection();
+  preservePositionsForLabelUpdate = true;
+  interaction.toggleNodeType(nodeType);
+  const selectedId = interaction.selectedNode.value?.id;
+  if (selectedId && !interaction.visibleNodes.value.some((node) => node.id === selectedId)) {
+    interaction.selectNode(null);
+  }
+  if (!interaction.selectedNode.value) props.workspace.clearDocumentPreview();
+}
 function setZoom(value: number) {
   zoom.value = Math.min(1.8, Math.max(0.65, value));
   const width = 760 / zoom.value;
@@ -120,16 +156,21 @@ function openDocumentFromRail(documentId: string) {
 }
 
 watchEffect(() => {
+  if (pendingSelectionNodeId && !interaction.visibleNodes.value.some((node) => node.id === pendingSelectionNodeId)) {
+    cancelPendingSelection();
+  }
   const next = new Set(
     positionedNodes.value
       .filter((node) => interaction.labelVisible(node.id, zoom.value, hoveredNodeId.value))
       .map((node) => node.id),
   );
-  interaction.setVisibleLabelIds(next);
+  interaction.setVisibleLabelIds(next, !preservePositionsForLabelUpdate);
+  preservePositionsForLabelUpdate = false;
 });
 
 onBeforeUnmount(() => {
-  if (selectionTimer !== null) window.clearTimeout(selectionTimer);
+  cancelPendingSelection();
+  props.workspace.clearDocumentPreview();
 });
 
 function nodeTypeLabel(nodeType: string) {
@@ -156,16 +197,16 @@ function nodeTypeLabel(nodeType: string) {
           <div class="graph-toolbar-controls">
             <form @submit.prevent="workspace.runGraphRag"><Search /><input v-model="workspace.graphRagQuestion.value" :placeholder="t('graph.search')" /><button aria-label="Run GraphRAG"><Send /></button></form>
             <div class="graph-tabs">
-              <button :class="{ active: interaction.activeFilter.value === 'all' }" :aria-pressed="interaction.activeFilter.value === 'all'" @click="interaction.setActiveFilter('all')">{{ t("graph.allNodes") }}</button>
-              <button :class="{ active: interaction.activeFilter.value === 'tags' }" :aria-pressed="interaction.activeFilter.value === 'tags'" @click="interaction.setActiveFilter('tags')">{{ t("graph.tags") }}</button>
-              <button :class="{ active: interaction.activeFilter.value === 'orphans' }" :aria-pressed="interaction.activeFilter.value === 'orphans'" @click="interaction.setActiveFilter('orphans')">{{ t("graph.orphans") }}</button>
+              <button :class="{ active: interaction.activeFilter.value === 'all' }" :aria-pressed="interaction.activeFilter.value === 'all'" @click="setGraphFilter('all')">{{ t("graph.allNodes") }}</button>
+              <button :class="{ active: interaction.activeFilter.value === 'tags' }" :aria-pressed="interaction.activeFilter.value === 'tags'" @click="setGraphFilter('tags')">{{ t("graph.tags") }}</button>
+              <button :class="{ active: interaction.activeFilter.value === 'orphans' }" :aria-pressed="interaction.activeFilter.value === 'orphans'" @click="setGraphFilter('orphans')">{{ t("graph.orphans") }}</button>
               <button aria-label="Graph filters" :aria-expanded="filtersOpen" @click="filtersOpen = !filtersOpen"><SlidersHorizontal /></button>
             </div>
           </div>
         </div>
         <div v-if="filtersOpen" data-testid="graph-node-type-filters" class="graph-filter-panel">
           <small>{{ t("graph.nodeTypes") }}</small>
-          <button v-for="nodeType in interaction.nodeTypes.value" :key="nodeType" :class="{ active: interaction.isNodeTypeEnabled(nodeType) }" :aria-pressed="interaction.isNodeTypeEnabled(nodeType)" @click="interaction.toggleNodeType(nodeType)">{{ nodeTypeLabel(nodeType) }}</button>
+          <button v-for="nodeType in interaction.nodeTypes.value" :key="nodeType" :class="{ active: interaction.isNodeTypeEnabled(nodeType) }" :aria-pressed="interaction.isNodeTypeEnabled(nodeType)" @click="toggleGraphNodeType(nodeType)">{{ nodeTypeLabel(nodeType) }}</button>
         </div>
         <p v-if="workspace.graphRagStatus.value" class="graph-status">{{ workspace.graphRagStatus.value }}</p>
 
