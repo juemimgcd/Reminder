@@ -54,6 +54,25 @@ async def list_documents(
         *,
         user_id: int | None = None,
         knowledge_base_pk: int | None = None,
+) -> list[Document]:
+    sql = select(Document)
+
+    if user_id:
+        sql = sql.where(Document.user_id == user_id)
+
+    if knowledge_base_pk:
+        sql = sql.where(Document.knowledge_base_pk == knowledge_base_pk)
+
+    sql = sql.order_by(Document.created_at.desc())
+    res = await db.execute(sql)
+    return list(res.scalars().all())
+
+
+async def list_document_workspace_rows(
+        db: AsyncSession,
+        *,
+        user_id: int | None = None,
+        knowledge_base_pk: int | None = None,
 ) -> list[tuple[Document, str]]:
     sql = select(Document, DocumentFolder.id).join(
         DocumentFolder,

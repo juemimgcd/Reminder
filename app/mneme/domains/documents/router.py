@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.mneme.conf.config import settings
 from app.mneme.conf.database import get_database, get_write_database
 from app.mneme.conf.logging import app_logger
-from app.mneme.crud.document import get_document_by_id, list_documents
+from app.mneme.crud.document import get_document_by_id, list_document_workspace_rows
 from app.mneme.crud.document_folder import ensure_root_folder, get_folder_by_id, get_folder_by_pk
 from app.mneme.crud.knowledge_base import get_knowledge_base_by_id, get_or_create_default_knowledge_base
 from app.mneme.infra.rate_limit import enforce_fixed_window_rate_limit
@@ -181,7 +181,7 @@ async def get_document_list(
         if knowledge_base.user_id != resolved_user_id:
             raise BusinessException(message="knowledge base does not belong to current user", code=4007)
 
-    documents = await list_documents(
+    documents = await list_document_workspace_rows(
         db,
         user_id=resolved_user_id,
         knowledge_base_pk=knowledge_base.pk if knowledge_base else None,
