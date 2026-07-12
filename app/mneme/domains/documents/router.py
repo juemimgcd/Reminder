@@ -1,6 +1,8 @@
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,11 +10,12 @@ from app.mneme.conf.config import settings
 from app.mneme.conf.database import get_database, get_write_database
 from app.mneme.conf.logging import app_logger
 from app.mneme.crud.document import get_document_by_id, list_documents
-from app.mneme.crud.document_folder import ensure_root_folder, get_folder_by_id
+from app.mneme.crud.document_folder import ensure_root_folder, get_folder_by_id, get_folder_by_pk
 from app.mneme.crud.knowledge_base import get_knowledge_base_by_id, get_or_create_default_knowledge_base
 from app.mneme.infra.rate_limit import enforce_fixed_window_rate_limit
 from app.mneme.infra.task_queue import enqueue_index_document_task
 from app.mneme.models.chunk import Chunk
+from app.mneme.models.document import Document
 from app.mneme.models.memory import MemoryEntry
 from app.mneme.models.user import User
 from app.mneme.schemas.document import (
@@ -23,6 +26,14 @@ from app.mneme.schemas.document import (
     DocumentPreviewChunk,
     DocumentPreviewData,
     DocumentPreviewMemoryEntry,
+    DocumentVersionData,
+    DocumentVersionListData,
+)
+from app.mneme.domains.documents.content_service import (
+    build_document_content,
+    list_document_versions,
+    require_source_file,
+    sanitize_download_name,
 )
 from app.mneme.domains.documents.service import submit_document_index_task
 from app.mneme.domains.documents.resources import delete_document_resources
@@ -51,6 +62,17 @@ def summarize_document_preview(chunks: list[Chunk], memory_entries: list[MemoryE
         if chunk.content:
             return chunk.content[:360]
     return "No indexed preview content is available for this document yet."
+
+
+async def require_owned_document(db: AsyncSession, document_id: str, user_id: int) -> Document:
+    document = await get_document_by_id(db, document_id=document_id, user_id=user_id)
+    if document is None:
+        raise BusinessException(
+            message="document not found or not owned by current user",
+            code=4044,
+            status_code=404,
+        )
+    return document
 
 
 @router.post("/upload")
@@ -271,6 +293,70 @@ async def preview_document_api(
             ],
         )
     )
+
+
+@router.get("/{document_id}/content")
+async def document_content_api(
+        document_id: str,
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_database),
+):
+    document = await require_owned_document(db, document_id, current_user.id)
+    folder = await get_folder_by_pk(db, folder_pk=document.folder_pk, user_id=current_user.id)
+    if folder is None:
+        raise BusinessException(
+            message="document folder is unavailable",
+            code=4045,
+            status_code=404,
+        )
+    return success_response(
+        data=await build_document_content(document, folder_id=folder.id)
+    )
+
+
+@router.get("/{document_id}/raw")
+async def document_raw_api(
+        document_id: str,
+        disposition: Literal["inline", "attachment"] = Query(default="inline"),
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_database),
+):
+    document = await require_owned_document(db, document_id, current_user.id)
+    source_path = require_source_file(document)
+    is_pdf = document.file_type.strip().lower().lstrip(".") == "pdf"
+    effective_disposition = "inline" if is_pdf and disposition == "inline" else "attachment"
+    media_type = "application/pdf" if is_pdf else "application/octet-stream"
+    return FileResponse(
+        source_path,
+        media_type=media_type,
+        content_disposition_type=effective_disposition,
+        filename=sanitize_download_name(document.file_name),
+    )
+
+
+@router.get("/{document_id}/versions")
+async def document_versions_api(
+        document_id: str,
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_database),
+):
+    document = await require_owned_document(db, document_id, current_user.id)
+    versions = await list_document_versions(
+        db,
+        version_group_id=document.version_group_id,
+        user_id=current_user.id,
+    )
+    items = [
+        DocumentVersionData(
+            document_id=version.id,
+            version_group_id=version.version_group_id,
+            version_number=version.version_number,
+            file_name=version.file_name,
+            created_at=version.created_at,
+        )
+        for version in versions
+    ]
+    return success_response(data=DocumentVersionListData(items=items, total=len(items)))
 
 
 @router.delete("/{document_id}")

@@ -137,3 +137,32 @@ class DocumentFolderItem(BaseModel):
 
 class DocumentMoveRequest(BaseModel):
     folder_id: str
+
+
+class DocumentContentSection(BaseModel):
+    title: str | None
+    text: str
+
+
+class DocumentContentData(BaseModel):
+    document_id: str
+    folder_id: str
+    file_name: str
+    render_mode: Literal["markdown", "text", "structured", "office", "pdf", "unsupported"]
+    mime_type: str
+    text: str | None
+    sections: list[DocumentContentSection]
+    parse_warning: str | None
+
+
+class DocumentVersionData(BaseModel):
+    document_id: str
+    version_group_id: str
+    version_number: int
+    file_name: str
+    created_at: datetime
+
+
+class DocumentVersionListData(BaseModel):
+    items: list[DocumentVersionData]
+    total: int
