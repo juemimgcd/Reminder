@@ -104,14 +104,27 @@ function handleEscape(event: KeyboardEvent) {
   }
 }
 
-function toggleTree() {
-  treeOpen.value = !treeOpen.value;
-  if (treeOpen.value) propertiesOpen.value = false;
+async function focusDrawerPane(id: string) {
+  await nextTick();
+  document.getElementById(id)?.focus();
 }
 
-function toggleProperties() {
-  propertiesOpen.value = !propertiesOpen.value;
-  if (propertiesOpen.value) treeOpen.value = false;
+async function toggleTree() {
+  const opening = !treeOpen.value;
+  treeOpen.value = opening;
+  if (opening) {
+    propertiesOpen.value = false;
+    await focusDrawerPane("document-tree-pane");
+  }
+}
+
+async function toggleProperties() {
+  const opening = !propertiesOpen.value;
+  propertiesOpen.value = opening;
+  if (opening) {
+    treeOpen.value = false;
+    await focusDrawerPane("document-properties-pane");
+  }
 }
 
 onMounted(() => window.addEventListener("keydown", handleEscape));

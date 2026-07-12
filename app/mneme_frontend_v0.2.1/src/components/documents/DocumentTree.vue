@@ -112,7 +112,7 @@ function triggerUpload() {
 </script>
 
 <template>
-  <aside id="document-tree-pane" data-testid="document-tree-pane" class="tree-pane" :aria-label="t('reader.files')">
+  <aside id="document-tree-pane" data-testid="document-tree-pane" class="tree-pane" :aria-label="t('reader.files')" tabindex="-1">
     <header>
       <div><small>{{ t("vault.active") }}</small><h2>{{ t("reader.files") }}</h2></div>
       <label class="upload-control" for="workspace-upload" tabindex="0" :title="t('reader.uploadDocument')" @keydown.enter.prevent="triggerUpload" @keydown.space.prevent="triggerUpload"><Upload /><span>{{ t("reader.upload") }}</span></label>

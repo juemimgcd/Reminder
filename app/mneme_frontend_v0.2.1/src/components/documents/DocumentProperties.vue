@@ -14,7 +14,7 @@ const emit = defineEmits<{ selectVersion: [documentId: string] }>();
 </script>
 
 <template>
-  <aside id="document-properties-pane" data-testid="document-properties" class="properties" :aria-label="t('reader.properties')">
+  <aside id="document-properties-pane" data-testid="document-properties" class="properties" :aria-label="t('reader.properties')" tabindex="-1">
     <header><small>{{ t("reader.inspector") }}</small><h2>{{ t("reader.properties") }}</h2></header>
     <div v-if="preview" class="properties-scroll">
       <section>
