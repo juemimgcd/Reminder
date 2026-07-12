@@ -104,3 +104,14 @@ async def delete_document_by_id(
     sql = delete(Document).where(Document.id == document_id)
     res = await db.execute(sql)
     return res.rowcount or 0
+
+
+async def move_document_to_folder(
+        db: AsyncSession,
+        *,
+        document: Document,
+        folder_pk: int,
+) -> Document:
+    document.folder_pk = folder_pk
+    await db.flush()
+    return document

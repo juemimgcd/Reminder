@@ -107,3 +107,26 @@ class DocumentDeleteData(BaseModel):
     deleted_memory_entry_count: int
     deleted_task_count: int
     deleted_vector_count: int
+
+
+class DocumentFolderCreate(BaseModel):
+    knowledge_base_id: str
+    parent_id: str
+    name: str = Field(min_length=1, max_length=255)
+
+
+class DocumentFolderUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    parent_id: str | None = None
+
+
+class DocumentFolderItem(BaseModel):
+    id: str
+    parent_id: str
+    name: str
+    is_root: bool
+    children: list["DocumentFolderItem"] = Field(default_factory=list)
+
+
+class DocumentMoveRequest(BaseModel):
+    folder_id: str
