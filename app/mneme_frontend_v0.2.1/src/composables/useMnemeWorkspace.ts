@@ -406,6 +406,9 @@ export function useMnemeWorkspace() {
           documentActionStatus.value = "Indexing completed";
           workspaceLoaders.invalidate();
           await ensureViewLoaded(view.value, true);
+          if (documentWorkspace.activeDocumentId.value) {
+            await loadDocumentPreview(documentWorkspace.activeDocumentId.value);
+          }
           return;
         }
         if (status === "failed" || status === "cancelled") {

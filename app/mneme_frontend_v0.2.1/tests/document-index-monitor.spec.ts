@@ -17,7 +17,10 @@ async function routeIndexWorkspace(page: Page, taskStatuses: string[]) {
       documentCalls += 1;
       return route.fulfill({ json: envelope({ items: [{ id: "doc-7", user_id: 7, knowledge_base_id: "kb-7", folder_id: "fld-root", file_name: "Index me.md", file_type: "md", status: documentCalls > 1 ? "indexed" : "uploaded", version_group_id: "vg-7", version_number: 1, duplicate_of_document_id: null, created_at: "2026-07-11T00:00:00Z" }], total: 1 }) });
     }
-    if (path === "/kb/document-folders") return route.fulfill({ json: envelope([]) });
+    if (path === "/kb/document-folders") return route.fulfill({ json: envelope([{ id: "fld-root", parent_id: "fld-root", name: "", is_root: true, children: [] }]) });
+    if (path === "/kb/documents/doc-7/content") return route.fulfill({ json: envelope({ document_id: "doc-7", folder_id: "fld-root", file_name: "Index me.md", render_mode: "markdown", mime_type: "text/markdown", text: "# Index me", sections: [], parse_warning: null }) });
+    if (path === "/kb/documents/doc-7/preview") return route.fulfill({ json: envelope({ document_id: "doc-7", knowledge_base_id: "kb-7", file_name: "Index me.md", file_type: "md", status: documentCalls > 1 ? "indexed" : "uploaded", summary: "Index monitor fixture", chunks: [], memory_entries: [] }) });
+    if (path === "/kb/documents/doc-7/versions") return route.fulfill({ json: envelope({ items: [{ document_id: "doc-7", version_group_id: "vg-7", version_number: 1, file_name: "Index me.md", created_at: "2026-07-11T00:00:00Z" }], total: 1 }) });
     if (path === "/memory/knowledge-bases/kb-7/library") return route.fulfill({ json: envelope({ timeline: [], by_type: {}, by_theme: [] }) });
     if (path === "/kb/documents/doc-7/index") return route.fulfill({ json: envelope({ task_id: "task-7", document_id: "doc-7", knowledge_base_id: "kb-7", status: "pending", message: "Index task submitted" }) });
     if (path === "/tasks/task-7") {
@@ -37,35 +40,38 @@ async function loginAndOpenVault(page: Page) {
   await page.locator("form").getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByTestId("obsidian-shell")).toBeVisible();
   await page.getByRole("button", { name: "Research Vault" }).click();
-  await expect(page.getByTestId("document-card")).toContainText("Index me.md");
+  const document = page.getByTestId("document-tree").getByRole("button", { name: "Index me.md", exact: true });
+  await expect(document).toBeVisible();
+  await document.click();
+  await expect(page.getByTestId("document-reader-title")).toContainText("Index me.md");
 }
 
 test("index monitoring reaches terminal success and refreshes notes again", async ({ page }) => {
   const calls = await routeIndexWorkspace(page, ["running", "succeeded"]);
   await loginAndOpenVault(page);
 
-  await page.getByTestId("document-card").getByRole("button", { name: "Index" }).click();
+  await page.getByRole("button", { name: "Index", exact: true }).click();
 
-  await expect(page.getByText("Indexing completed")).toBeVisible();
+  await expect(page.getByTestId("document-action-status")).toContainText("Indexing completed");
   await expect.poll(calls.taskCalls).toBe(2);
   await expect.poll(calls.documentCalls).toBeGreaterThanOrEqual(2);
-  await expect(page.getByTestId("document-card")).toContainText("indexed");
+  await expect(page.getByRole("button", { name: "Index", exact: true })).toBeDisabled();
 });
 
 test("index monitoring stops at failure and surfaces the task error", async ({ page }) => {
   const calls = await routeIndexWorkspace(page, ["running", "failed"]);
   await loginAndOpenVault(page);
 
-  await page.getByTestId("document-card").getByRole("button", { name: "Index" }).click();
+  await page.getByRole("button", { name: "Index", exact: true }).click();
 
-  await expect(page.getByText(/Indexing failed: Parser failed/)).toBeVisible();
+  await expect(page.getByTestId("document-action-status")).toContainText(/Indexing failed: Parser failed/);
   await expect.poll(calls.taskCalls).toBe(2);
 });
 
 test("logout cancels an active bounded index monitor", async ({ page }) => {
   const calls = await routeIndexWorkspace(page, ["running"]);
   await loginAndOpenVault(page);
-  await page.getByTestId("document-card").getByRole("button", { name: "Index" }).click();
+  await page.getByRole("button", { name: "Index", exact: true }).click();
   await expect.poll(calls.taskCalls).toBeGreaterThan(0);
 
   await page.getByRole("button", { name: "Log out" }).click();

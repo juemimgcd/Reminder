@@ -28,7 +28,7 @@ for (const testId of [
   'data-testid="sanctuary-topbar"',
   'data-testid="obsidian-editor-pane"',
   'data-testid="stitch-dashboard-grid"',
-  'data-testid="stitch-research-vault-layout"',
+  'data-testid="document-workspace"',
   'data-testid="stitch-graph-layout"',
   'data-testid="stitch-ai-laboratory-layout"',
   'data-testid="stitch-settings-layout"',

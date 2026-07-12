@@ -161,6 +161,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", handleEscape));
 
     <section class="reader-center">
       <div v-if="workspace.activeDocumentId.value" class="document-actions" :aria-label="t('reader.documentActions')">
+        <p v-if="workspace.documentActionStatus.value" data-testid="document-action-status" role="status">{{ workspace.documentActionStatus.value }}</p>
         <button type="button" @click="workspace.downloadDocument()"><Download />{{ t("reader.download") }}</button>
         <button type="button" :disabled="workspace.documentPreview.value?.status === 'indexed'" @click="workspace.indexDocument(workspace.activeDocumentId.value)"><WandSparkles />{{ t("reader.index") }}</button>
         <button type="button" class="danger" @click="workspace.deleteDocument(workspace.activeDocumentId.value)"><Trash2 />{{ t("reader.delete") }}</button>
@@ -196,6 +197,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", handleEscape));
 .document-workspace { position: relative; display: grid; width: 100%; height: 100%; min-height: 0; grid-template-columns: 230px minmax(0, 1fr) 270px; overflow: hidden; background: var(--bg-canvas); }
 .reader-center { display: grid; min-width: 0; min-height: 0; grid-template-rows: auto minmax(0, 1fr); }
 .document-actions { display: flex; min-height: 2.2rem; align-items: center; justify-content: flex-end; gap: 0.25rem; padding: 0.25rem 0.55rem; background: var(--bg-sidebar); border-bottom: 1px solid var(--border-muted); }
+.document-actions p { min-width: 0; margin: 0 auto 0 0; overflow: hidden; color: var(--text-secondary); font: 0.62rem var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
 .document-actions button { display: inline-flex; min-height: 1.7rem; align-items: center; gap: 0.3rem; padding: 0 0.45rem; color: var(--text-secondary); background: transparent; border: 1px solid transparent; border-radius: 0.3rem; font-size: 0.65rem; }
 .document-actions button:hover:not(:disabled) { color: var(--text-primary); background: var(--bg-elevated); border-color: var(--border-muted); }
 .document-actions button:disabled { opacity: 0.36; }
