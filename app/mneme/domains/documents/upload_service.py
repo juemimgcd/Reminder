@@ -7,6 +7,7 @@ import unicodedata
 import uuid
 
 from fastapi import UploadFile
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,6 +31,22 @@ CHUNK_SIZE = 1024 * 1024
 
 def normalize_file_name(value: str) -> str:
     return unicodedata.normalize("NFKC", value.strip()).casefold()
+
+
+def version_lineage_lock_identity(folder_pk: int, normalized_file_name: str) -> str:
+    return f"document-version:{folder_pk}:{normalized_file_name}"
+
+
+async def acquire_version_lineage_lock(
+    db: AsyncSession,
+    *,
+    folder_pk: int,
+    normalized_file_name: str,
+) -> None:
+    await db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended(:identity, 0))"),
+        {"identity": version_lineage_lock_identity(folder_pk, normalized_file_name)},
+    )
 
 
 def next_version(*, latest_id: str, latest_version: int, group_id: str) -> dict[str, str | int]:
@@ -155,6 +172,11 @@ async def store_uploaded_document(
             return await _upload_data(db, document=canonical, disposition="duplicate")
 
         normalized_name = normalize_file_name(file_name)
+        await acquire_version_lineage_lock(
+            db,
+            folder_pk=folder.pk,
+            normalized_file_name=normalized_name,
+        )
         latest = await find_latest_version(
             db,
             knowledge_base_pk=knowledge_base.pk,

@@ -4,6 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.dialects import postgresql
 import pytest
 
 import app.mneme.domains.documents.upload_service as service
@@ -21,6 +22,12 @@ class AsyncBytesFile:
 
 
 class FakeDatabase:
+    def __init__(self):
+        self.executions = []
+
+    async def execute(self, statement, parameters=None):
+        self.executions.append((statement, parameters))
+
     @asynccontextmanager
     async def begin_nested(self):
         yield
@@ -86,6 +93,28 @@ def test_next_version_links_latest_document():
     }
 
 
+def test_version_lineage_lock_uses_postgres_transaction_advisory_lock():
+    db = FakeDatabase()
+
+    asyncio.run(service.acquire_version_lineage_lock(
+        db,
+        folder_pk=2,
+        normalized_file_name="notes.md",
+    ))
+
+    statement, parameters = db.executions[0]
+    compiled = str(statement.compile(dialect=postgresql.dialect()))
+    assert "pg_advisory_xact_lock" in compiled
+    assert "hashtextextended" in compiled
+    assert parameters == {"identity": "document-version:2:notes.md"}
+
+
+def test_version_lineage_lock_identity_changes_by_folder_and_normalized_name():
+    notes_in_folder = service.version_lineage_lock_identity(2, "notes.md")
+    assert notes_in_folder != service.version_lineage_lock_identity(3, "notes.md")
+    assert notes_in_folder != service.version_lineage_lock_identity(2, "other.md")
+
+
 def test_exact_bytes_anywhere_in_kb_return_duplicate_without_creating(monkeypatch, tmp_path):
     install_folder_lookup(monkeypatch)
     monkeypatch.setattr(service.settings, "RAW_FILE_DIR", tmp_path)
@@ -117,16 +146,24 @@ def test_same_name_different_bytes_in_same_folder_creates_next_version(monkeypat
     monkeypatch.setattr(service.settings, "RAW_FILE_DIR", tmp_path)
     latest = document(id="doc-v2", version_group_id="doc-v1", version_number=2)
     captured = {}
+    calls = []
 
     async def no_canonical(*args, **kwargs):
+        calls.append("canonical")
         return None
 
+    async def lock_lineage(*args, **kwargs):
+        calls.append("lock")
+        assert kwargs == {"folder_pk": 2, "normalized_file_name": "notes.md"}
+
     async def latest_version(*args, **kwargs):
+        calls.append("latest")
         assert kwargs["folder_pk"] == 2
         assert kwargs["normalized_file_name"] == "notes.md"
         return latest
 
     async def create(*args, **kwargs):
+        calls.append("create")
         captured.update(kwargs)
         return document(
             id=kwargs["document_id"], file_name=kwargs["file_name"],
@@ -135,6 +172,7 @@ def test_same_name_different_bytes_in_same_folder_creates_next_version(monkeypat
         )
 
     monkeypatch.setattr(service, "find_canonical_by_hash", no_canonical)
+    monkeypatch.setattr(service, "acquire_version_lineage_lock", lock_lineage)
     monkeypatch.setattr(service, "find_latest_version", latest_version)
     monkeypatch.setattr(service, "create_document", create)
     user, kb, folder = destination()
@@ -148,6 +186,35 @@ def test_same_name_different_bytes_in_same_folder_creates_next_version(monkeypat
     assert captured["version_number"] == 3
     assert captured["previous_document_id"] == "doc-v2"
     assert Path(captured["file_path"]).is_file()
+    assert calls == ["canonical", "lock", "latest", "create"]
+
+
+def test_exact_duplicate_returns_before_version_lineage_lock(monkeypatch, tmp_path):
+    install_folder_lookup(monkeypatch)
+    monkeypatch.setattr(service.settings, "RAW_FILE_DIR", tmp_path)
+    canonical = document(folder_pk=2, file_name="canonical.md")
+    calls = []
+
+    async def find_canonical(*args, **kwargs):
+        calls.append("canonical")
+        return canonical
+
+    async def forbidden_lock(*args, **kwargs):
+        calls.append("lock")
+        raise AssertionError("exact duplicate must return before lineage lock")
+
+    monkeypatch.setattr(service, "find_canonical_by_hash", find_canonical)
+    monkeypatch.setattr(service, "acquire_version_lineage_lock", forbidden_lock)
+    user, kb, folder = destination()
+
+    result = asyncio.run(service.store_uploaded_document(
+        FakeDatabase(), file=AsyncBytesFile("renamed.md", [b"same", b""]),
+        current_user=user, knowledge_base=kb, folder=folder,
+    ))
+
+    assert result.disposition == "duplicate"
+    assert calls == ["canonical"]
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_same_name_in_different_folder_starts_independent_v1(monkeypatch, tmp_path):
