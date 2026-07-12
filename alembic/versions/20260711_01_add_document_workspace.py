@@ -99,6 +99,11 @@ def upgrade():
         FROM document_folders AS f
         WHERE f.knowledge_base_pk = d.knowledge_base_pk AND f.is_root
     """))
+    # The self-referential folder FK is initially deferred. PostgreSQL will not
+    # ALTER a table while its deferred constraint-trigger events are pending,
+    # so validate and drain those events before making the backfilled columns
+    # non-nullable.
+    op.execute(sa.text("SET CONSTRAINTS ALL IMMEDIATE"))
     op.alter_column("document_folders", "parent_pk", nullable=False)
     op.alter_column("documents", "folder_pk", nullable=False)
     op.create_index(

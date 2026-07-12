@@ -46,3 +46,18 @@ def test_workspace_migration_cascades_folder_cleanup_with_knowledge_base_deletio
         'sa.ForeignKey("document_folders.pk", deferrable=True, initially="DEFERRED")'
         in source
     )
+
+
+def test_workspace_migration_flushes_deferred_fk_events_before_altering_columns():
+    source = Path("alembic/versions/20260711_01_add_document_workspace.py").read_text("utf-8")
+
+    update_folder = source.index("UPDATE document_folders SET parent_pk = pk")
+    update_documents = source.index("UPDATE documents AS d")
+    flush_constraints = source.index("SET CONSTRAINTS ALL IMMEDIATE")
+    alter_folder = source.index('op.alter_column("document_folders", "parent_pk"')
+    alter_documents = source.index('op.alter_column("documents", "folder_pk"')
+
+    assert update_folder < flush_constraints
+    assert update_documents < flush_constraints
+    assert flush_constraints < alter_folder
+    assert flush_constraints < alter_documents
