@@ -26,9 +26,13 @@ class DocumentListItem(BaseModel):
     id: str
     user_id: int
     knowledge_base_id: str
+    folder_id: str
     file_name: str
     file_type: str
     status: str
+    version_group_id: str
+    version_number: int
+    duplicate_of_document_id: str | None
     created_at: datetime
 
 

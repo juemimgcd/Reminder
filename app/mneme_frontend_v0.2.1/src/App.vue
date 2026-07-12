@@ -136,6 +136,7 @@ function openCreateCommand() {
         </header>
         <UiStatusPanel v-if="workspace.banner.value" class="workspace-banner" :title="workspace.banner.value" dismissible @dismiss="workspace.dismissBanner" />
         <UiStatusPanel v-if="workspace.authNotice.value" class="workspace-banner" :title="workspace.authNotice.value" />
+        <UiStatusPanel v-if="workspace.documentActionStatus.value" class="workspace-banner" :title="workspace.documentActionStatus.value" />
         <UiStatusPanel v-if="activeViewLoadState.message.value" class="workspace-banner" :title="activeViewLoadState.message.value" variant="warning" />
         <UiStatusPanel
           v-if="workspace.duplicateUpload.value"

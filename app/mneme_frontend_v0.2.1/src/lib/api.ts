@@ -355,16 +355,16 @@ const realApi = {
   documentVersions(token: string, documentId: string) {
     return request<DocumentVersionListData>(`/kb/documents/${documentId}/versions`, { token });
   },
-  async documentRawBlob(token: string, documentId: string, disposition: "inline" | "attachment" = "inline") {
+  async documentRawBlob(token: string, documentId: string, disposition: "inline" | "attachment" = "inline", options: { signal?: AbortSignal } = {}) {
     const response = await fetch(
       `${API_BASE_URL}/kb/documents/${documentId}/raw${buildQuery({ disposition })}`,
-      { headers: { Authorization: `Bearer ${token}` } },
+      { headers: { Authorization: `Bearer ${token}` }, signal: options.signal },
     );
     if (!response.ok) throw await responseError(response);
     return response.blob();
   },
-  getTask(taskId: string, token: string) {
-    return request<TaskRecordData>(`/tasks/${taskId}`, { token });
+  getTask(taskId: string, token: string, options: { signal?: AbortSignal } = {}) {
+    return request<TaskRecordData>(`/tasks/${taskId}`, { token, signal: options.signal });
   },
   cancelTask(taskId: string, token: string) {
     return request<TaskActionData>(`/tasks/${taskId}/cancel`, {

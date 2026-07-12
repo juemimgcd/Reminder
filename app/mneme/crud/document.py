@@ -1,6 +1,7 @@
-from sqlalchemy import delete, select
+from sqlalchemy import and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.mneme.models.document import Document
+from app.mneme.models.document_folder import DocumentFolder
 
 
 async def create_document(
@@ -53,8 +54,15 @@ async def list_documents(
         *,
         user_id: int | None = None,
         knowledge_base_pk: int | None = None,
-) -> list[Document]:
-    sql = select(Document)
+) -> list[tuple[Document, str]]:
+    sql = select(Document, DocumentFolder.id).join(
+        DocumentFolder,
+        and_(
+            Document.folder_pk == DocumentFolder.pk,
+            Document.user_id == DocumentFolder.user_id,
+            Document.knowledge_base_pk == DocumentFolder.knowledge_base_pk,
+        ),
+    )
 
     if user_id:
         sql = sql.where(Document.user_id == user_id)
@@ -64,8 +72,7 @@ async def list_documents(
 
     sql = sql.order_by(Document.created_at.desc())
     res = await db.execute(sql)
-    document_list = list(res.scalars().all())
-    return document_list
+    return [(document, folder_id) for document, folder_id in res.all()]
 
 
 async def get_document_by_id(

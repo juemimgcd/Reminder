@@ -29,8 +29,16 @@ export function useDocumentWorkspace(params: {
   const documentContentError = ref("");
   const duplicateUpload = ref<DocumentUploadData | null>(null);
   const contentCache = new Map<string, DocumentContentData>();
+  const rawRequests = new Map<string, { controller: AbortController; generation: number; tab: DocumentTab }>();
   let contentAbort: AbortController | null = null;
   let openGeneration = 0;
+  let rawGeneration = 0;
+
+  function cancelRawRequests() {
+    rawGeneration += 1;
+    rawRequests.forEach((request) => request.controller.abort());
+    rawRequests.clear();
+  }
 
   function revokeTabBlob(documentId: string) {
     const tab = openDocumentTabs.value.find((item) => item.documentId === documentId);
@@ -43,6 +51,7 @@ export function useDocumentWorkspace(params: {
     openGeneration += 1;
     contentAbort?.abort();
     contentAbort = null;
+    cancelRawRequests();
     openDocumentTabs.value.forEach((tab) => {
       if (tab.blobUrl) URL.revokeObjectURL(tab.blobUrl);
     });
@@ -63,7 +72,10 @@ export function useDocumentWorkspace(params: {
     if (!documentId || !params.token.value) return;
 
     const previousDocumentId = activeDocumentId.value;
-    if (previousDocumentId && previousDocumentId !== documentId) revokeTabBlob(previousDocumentId);
+    if (previousDocumentId && previousDocumentId !== documentId) {
+      cancelRawRequests();
+      revokeTabBlob(previousDocumentId);
+    }
     activeDocumentId.value = documentId;
     params.view.value = "notes";
     contentAbort?.abort();
@@ -109,16 +121,41 @@ export function useDocumentWorkspace(params: {
   async function ensureDocumentBlob(documentId = activeDocumentId.value) {
     const tab = openDocumentTabs.value.find((item) => item.documentId === documentId);
     if (!tab || tab.blobUrl) return tab?.blobUrl ?? null;
-    const blob = await api.documentRawBlob(params.token.value, documentId, "inline");
-    if (activeDocumentId.value !== documentId) return null;
-    const currentTab = openDocumentTabs.value.find((item) => item.documentId === documentId);
-    if (!currentTab) return null;
-    if (currentTab.blobUrl) return currentTab.blobUrl;
-    currentTab.blobUrl = URL.createObjectURL(blob);
-    return currentTab.blobUrl;
+    rawRequests.get(documentId)?.controller.abort();
+    const controller = new AbortController();
+    const generation = ++rawGeneration;
+    const token = params.token.value;
+    const request = { controller, generation, tab };
+    rawRequests.set(documentId, request);
+    try {
+      const blob = await api.documentRawBlob(token, documentId, "inline", { signal: controller.signal });
+      const currentTab = openDocumentTabs.value.find((item) => item.documentId === documentId);
+      if (
+        controller.signal.aborted ||
+        rawRequests.get(documentId) !== request ||
+        generation !== rawGeneration ||
+        params.token.value !== token ||
+        activeDocumentId.value !== documentId ||
+        currentTab !== tab
+      ) return null;
+      if (currentTab.blobUrl) return currentTab.blobUrl;
+      currentTab.blobUrl = URL.createObjectURL(blob);
+      return currentTab.blobUrl;
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") return null;
+      throw error;
+    } finally {
+      if (rawRequests.get(documentId) === request) rawRequests.delete(documentId);
+    }
   }
 
   function closeDocument(documentId: string) {
+    const rawRequest = rawRequests.get(documentId);
+    if (rawRequest) {
+      rawGeneration += 1;
+      rawRequest.controller.abort();
+      rawRequests.delete(documentId);
+    }
     revokeTabBlob(documentId);
     const remaining = openDocumentTabs.value.filter((item) => item.documentId !== documentId);
     openDocumentTabs.value = remaining;

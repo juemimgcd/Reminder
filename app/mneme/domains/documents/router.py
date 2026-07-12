@@ -186,7 +186,22 @@ async def get_document_list(
         user_id=resolved_user_id,
         knowledge_base_pk=knowledge_base.pk if knowledge_base else None,
     )
-    document_items = [DocumentListItem.model_validate(item) for item in documents]
+    document_items = [
+        DocumentListItem(
+            id=document.id,
+            user_id=document.user_id,
+            knowledge_base_id=document.knowledge_base_id,
+            folder_id=folder_id,
+            file_name=document.file_name,
+            file_type=document.file_type,
+            status=document.status,
+            version_group_id=document.version_group_id,
+            version_number=document.version_number,
+            duplicate_of_document_id=document.duplicate_of_document_id,
+            created_at=document.created_at,
+        )
+        for document, folder_id in documents
+    ]
 
     total = len(document_items)
     app_logger.bind(module="documents_router").info(

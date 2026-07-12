@@ -1,4 +1,4 @@
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "./useI18n";
 import { useDocumentWorkspace } from "./useDocumentWorkspace";
 import { useWorkspaceLoaders, type ViewLoadResult } from "./useWorkspaceLoaders";
@@ -84,6 +84,7 @@ export function useMnemeWorkspace() {
   const graphRagStatus = ref("");
   const aiModelActionStatus = ref("");
   const chatSessionFilter = ref("");
+  const indexTaskMonitors = new Map<string, AbortController>();
 
   const loginForm = ref({ username: "", password: "" });
   const registerForm = ref({ username: "", displayName: "", password: "", confirmPassword: "" });
@@ -360,7 +361,72 @@ export function useMnemeWorkspace() {
     const result = await api.indexDocument(documentId, token.value);
     documentActionStatus.value = result.message;
     workspaceLoaders.invalidate();
-    await ensureViewLoaded(view.value, true);
+    void ensureViewLoaded(view.value, true);
+    void monitorIndexTask(result.task_id);
+  }
+
+  function normalizedTaskStatus(status: string) {
+    if (["queued"].includes(status)) return "pending";
+    if (["completed"].includes(status)) return "succeeded";
+    if (["canceled"].includes(status)) return "cancelled";
+    if (["parsing", "chunking", "memory_extracting", "embedding", "vector_upserting", "graph_projecting", "eval_running"].includes(status)) return "running";
+    return status;
+  }
+
+  function pollDelay(milliseconds: number, signal: AbortSignal) {
+    return new Promise<void>((resolve, reject) => {
+      if (signal.aborted) {
+        reject(new DOMException("Aborted", "AbortError"));
+        return;
+      }
+      const onAbort = () => {
+        window.clearTimeout(timer);
+        reject(new DOMException("Aborted", "AbortError"));
+      };
+      const timer = window.setTimeout(() => {
+        signal.removeEventListener("abort", onAbort);
+        resolve();
+      }, milliseconds);
+      signal.addEventListener("abort", onAbort, { once: true });
+    });
+  }
+
+  async function monitorIndexTask(taskId: string) {
+    indexTaskMonitors.get(taskId)?.abort();
+    const controller = new AbortController();
+    indexTaskMonitors.set(taskId, controller);
+    const maximumPolls = IS_PREVIEW_MODE ? 8 : 80;
+    const interval = IS_PREVIEW_MODE ? 0 : 250;
+    try {
+      for (let attempt = 0; attempt < maximumPolls; attempt += 1) {
+        const task = await api.getTask(taskId, token.value, { signal: controller.signal });
+        const status = normalizedTaskStatus(task.status);
+        if (status === "succeeded") {
+          documentActionStatus.value = "Indexing completed";
+          workspaceLoaders.invalidate();
+          await ensureViewLoaded(view.value, true);
+          return;
+        }
+        if (status === "failed" || status === "cancelled") {
+          const detail = task.error_message || task.result_summary || status;
+          documentActionStatus.value = `Indexing ${status}: ${detail}`;
+          return;
+        }
+        await pollDelay(interval, controller.signal);
+      }
+      documentActionStatus.value = "Indexing is still running. Refresh to check again.";
+    } catch (error) {
+      if (!(error instanceof Error && error.name === "AbortError")) {
+        documentActionStatus.value = errorMessage(error, "Unable to monitor indexing status.");
+      }
+    } finally {
+      if (indexTaskMonitors.get(taskId) === controller) indexTaskMonitors.delete(taskId);
+    }
+  }
+
+  function cancelIndexTaskMonitors() {
+    indexTaskMonitors.forEach((controller) => controller.abort());
+    indexTaskMonitors.clear();
   }
 
   async function deleteDocument(documentId: string) {
@@ -588,6 +654,8 @@ export function useMnemeWorkspace() {
   }
 
   function logout() {
+    cancelIndexTaskMonitors();
+    documentActionStatus.value = "";
     token.value = "";
     user.value = null;
     authStatus.value = "guest";
@@ -597,10 +665,14 @@ export function useMnemeWorkspace() {
   onMounted(() => {
     void authenticateWithToken();
   });
+  onBeforeUnmount(cancelIndexTaskMonitors);
 
   watch([isAuthenticated, view, activeKnowledgeBaseId], ([authenticated]) => {
     if (authenticated) void ensureViewLoaded(view.value);
   }, { immediate: true });
+  watch(token, (nextToken) => {
+    if (!nextToken) cancelIndexTaskMonitors();
+  });
 
   return {
     API_BASE_URL,

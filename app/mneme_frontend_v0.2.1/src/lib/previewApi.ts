@@ -118,6 +118,18 @@ let documents: DocumentListItem[] = [
   },
 ];
 
+const documentFileSizes = new Map<string, number>([
+  ["doc-zettelkasten", 14],
+  ["doc-memory-graph", 11],
+  ["doc-roadmap", 0],
+]);
+const documentFolderPaths = new Map<string, string[]>([
+  ["doc-zettelkasten", []],
+  ["doc-memory-graph", []],
+  ["doc-roadmap", []],
+]);
+let previewDocumentSequence = 0;
+
 let tasks: Record<string, TaskRecordData> = {};
 
 let chatSessions: ChatSessionData[] = [
@@ -277,6 +289,24 @@ function documentContent(documentId: string): DocumentContentData {
     text: document.file_type === "pdf" ? null : `# ${document.file_name}\n\nPreview document content.`,
     sections: [],
     parse_warning: null,
+  };
+}
+
+function uploadDataForDocument(document: DocumentListItem, disposition: "created" | "duplicate"): DocumentUploadData {
+  return {
+    disposition,
+    document_id: document.id,
+    canonical_document_id: document.id,
+    user_id: document.user_id,
+    knowledge_base_id: document.knowledge_base_id,
+    folder_id: document.folder_id,
+    folder_path: [...(documentFolderPaths.get(document.id) ?? [])],
+    file_name: document.file_name,
+    file_type: document.file_type,
+    file_size: documentFileSizes.get(document.id) ?? 0,
+    status: document.status,
+    version_group_id: document.version_group_id,
+    version_number: document.version_number,
   };
 }
 
@@ -487,25 +517,15 @@ const previewApi = {
   },
   async uploadDocument(_token: string, payload: { file: File; userId?: number | null; knowledgeBaseId?: string | null; folderId?: string | null }): Promise<DocumentUploadData> {
     const contentSha256 = await sha256(payload.file);
-    if (contentSha256 === ATOMIC_NOTES_SHA256) {
-      return delay({
-        disposition: "duplicate",
-        document_id: "doc-zettelkasten",
-        canonical_document_id: "doc-zettelkasten",
-        user_id: payload.userId ?? previewUser.id,
-        knowledge_base_id: payload.knowledgeBaseId ?? knowledgeBases[0].id,
-        folder_id: ROOT_FOLDER_ID,
-        folder_path: [],
-        file_name: "zettelkasten-principles.md",
-        file_type: "markdown",
-        file_size: payload.file.size,
-        status: "indexed",
-        version_group_id: "ver-zettelkasten",
-        version_number: 1,
-      });
-    }
-    const documentId = `doc-preview-${Date.now()}`;
     const knowledgeBaseId = payload.knowledgeBaseId ?? knowledgeBases[0].id;
+    const canonical = documents.find((document) =>
+      document.knowledge_base_id === knowledgeBaseId &&
+      document.content_sha256 === contentSha256 &&
+      document.duplicate_of_document_id === null
+    );
+    if (canonical) return delay(uploadDataForDocument(canonical, "duplicate"));
+    previewDocumentSequence += 1;
+    const documentId = `doc-preview-${Date.now()}-${previewDocumentSequence}`;
     const folderId = payload.folderId ?? ROOT_FOLDER_ID;
     const normalizedName = payload.file.name.toLocaleLowerCase();
     const previous = documents
@@ -514,7 +534,7 @@ const previewApi = {
     const versionGroupId = previous?.version_group_id ?? `ver-${documentId}`;
     const versionNumber = (previous?.version_number ?? 0) + 1;
     const fileType = payload.file.name.split(".").pop() ?? "file";
-    documents = [...documents, {
+    const created: DocumentListItem = {
       id: documentId,
       user_id: payload.userId ?? previewUser.id,
       knowledge_base_id: knowledgeBaseId,
@@ -527,8 +547,11 @@ const previewApi = {
       version_number: versionNumber,
       duplicate_of_document_id: null,
       created_at: new Date().toISOString(),
-    }];
-    return delay({ disposition: "created", document_id: documentId, canonical_document_id: documentId, user_id: payload.userId ?? previewUser.id, knowledge_base_id: knowledgeBaseId, folder_id: folderId, folder_path: [], file_name: payload.file.name, file_type: payload.file.type || "application/octet-stream", file_size: payload.file.size, status: "uploaded", version_group_id: versionGroupId, version_number: versionNumber });
+    };
+    documents = [...documents, created];
+    documentFileSizes.set(documentId, payload.file.size);
+    documentFolderPaths.set(documentId, []);
+    return delay(uploadDataForDocument(created, "created"));
   },
   indexDocument(documentId: string): Promise<DocumentIndexTaskData> {
     documents = documents.map((item) => item.id === documentId ? { ...item, status: "indexed" } : item);
@@ -586,11 +609,13 @@ const previewApi = {
       .map((item) => ({ document_id: item.id, version_group_id: item.version_group_id, version_number: item.version_number, file_name: item.file_name, created_at: item.created_at }));
     return delay({ items, total: items.length });
   },
-  documentRawBlob(_token: string, documentId: string, _disposition: "inline" | "attachment" = "inline"): Promise<Blob> {
+  documentRawBlob(_token: string, documentId: string, _disposition: "inline" | "attachment" = "inline", options: { signal?: AbortSignal } = {}): Promise<Blob> {
+    if (options.signal?.aborted) return Promise.reject(new DOMException("Aborted", "AbortError"));
     const content = documentContent(documentId);
     return delay(new Blob([content.text ?? "Preview PDF"], { type: content.mime_type }));
   },
-  getTask(taskId: string): Promise<TaskRecordData> {
+  getTask(taskId: string, _token?: string, options: { signal?: AbortSignal } = {}): Promise<TaskRecordData> {
+    if (options.signal?.aborted) return Promise.reject(new DOMException("Aborted", "AbortError"));
     return delay(tasks[taskId] ?? createTask(taskId, "preview-target"));
   },
   cancelTask(taskId: string): Promise<TaskActionData> {
