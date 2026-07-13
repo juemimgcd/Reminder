@@ -2,6 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.mneme.agent.contracts import AnswerMode
 from app.mneme.schemas.chat import ChatCitationItem, ChatSourceItem, QueryRouteDecision
 
 
@@ -58,3 +59,4 @@ class ChatSessionUpdateRequest(BaseModel):
 class ChatSessionMessageRequest(BaseModel):
     question: str = Field(..., min_length=1)
     top_k: int = Field(default=4, ge=1, le=10)
+    answer_mode: AnswerMode = "kb_qa"

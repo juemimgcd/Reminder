@@ -1,6 +1,7 @@
 ﻿import type {
   AiModelConfigData,
   AiModelConfigListData,
+  AnswerMode,
   AuthTokenData,
   ChatMessageData,
   ChatQueryData,
@@ -658,7 +659,7 @@ const previewApi = {
     delete chatMessages[sessionId];
     return delay({ session_id: sessionId, deleted_count: 1 });
   },
-  sendChatSessionMessage(_token: string, sessionId: string, payload: { question: string; top_k?: number }): Promise<ChatSessionDetailData> {
+  sendChatSessionMessage(_token: string, sessionId: string, payload: { question: string; answer_mode: AnswerMode; top_k?: number }): Promise<ChatSessionDetailData> {
     const session = chatSessions.find((item) => item.id === sessionId) ?? chatSessions[0];
     const createdAt = new Date().toISOString();
     const nextMessages: ChatMessageData[] = [

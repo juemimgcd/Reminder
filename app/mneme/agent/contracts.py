@@ -1,6 +1,8 @@
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+
+AnswerMode = Literal["kb_qa", "memory_query", "profile_query", "analysis_query", "general_chat"]
 
 
 class AgentRequest(BaseModel):
@@ -8,6 +10,7 @@ class AgentRequest(BaseModel):
     knowledge_base_id: str = Field(..., min_length=1)
     user_id: int
     top_k: int = Field(default=4, ge=1, le=10)
+    answer_mode: AnswerMode = "kb_qa"
     llm_config: dict[str, Any] | None = None
 
 

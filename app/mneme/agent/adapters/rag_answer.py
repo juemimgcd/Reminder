@@ -16,6 +16,7 @@ class RagAnswerEngine:
             knowledge_base_id=request.knowledge_base_id,
             user_id=request.user_id,
             top_k=request.top_k,
+            answer_mode=request.answer_mode,
             llm_config=request.llm_config,
         )
         return AgentResponse.model_validate(result)

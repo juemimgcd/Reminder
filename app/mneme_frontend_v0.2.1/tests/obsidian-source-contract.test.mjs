@@ -36,6 +36,7 @@ for (const testId of [
   'data-testid="graph-document-preview-panel"',
   'data-testid="ai-history-rail"',
   'data-testid="workspace-chat-command"',
+  'data-testid="answer-mode-selector"',
 ]) {
   assert.ok(vueSource.includes(testId), `Expected the composed Vue workspace to expose ${testId}`);
 }
@@ -75,6 +76,7 @@ assert.ok(!vueSource.includes('Machine Learning') && !vueSource.includes('Neural
 assert.ok(workspaceSource.includes('ref<WorkspaceView>(IS_PREVIEW_MODE ? "graph" : "dashboard")'), 'Expected preview to open Graph while authenticated production starts on the lightweight dashboard');
 assert.ok(previewApiSource.includes('import.meta.env.MODE === "preview"'), 'Expected explicit preview mode');
 assert.ok(previewApiSource.includes('window.location.hash'), 'Expected hash preview detection');
+assert.ok(workspaceSource.includes('answer_mode: chatAnswerMode.value'), 'Expected chat requests to send the user-selected answer mode');
 
 for (const apiMethod of ['uploadDocument', 'indexDocument', 'deleteDocument', 'testAiModelConfig', 'setDefaultAiModelConfig', 'updateAiModelConfig', 'deleteChatSession', 'graphRag']) {
   assert.ok(apiSource.includes(apiMethod) || previewApiSource.includes(apiMethod), `Expected client API method ${apiMethod}`);

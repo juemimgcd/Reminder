@@ -7,6 +7,7 @@ import { safeStorageGet, safeStorageRemove, safeStorageSet } from "../lib/safeSt
 import type {
   AiModelConfigData,
   AiModelProviderPreset,
+  AnswerMode,
   AuthMode,
   ChatQueryData,
   ChatMessageData,
@@ -84,6 +85,7 @@ export function useMnemeWorkspace() {
   const graphRagStatus = ref("");
   const aiModelActionStatus = ref("");
   const chatSessionFilter = ref("");
+  const chatAnswerMode = ref<AnswerMode>("kb_qa");
   const indexTaskMonitors = new Map<string, AbortController>();
   let documentPreviewGeneration = 0;
 
@@ -453,6 +455,7 @@ export function useMnemeWorkspace() {
     chatResult.value = await api.chatQuery(token.value, {
       question: chatQuestion.value.trim(),
       knowledge_base_id: activeKnowledgeBaseId.value,
+      answer_mode: chatAnswerMode.value,
       top_k: 4,
     });
   }
@@ -536,6 +539,7 @@ export function useMnemeWorkspace() {
     chatQuestion.value = "";
     const detail = await api.sendChatSessionMessage(token.value, activeChatSessionId.value, {
       question,
+      answer_mode: chatAnswerMode.value,
       top_k: 4,
     });
     chatMessages.value = [...chatMessages.value, ...detail.messages];
@@ -704,6 +708,7 @@ export function useMnemeWorkspace() {
     authStatus,
     banner,
     chatQuestion,
+    chatAnswerMode,
     chatResult,
     chatMessages,
     chatSessionFilter,
