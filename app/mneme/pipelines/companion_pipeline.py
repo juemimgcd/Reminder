@@ -1,10 +1,11 @@
-from app.mneme.crud.memory_entry import list_memory_entries_by_user_id
+from app.mneme.agent.adapters import build_mneme_agent
+from app.mneme.agent.contracts import AgentRequest
 from app.mneme.conf.logging import app_logger
-from app.mneme.domains.companion.service import build_companion_response
+from app.mneme.crud.memory_entry import list_memory_entries_by_user_id
 from app.mneme.domains.analysis.growth import build_growth_report
+from app.mneme.domains.companion.service import build_companion_response
 from app.mneme.domains.memory.service import build_memory_library
 from app.mneme.domains.profile.service import build_personal_profile
-from app.mneme.domains.retrieval.query_service import generate_rag_answer
 
 
 async def run_companion_pipeline(
@@ -19,13 +20,15 @@ async def run_companion_pipeline(
         f"companion pipeline start user_id={user_id} knowledge_base_id={knowledge_base_id} "
         f"top_k={top_k} question_length={len(question)}"
     )
-    rag_result = await generate_rag_answer(
-        question=question,
-        db=db,
-        knowledge_base_id=knowledge_base_id,
-        user_id=user_id,
-        top_k=top_k,
+    agent_response = await build_mneme_agent(db).run(
+        AgentRequest(
+            question=question,
+            knowledge_base_id=knowledge_base_id,
+            user_id=user_id,
+            top_k=top_k,
+        )
     )
+    rag_result = agent_response.to_legacy_result()
 
     entries = await list_memory_entries_by_user_id(db, user_id=user_id)
     entry_dicts = [item.__dict__ for item in entries]

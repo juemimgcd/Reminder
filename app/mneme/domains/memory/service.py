@@ -1,8 +1,10 @@
 import uuid
 from collections import defaultdict
+from datetime import datetime, timezone
 
 from langchain_core.documents import Document as LCDocument
 from langchain_core.output_parsers import PydanticOutputParser
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mneme.clients.llm_client import get_llm
 from app.mneme.conf.database import open_read_session, open_write_session
@@ -10,11 +12,17 @@ from app.mneme.conf.logging import log_event
 from app.mneme.crud.chunk import list_chunks_by_document_id
 from app.mneme.crud.document import list_documents
 from app.mneme.crud.knowledge_base import get_knowledge_base_by_id
-from app.mneme.crud.memory_entry import create_memory_entries, delete_memory_entries_by_document_id
+from app.mneme.crud.memory_entry import (
+    list_memory_entries_by_document_id,
+    list_memory_entries_by_knowledge_base_id,
+)
 from app.mneme.crud.user import get_user_by_id
-from app.mneme.models.document import Document
-from app.mneme.schemas.memory_entry import MemoryEntryExtractionResult
 from app.mneme.domains.graph.projection import sync_document_memory_projection
+from app.mneme.domains.memory.identity import prepare_memory_entry_payload
+from app.mneme.domains.memory.projection import rebuild_memory_governance_projection
+from app.mneme.models.document import Document
+from app.mneme.models.memory_entry import MemoryEntry
+from app.mneme.schemas.memory_entry import MemoryEntryExtractionResult
 from app.mneme.utils.entry_prompt import get_entry_extraction_prompt
 
 
@@ -296,20 +304,85 @@ async def rebuild_memory_entries_for_knowledge_base(
     }
 
 
+async def reconcile_memory_entries_for_document(
+    db: AsyncSession,
+    *,
+    document: Document,
+    entries: list[dict],
+) -> tuple[int, list[MemoryEntry]]:
+    existing_entries = await list_memory_entries_by_document_id(
+        db,
+        document_id=document.id,
+        include_inactive=True,
+    )
+    now = datetime.now(timezone.utc)
+    incoming_by_fingerprint = {
+        payload["source_fingerprint"]: payload
+        for item in entries
+        for payload in [prepare_memory_entry_payload(item, stable_id=True)]
+    }
+    existing_by_fingerprint = {
+        item.source_fingerprint: item
+        for item in existing_entries
+    }
+
+    persisted_entries: list[MemoryEntry] = []
+    for fingerprint, payload in incoming_by_fingerprint.items():
+        existing = existing_by_fingerprint.get(fingerprint)
+        if existing:
+            existing.status = "active"
+            existing.valid_to = None
+            existing.last_seen_at = now
+            existing.confidence = payload["confidence"]
+            existing.importance_score = payload["importance_score"]
+            persisted_entries.append(existing)
+            continue
+
+        memory_entry = MemoryEntry(
+            **payload,
+            first_seen_at=now,
+            last_seen_at=now,
+            valid_from=now,
+            valid_to=None,
+        )
+        db.add(memory_entry)
+        persisted_entries.append(memory_entry)
+
+    retired_entry_count = 0
+    incoming_fingerprints = set(incoming_by_fingerprint)
+    for existing in existing_entries:
+        if existing.status == "active" and existing.source_fingerprint not in incoming_fingerprints:
+            existing.status = "superseded"
+            existing.valid_to = now
+            retired_entry_count += 1
+
+    await db.flush()
+
+    active_knowledge_base_entries = await list_memory_entries_by_knowledge_base_id(
+        db,
+        knowledge_base_id=document.knowledge_base_id,
+    )
+    await rebuild_memory_governance_projection(
+        db,
+        user_id=document.user_id,
+        knowledge_base_id=document.knowledge_base_id,
+        knowledge_base_pk=document.knowledge_base_pk,
+        entries=active_knowledge_base_entries,
+    )
+    return retired_entry_count, persisted_entries
+
+
 async def replace_memory_entries_for_document(
         *,
         document: Document,
         entries: list[dict],
 ) -> tuple[int, list]:
     async with open_write_session() as db:
-        deleted_entry_count = await delete_memory_entries_by_document_id(
+        retired_entry_count, persisted_entries = await reconcile_memory_entries_for_document(
             db,
-            document_id=document.id,
+            document=document,
+            entries=entries,
         )
-
-        persisted_entries = []
-        if entries:
-            persisted_entries = await create_memory_entries(db, entries=entries)
 
         knowledge_base = await get_knowledge_base_by_id(
             db,
@@ -328,4 +401,4 @@ async def replace_memory_entries_for_document(
                 memory_entries=persisted_entries,
             )
 
-        return deleted_entry_count, persisted_entries
+        return retired_entry_count, persisted_entries

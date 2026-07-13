@@ -4,11 +4,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.mneme.conf.logging import app_logger
 from app.mneme.crud.document import get_document_by_id
 from app.mneme.crud.knowledge_base import get_knowledge_base_by_id
-from app.mneme.crud.user import get_user_by_id
 from app.mneme.crud.memory_entry import create_memory_entries
-from app.mneme.schemas.memory_entry import MemoryExtractPipelineResult, MemoryEntryPayload
+from app.mneme.crud.user import get_user_by_id
 from app.mneme.domains.graph.projection import sync_document_memory_projection
-from app.mneme.domains.memory.service import extract_entries_from_chunks
+from app.mneme.domains.memory.service import extract_entries_from_chunks, reconcile_memory_entries_for_document
+from app.mneme.schemas.memory_entry import MemoryEntryPayload, MemoryExtractPipelineResult
 
 
 async def run_memory_extract_pipeline(
@@ -29,15 +29,18 @@ async def run_memory_extract_pipeline(
         MemoryEntryPayload(**item).model_dump()
         for item in deduped_entries
     ]
-    persisted_entries = await create_memory_entries(
-        db,
-        entries=payloads,
-    )
+    persisted_entries = []
     if document_id:
         document = await get_document_by_id(
             db,
             document_id=document_id,
         )
+        if document:
+            _, persisted_entries = await reconcile_memory_entries_for_document(
+                db,
+                document=document,
+                entries=payloads,
+            )
         knowledge_base = await get_knowledge_base_by_id(
             db,
             knowledge_base_id=knowledge_base_id,
@@ -54,6 +57,11 @@ async def run_memory_extract_pipeline(
                 document=document,
                 memory_entries=persisted_entries,
             )
+    else:
+        persisted_entries = await create_memory_entries(
+            db,
+            entries=payloads,
+        )
     app_logger.bind(module="memory_pipeline").info(
         f"memory extract pipeline completed knowledge_base_id={knowledge_base_id} "
         f"document_id={document_id} raw_entry_count={len(raw_entries)} "

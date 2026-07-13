@@ -29,6 +29,8 @@ class MemoryEntryPayload(BaseModel):
     summary: str
     evidence_text: str
     importance_score: float
+    extraction_version: str = "v1"
+    confidence: float = 0.5
 
 
 class MemoryExtractPipelineResult(BaseModel):

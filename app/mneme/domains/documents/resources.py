@@ -8,14 +8,16 @@ from app.mneme.crud.document import delete_document_by_id, list_documents
 from app.mneme.crud.knowledge_base import delete_knowledge_base_by_id
 from app.mneme.crud.memory_entry import delete_memory_entries_by_document_id, delete_memory_entries_by_knowledge_base_id
 from app.mneme.crud.task_record import delete_task_records_by_target_id
-from app.mneme.models.document import Document
 from app.mneme.domains.graph.projection import delete_document_projection, delete_knowledge_base_projection
+from app.mneme.domains.memory.projection import rebuild_memory_governance_projection
+from app.mneme.models.document import Document
 
 
 async def delete_document_resources(
         db: AsyncSession,
         *,
         document: Document,
+        rebuild_memory_projection: bool = True,
 ) -> dict[str, int | str]:
     chunk_rows = await list_chunks_by_document_id(
         db,
@@ -28,6 +30,13 @@ async def delete_document_resources(
         db,
         document_id=document.id,
     )
+    if rebuild_memory_projection:
+        await rebuild_memory_governance_projection(
+            db,
+            user_id=document.user_id,
+            knowledge_base_id=document.knowledge_base_id,
+            knowledge_base_pk=document.knowledge_base_pk,
+        )
     deleted_chunk_count = await delete_chunks_by_document_id(
         db,
         document_id=document.id,
@@ -78,6 +87,7 @@ async def delete_knowledge_base_resources(
         result = await delete_document_resources(
             db,
             document=document,
+            rebuild_memory_projection=False,
         )
         total_chunk_count += int(result["chunk_count"])
         total_deleted_memory_entry_count += int(result["deleted_memory_entry_count"])

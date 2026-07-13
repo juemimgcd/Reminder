@@ -1,19 +1,19 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.mneme.agent.adapters import build_mneme_agent
+from app.mneme.agent.contracts import AgentRequest
 from app.mneme.conf.config import settings
 from app.mneme.conf.database import get_write_database
 from app.mneme.conf.logging import app_logger
 from app.mneme.crud.knowledge_base import get_knowledge_base_by_id
+from app.mneme.domains.chat.service import ask_in_chat_session, message_to_data
 from app.mneme.infra.rate_limit import enforce_fixed_window_rate_limit
 from app.mneme.models.user import User
 from app.mneme.schemas.chat import ChatQueryData, ChatQueryRequest
-from app.mneme.domains.chat.service import ask_in_chat_session, message_to_data
-from app.mneme.domains.retrieval.query_service import generate_rag_answer
 from app.mneme.utils.auth import get_current_user
 from app.mneme.utils.exceptions import BusinessException
 from app.mneme.utils.response import success_response
-
 
 router = APIRouter(prefix="/kb/chat", tags=["chat"])
 
@@ -64,13 +64,15 @@ async def query_chat(
         )
         return success_response(data=data)
 
-    result = await generate_rag_answer(
-        question=payload.question,
-        db=db,
-        knowledge_base_id=payload.knowledge_base_id,
-        user_id=current_user.id,
-        top_k=payload.top_k,
+    agent_response = await build_mneme_agent(db).run(
+        AgentRequest(
+            question=payload.question,
+            knowledge_base_id=payload.knowledge_base_id,
+            user_id=current_user.id,
+            top_k=payload.top_k,
+        )
     )
+    result = agent_response.to_legacy_result()
     app_logger.bind(module="chat_router").info(
         f"chat query success user_id={current_user.id} knowledge_base_id={payload.knowledge_base_id} "
         f"source_count={len(result['sources'])} citation_count={len(result['citations'])} "

@@ -1,18 +1,25 @@
-from datetime import datetime, timezone
 import uuid
+from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.mneme.agent.adapters import build_mneme_agent
+from app.mneme.agent.contracts import AgentRequest
+from app.mneme.crud.ai_model_config import get_default_ai_model_config
 from app.mneme.crud.chat_message import create_chat_message, delete_chat_messages, list_chat_messages
 from app.mneme.crud.chat_session import (
     create_chat_session as insert_chat_session,
+)
+from app.mneme.crud.chat_session import (
     delete_chat_session as delete_chat_session_row,
+)
+from app.mneme.crud.chat_session import (
     get_chat_session_by_id,
+)
+from app.mneme.crud.chat_session import (
     list_chat_sessions as list_chat_session_rows,
 )
 from app.mneme.crud.knowledge_base import get_knowledge_base_by_id
-from app.mneme.crud.ai_model_config import get_default_ai_model_config
-from app.mneme.domains.retrieval.query_service import generate_rag_answer
 from app.mneme.domains.settings.ai_models import ai_model_config_runtime_kwargs
 from app.mneme.models.chat_message import ChatMessage
 from app.mneme.models.chat_session import ChatSession
@@ -164,20 +171,26 @@ async def ask_in_chat_session(
 ) -> tuple[ChatSession, list[ChatMessage]]:
     session = await require_owned_chat_session(db, current_user=current_user, session_id=session_id)
     if expected_knowledge_base_id and session.knowledge_base_id != expected_knowledge_base_id:
-        raise BusinessException(message="chat session does not belong to this knowledge base", code=4050, status_code=400)
+        raise BusinessException(
+            message="chat session does not belong to this knowledge base",
+            code=4050,
+            status_code=400,
+        )
     if session.archived_at is not None:
         raise BusinessException(message="chat session is archived", code=4049, status_code=400)
 
     model_config = await get_default_ai_model_config(db, user_id=current_user.id)
     llm_config = ai_model_config_runtime_kwargs(model_config) if model_config else None
-    result = await generate_rag_answer(
-        question=question,
-        db=db,
-        knowledge_base_id=session.knowledge_base_id,
-        user_id=current_user.id,
-        top_k=top_k,
-        llm_config=llm_config,
+    agent_response = await build_mneme_agent(db).run(
+        AgentRequest(
+            question=question,
+            knowledge_base_id=session.knowledge_base_id,
+            user_id=current_user.id,
+            top_k=top_k,
+            llm_config=llm_config,
+        )
     )
+    result = agent_response.to_legacy_result()
     now = datetime.now(timezone.utc)
     user_message = await create_chat_message(
         db,

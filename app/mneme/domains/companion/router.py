@@ -1,18 +1,18 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.mneme.agent.adapters import build_mneme_agent
+from app.mneme.agent.contracts import AgentRequest
 from app.mneme.conf.database import get_database
 from app.mneme.conf.logging import app_logger
 from app.mneme.crud.knowledge_base import get_knowledge_base_by_id
-from app.mneme.models.user import User
-from app.mneme.schemas.companion import CompanionAnswerResult, CompanionQueryRequest
 from app.mneme.domains.companion.service import build_companion_response
 from app.mneme.domains.profile.insight import build_growth_for_knowledge_base
-from app.mneme.domains.retrieval.query_service import generate_rag_answer
+from app.mneme.models.user import User
+from app.mneme.schemas.companion import CompanionAnswerResult, CompanionQueryRequest
 from app.mneme.utils.auth import get_current_user
 from app.mneme.utils.exceptions import BusinessException
 from app.mneme.utils.response import success_response
-
 
 router = APIRouter(prefix="/companion", tags=["companion"])
 
@@ -36,13 +36,15 @@ async def get_companion_reply(
     if knowledge_base.user_id != current_user.id:
         raise BusinessException(message="知识库不属于当前用户", code=4007)
 
-    result = await generate_rag_answer(
-        question=payload.question,
-        db=db,
-        top_k=payload.top_k,
-        knowledge_base_id=knowledge_base_id,
-        user_id=current_user.id,
+    agent_response = await build_mneme_agent(db).run(
+        AgentRequest(
+            question=payload.question,
+            knowledge_base_id=knowledge_base_id,
+            user_id=current_user.id,
+            top_k=payload.top_k,
+        )
     )
+    result = agent_response.to_legacy_result()
 
     entries, profile, report = await build_growth_for_knowledge_base(
         db,
