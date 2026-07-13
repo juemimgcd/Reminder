@@ -3,6 +3,10 @@ VERSION=0.1.0
 DESCRIPTION=Reminder production environment
 LOG_LEVEL=INFO
 
+APP_IMAGE_REPOSITORY=ghcr.io/juemimgcd/reminder
+APP_IMAGE_TAG=
+APP_IMAGE_PULL_POLICY=always
+
 PYTHON_VERSION=3.12
 PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 PIP_EXTRA_INDEX_URL=

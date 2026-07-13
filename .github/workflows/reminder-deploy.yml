@@ -4,16 +4,9 @@ on:
   push:
     branches:
       - master
+    tags:
+      - "v*"
   workflow_dispatch:
-    inputs:
-      run_deploy:
-        description: "Run remote deploy after checks"
-        required: false
-        default: "false"
-        type: choice
-        options:
-          - "false"
-          - "true"
 
 permissions:
   contents: read
@@ -69,172 +62,43 @@ jobs:
       - name: Run backend unit tests
         run: python -m pytest -q -p no:cacheprovider
 
-  deploy-ready:
-    runs-on: ubuntu-latest
-    outputs:
-      enabled: ${{ steps.check.outputs.enabled }}
-    steps:
-      - name: Check deploy configuration
-        id: check
-        env:
-          DEPLOY_HOST_SECRET: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_HOST_VAR: ${{ vars.DEPLOY_HOST }}
-          DEPLOY_USER_SECRET: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_USER_VAR: ${{ vars.DEPLOY_USER }}
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
-        run: |
-          set -euo pipefail
-          DEPLOY_HOST="${DEPLOY_HOST_SECRET:-${DEPLOY_HOST_VAR:-}}"
-          DEPLOY_USER="${DEPLOY_USER_SECRET:-${DEPLOY_USER_VAR:-}}"
-
-          if [[ -z "${DEPLOY_HOST}" || -z "${DEPLOY_USER}" || ( -z "${DEPLOY_SSH_KEY}" && -z "${DEPLOY_PASSWORD}" ) ]]; then
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Deploy job skipped because required deploy configuration is missing."
-            exit 0
-          fi
-
-          echo "enabled=true" >> "$GITHUB_OUTPUT"
-
-  deploy:
+  publish-image:
     runs-on: ubuntu-latest
     needs:
       - frontend-check
       - backend-check
-      - deploy-ready
-    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_deploy == 'true' && needs.deploy-ready.outputs.enabled == 'true' }}
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    permissions:
+      contents: read
+      packages: write
     steps:
-      - name: Validate deploy configuration
-        env:
-          DEPLOY_HOST_SECRET: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_HOST_VAR: ${{ vars.DEPLOY_HOST }}
-          DEPLOY_PORT_SECRET: ${{ secrets.DEPLOY_PORT }}
-          DEPLOY_PORT_VAR: ${{ vars.DEPLOY_PORT }}
-          DEPLOY_USER_SECRET: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_USER_VAR: ${{ vars.DEPLOY_USER }}
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
-          DEPLOY_APP_DIR: ${{ vars.DEPLOY_APP_DIR }}
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate release tag
+        shell: bash
         run: |
-          set -euo pipefail
-          missing=()
-          DEPLOY_HOST="${DEPLOY_HOST_SECRET:-${DEPLOY_HOST_VAR:-}}"
-          DEPLOY_PORT="${DEPLOY_PORT_SECRET:-${DEPLOY_PORT_VAR:-}}"
-          DEPLOY_USER="${DEPLOY_USER_SECRET:-${DEPLOY_USER_VAR:-}}"
-
-          if [[ -n "${DEPLOY_HOST_SECRET}" ]]; then
-            echo "::notice::DEPLOY_HOST loaded from repository secret."
-          elif [[ -n "${DEPLOY_HOST_VAR}" ]]; then
-            echo "::notice::DEPLOY_HOST loaded from repository variable."
-          fi
-
-          if [[ -n "${DEPLOY_USER_SECRET}" ]]; then
-            echo "::notice::DEPLOY_USER loaded from repository secret."
-          elif [[ -n "${DEPLOY_USER_VAR}" ]]; then
-            echo "::notice::DEPLOY_USER loaded from repository variable."
-          fi
-
-          if [[ -n "${DEPLOY_PORT_SECRET}" ]]; then
-            echo "::notice::DEPLOY_PORT loaded from repository secret."
-          elif [[ -n "${DEPLOY_PORT_VAR}" ]]; then
-            echo "::notice::DEPLOY_PORT loaded from repository variable."
-          fi
-
-          [[ -n "${DEPLOY_HOST}" ]] || missing+=("DEPLOY_HOST")
-          [[ -n "${DEPLOY_USER}" ]] || missing+=("DEPLOY_USER")
-
-          if (( ${#missing[@]} > 0 )); then
-            echo "::error::Missing required GitHub Actions deploy configuration: ${missing[*]}"
-            echo "::error::Set them in Repository variables or Repository secrets. See .github/deploy/github-actions.secrets.example."
+          if [[ ! "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tags must use vMAJOR.MINOR.PATCH (got: ${GITHUB_REF_NAME})." >&2
             exit 1
           fi
 
-          if [[ -z "${DEPLOY_SSH_KEY}" && -z "${DEPLOY_PASSWORD}" ]]; then
-            echo "::error::Missing deploy authentication secret. Set DEPLOY_SSH_KEY or DEPLOY_PASSWORD."
-            echo "::error::SSH key auth is recommended, but password auth is also supported by this workflow."
-            exit 1
-          fi
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-          if [[ -z "${DEPLOY_APP_DIR}" ]]; then
-            echo "::warning::DEPLOY_APP_DIR is not set. Falling back to /opt/reminder."
-          fi
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-          if [[ -z "${DEPLOY_PORT}" ]]; then
-            echo "::notice::DEPLOY_PORT is not set. Falling back to 22."
-          fi
-
-      - name: Prepare SSH client
-        env:
-          DEPLOY_HOST_SECRET: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_HOST_VAR: ${{ vars.DEPLOY_HOST }}
-          DEPLOY_PORT_SECRET: ${{ secrets.DEPLOY_PORT }}
-          DEPLOY_PORT_VAR: ${{ vars.DEPLOY_PORT }}
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
-        run: |
-          set -euo pipefail
-          DEPLOY_HOST="${DEPLOY_HOST_SECRET:-${DEPLOY_HOST_VAR:-}}"
-          DEPLOY_PORT="${DEPLOY_PORT_SECRET:-${DEPLOY_PORT_VAR:-22}}"
-
-          if [[ -n "${DEPLOY_SSH_KEY}" ]]; then
-            install -m 700 -d ~/.ssh
-            printf '%s\n' "${DEPLOY_SSH_KEY}" > ~/.ssh/reminder_deploy_key
-            chmod 600 ~/.ssh/reminder_deploy_key
-            ssh-keyscan -p "${DEPLOY_PORT}" -H "${DEPLOY_HOST}" >> ~/.ssh/known_hosts
-          elif [[ -n "${DEPLOY_PASSWORD}" ]]; then
-            sudo apt-get update
-            sudo apt-get install -y sshpass
-          fi
-
-      - name: Run remote deploy script
-        env:
-          DEPLOY_HOST_SECRET: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_HOST_VAR: ${{ vars.DEPLOY_HOST }}
-          DEPLOY_PORT_SECRET: ${{ secrets.DEPLOY_PORT }}
-          DEPLOY_PORT_VAR: ${{ vars.DEPLOY_PORT }}
-          DEPLOY_USER_SECRET: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_USER_VAR: ${{ vars.DEPLOY_USER }}
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
-          DEPLOY_APP_DIR: ${{ vars.DEPLOY_APP_DIR }}
-          DEPLOY_BRANCH: ${{ vars.DEPLOY_BRANCH }}
-          DEPLOY_ENABLE_NGINX_SYNC: ${{ vars.DEPLOY_ENABLE_NGINX_SYNC }}
-        run: |
-          set -euo pipefail
-          DEPLOY_HOST="${DEPLOY_HOST_SECRET:-${DEPLOY_HOST_VAR:-}}"
-          DEPLOY_PORT="${DEPLOY_PORT_SECRET:-${DEPLOY_PORT_VAR:-22}}"
-          DEPLOY_USER="${DEPLOY_USER_SECRET:-${DEPLOY_USER_VAR:-}}"
-          DEPLOY_APP_DIR="${DEPLOY_APP_DIR:-/opt/reminder}"
-          DEPLOY_BRANCH="${DEPLOY_BRANCH:-master}"
-          DEPLOY_ENABLE_NGINX_SYNC="${DEPLOY_ENABLE_NGINX_SYNC:-1}"
-
-          REMOTE_CMD=$(cat <<EOF
-          set -euo pipefail
-          if [[ ! -d '${DEPLOY_APP_DIR}' ]]; then
-            echo '::error::Remote deploy directory not found: ${DEPLOY_APP_DIR}'
-            echo '::error::This workflow only performs upgrades on a server that has already completed the initial deployment.'
-            echo '::error::Clone the repository to ${DEPLOY_APP_DIR}, create the production .env, and verify docker/nginx are installed first.'
-            exit 1
-          fi
-
-          if [[ ! -f '${DEPLOY_APP_DIR}/upgrade.sh' ]]; then
-            echo '::error::Remote upgrade script not found: ${DEPLOY_APP_DIR}/upgrade.sh'
-            echo '::error::The server project directory looks incomplete. Make sure the repository has been cloned successfully.'
-            exit 1
-          fi
-
-          cd '${DEPLOY_APP_DIR}'
-          BRANCH='${DEPLOY_BRANCH}' ENABLE_NGINX_SYNC='${DEPLOY_ENABLE_NGINX_SYNC}' bash './upgrade.sh'
-          EOF
-          )
-
-          if [[ -n "${DEPLOY_SSH_KEY}" ]]; then
-            ssh -i ~/.ssh/reminder_deploy_key -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" "${REMOTE_CMD}"
-          else
-            sshpass -p "${DEPLOY_PASSWORD}" ssh \
-              -o StrictHostKeyChecking=no \
-              -o UserKnownHostsFile=/dev/null \
-              -p "${DEPLOY_PORT}" \
-              "${DEPLOY_USER}@${DEPLOY_HOST}" \
-              "${REMOTE_CMD}"
-          fi
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/reminder:${{ github.ref_name }}
+            ghcr.io/${{ github.repository_owner }}/reminder:sha-${{ github.sha }}

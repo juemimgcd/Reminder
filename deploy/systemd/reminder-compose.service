@@ -8,8 +8,8 @@ Wants=network-online.target
 Type=oneshot
 WorkingDirectory=/opt/reminder
 RemainAfterExit=yes
-ExecStart=/usr/bin/docker compose up -d --build --remove-orphans
-ExecReload=/usr/bin/docker compose up -d --build --remove-orphans
+ExecStart=/usr/bin/docker compose up -d --no-build --remove-orphans
+ExecReload=/usr/bin/docker compose up -d --no-build --remove-orphans
 ExecStop=/usr/bin/docker compose down
 TimeoutStartSec=0
 
