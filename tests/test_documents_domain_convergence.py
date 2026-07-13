@@ -19,7 +19,7 @@ class DocumentsDomainConvergenceTest(unittest.TestCase):
     def test_documents_router_keeps_public_paths(self):
         from app.mneme.main import app
 
-        paths = {route.path for route in app.routes}
+        paths = set(app.openapi()["paths"])
         self.assertIn("/kb/documents/upload", paths)
         self.assertIn("/kb/documents", paths)
         self.assertIn("/kb/documents/{document_id}/preview", paths)

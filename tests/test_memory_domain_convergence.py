@@ -20,7 +20,7 @@ class MemoryDomainConvergenceTest(unittest.TestCase):
     def test_memory_router_keeps_public_paths(self):
         from app.mneme.main import app
 
-        paths = {route.path for route in app.routes}
+        paths = set(app.openapi()["paths"])
         self.assertIn("/memory/knowledge-bases/{knowledge_base_id}/library", paths)
         self.assertIn("/memory/knowledge-bases/{knowledge_base_id}/governance", paths)
         self.assertIn("/memory/knowledge-bases/{knowledge_base_id}/rebuild", paths)

@@ -18,7 +18,7 @@ class AdviceDomainConvergenceTest(unittest.TestCase):
     def test_advice_router_keeps_public_path(self):
         from app.mneme.main import app
 
-        paths = {route.path for route in app.routes}
+        paths = set(app.openapi()["paths"])
         self.assertIn("/advice/knowledge-bases/{knowledge_base_id}", paths)
 
 

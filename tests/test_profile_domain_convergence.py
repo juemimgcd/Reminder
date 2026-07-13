@@ -22,7 +22,7 @@ class ProfileDomainConvergenceTest(unittest.TestCase):
     def test_profile_router_keeps_public_paths(self):
         from app.mneme.main import app
 
-        paths = {route.path for route in app.routes}
+        paths = set(app.openapi()["paths"])
         self.assertIn("/profile/knowledge-bases/{knowledge_base_id}", paths)
         self.assertIn("/profile/knowledge-bases/{knowledge_base_id}/evidence", paths)
 

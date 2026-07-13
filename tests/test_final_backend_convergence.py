@@ -40,7 +40,7 @@ class FinalBackendConvergenceTest(unittest.TestCase):
     def test_public_routes_are_preserved(self):
         from app.mneme.main import app
 
-        paths = {route.path for route in app.routes}
+        paths = set(app.openapi()["paths"])
         expected_paths = {
             "/health",
             "/health/neo4j",

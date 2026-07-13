@@ -26,7 +26,7 @@ class GraphDomainConvergenceTest(unittest.TestCase):
     def test_graph_router_keeps_public_paths(self):
         from app.mneme.main import app
 
-        paths = {route.path for route in app.routes}
+        paths = set(app.openapi()["paths"])
         self.assertIn("/graph", paths)
         self.assertIn("/graph/rebuild", paths)
         self.assertIn("/graph/documents/{document_id}", paths)
