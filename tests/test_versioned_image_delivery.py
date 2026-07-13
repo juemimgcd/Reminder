@@ -6,6 +6,7 @@ import yaml
 
 COMPOSE_FILE = Path(__file__).resolve().parents[1] / "docker-compose.yml"
 RELEASE_SCRIPT = Path(__file__).resolve().parents[1] / "deploy" / "release-image.sh"
+UPGRADE_SCRIPT = Path(__file__).resolve().parents[1] / "upgrade.sh"
 SYSTEMD_SERVICE = (
     Path(__file__).resolve().parents[1]
     / "deploy"
@@ -60,6 +61,30 @@ def test_release_script_pre_pulls_the_requested_image_before_updating_dotenv():
     assert helper in script
     assert pull in script
     assert script.index(pull) < script.index(first_upsert)
+
+
+def test_upgrade_script_defaults_to_latest_version_tag_and_accepts_an_override():
+    script = UPGRADE_SCRIPT.read_text(encoding="utf-8")
+
+    assert 'REQUESTED_TAG="${1:-}"' in script
+    assert "git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname" in script
+    assert "SEMVER_PATTERN='^v(0|[1-9][0-9]*)" in script
+    assert 'IMAGE_TAG="$SELECTED_TAG" bash deploy/release-image.sh' in script
+
+
+def test_upgrade_script_updates_deployment_files_and_safely_reloads_nginx():
+    script = UPGRADE_SCRIPT.read_text(encoding="utf-8")
+
+    assert 'git fetch --prune --prune-tags "$REMOTE" "$BRANCH" --tags' in script
+    assert 'git pull --ff-only "$REMOTE" "$BRANCH"' in script
+    assert 'NGINX_DUMP="$(${SUDO} nginx -T 2>&1)"' in script
+    assert (
+        "grep -Eq '^[[:space:]]*(ssl_certificate|listen[[:space:]].*443)'"
+        in script
+    )
+    assert '${SUDO} nginx -t' in script
+    assert '${SUDO} systemctl reload nginx' in script
+    assert "docker compose up -d --build" not in script
 
 
 def test_systemd_service_restarts_the_stack_without_building_images():
