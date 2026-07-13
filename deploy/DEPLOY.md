@@ -1,14 +1,18 @@
 # Reminder 部署说明
 
-本文档基于当前仓库的推荐部署方式整理：单台 Linux 服务器、Docker Compose 启动全套服务、Nginx 对外代理、根目录 `upgrade.sh` 负责升级。
+本文档基于当前仓库的推荐部署方式整理：单台 Linux 服务器、Docker Compose 启动全套服务、Nginx 对外代理，以及 GitHub Container Registry（GHCR）发布带版本号的镜像。
 
 ## 1. 部署模型
 
-当前推荐的是这条链路：
+日常生产发布推荐使用这条链路：
 
 ```text
-本地开发 -> git push -> 服务器执行 bash upgrade.sh
+本地开发 -> git push tag vX.Y.Z -> GitHub Actions 构建并发布 GHCR 镜像 -> 服务器拉取该版本镜像
 ```
+
+推送 `vX.Y.Z` 标签会触发 GitHub Actions。服务器在正常发布时不执行 `git pull`，也不在本机重新构建镜像；只拉取指定版本的 GHCR 镜像并重启 Compose 服务。
+
+版本标签是发布标识符，不是镜像 digest；它们通过仓库访问控制和标签保护来管理，包括 `protected Git release tags`。为避免已发布版本被重新指向其他代码，`version tags are not overwritten`。
 
 线上只有一个公开入口：
 
@@ -31,7 +35,7 @@ sudo usermod -aG docker $USER
 
 执行完 `usermod` 后重新登录一次服务器。
 
-## 3. 克隆项目
+## 3. 获取部署配置（仅首次）
 
 ```bash
 sudo mkdir -p /opt/reminder
@@ -40,7 +44,7 @@ git clone <your-repo-url> /opt/reminder
 cd /opt/reminder
 ```
 
-如果仓库是私有仓库，建议先配置 deploy key 或服务器 SSH key，再执行 `git clone`。
+此克隆只用于保存 Compose 文件、部署脚本和运行时 `.env`，不用于在服务器构建应用镜像。仓库为私有时，建议先配置 deploy key 或服务器 SSH key，再执行 `git clone`。
 
 ## 4. 配置环境变量
 
@@ -74,21 +78,23 @@ cp deploy/env/backend.production.example .env
 - 当前模板已经预留 `RERANKER_*` 和 `RETRIEVAL_*` 参数，可用来打开 `BAAI/bge-reranker-v2-m3` 和放大召回候选池。
 - `LLM_PROVIDER` 支持 `qwen`、`mimo`、`kimi`、`glm`、`deepseek`，生产模板默认是 `deepseek`。可以配置对应的 provider key，也可以统一使用 `LLM_API_KEY`；`LLM_BASE_URL` 和 `LLM_MODEL_NAME` 留空时会使用 provider 默认值。
 
-## 5. 首次启动
+## 5. 首次启动（从 GHCR 拉取镜像）
 
 ```bash
-docker compose up -d --build
-docker compose ps
-curl http://127.0.0.1:8000/health
+docker login ghcr.io
+cd /opt/reminder
+IMAGE_TAG=v1.2.3 bash deploy/release-image.sh
 ```
 
-默认启动不再包含 Milvus standalone，因此不会拉起 `milvus + etcd + minio` 这组三个高磁盘占用服务。需要文档向量索引和 RAG 检索时，使用：
+`docker login ghcr.io` 使用具有 package read 权限的 GitHub token；私有 GHCR 镜像首次拉取前只需登录一次。`IMAGE_TAG` 必须是已经由 GitHub Actions 发布的版本标签。
 
-```bash
-COMPOSE_PROFILES=vector docker compose up -d --build
+默认启动不再包含 Milvus standalone，因此不会拉起 `milvus + etcd + minio` 这组三个高磁盘占用服务。需要文档向量索引和 RAG 检索时，在 `.env` 中设置：
+
+```env
+COMPOSE_PROFILES=vector
 ```
 
-如果你希望应用和 worker 在启动时也等待 Milvus ready，可以在 `.env` 中同时配置：
+如果你希望应用和 worker 在启动时也等待 Milvus ready，可以在 `.env` 中同时配置以下值，然后重新运行相同的 `IMAGE_TAG=vX.Y.Z bash deploy/release-image.sh` 命令：
 
 ```env
 COMPOSE_PROFILES=vector
@@ -146,9 +152,11 @@ sudo certbot --nginx -d your-domain.com
 
 - [deploy/systemd/reminder-compose.service](systemd/reminder-compose.service)
 
-安装：
+对于已有的源码构建部署，执行这一次最终源码更新和 systemd 安装；此后日常发布只拉取 GHCR 镜像，不再更新服务器上的应用源码：
 
 ```bash
+cd /opt/reminder
+git pull --ff-only
 sudo cp deploy/systemd/reminder-compose.service /etc/systemd/system/reminder-compose.service
 sudo systemctl daemon-reload
 sudo systemctl enable --now reminder-compose.service
@@ -157,77 +165,48 @@ sudo systemctl status reminder-compose.service
 
 如果你的项目目录不是 `/opt/reminder`，先修改 service 文件里的 `WorkingDirectory`。
 
-## 8. 日常升级
+## 8. 日常发布与回滚
 
-代码更新推荐统一走根目录脚本：
+首次启动步骤中的 `docker login ghcr.io` 使用具有 package read 权限的 GitHub token；登录状态可供后续版本拉取复用。
+
+运行时密钥只保存在服务器的 `.env`，包括 `JWT_SECRET`、数据库密码和 LLM provider API key；不要将它们提交到 GitHub，也不要写入镜像。
+
+发布新版本时，在开发机提交代码并推送版本标签：
+
+```bash
+git tag v1.2.3
+git push origin v1.2.3
+```
+
+推送 `vX.Y.Z` 标签会触发 GitHub Actions 构建和发布同名 GHCR 镜像。发布完成后，在服务器执行：
 
 ```bash
 cd /opt/reminder
-bash upgrade.sh
+IMAGE_TAG=v1.2.3 bash deploy/release-image.sh
 ```
 
-这个脚本会自动完成：
-
-1. 拉取最新代码
-2. 重新构建并重启 Compose 服务
-3. 同步 `nginx/reminder.conf`
-4. 检查并重载 Nginx
-5. 输出容器状态
-
-如果你这次只想更新容器，不想覆盖 Nginx：
+正常发布不需要在服务器执行 `git pull` 或 `docker compose build`。如需回滚，重新选择已发布的旧版本：
 
 ```bash
 cd /opt/reminder
-ENABLE_NGINX_SYNC=0 bash upgrade.sh
+IMAGE_TAG=v1.2.2 bash deploy/release-image.sh
 ```
 
-`deploy/scripts/update_server.sh` 现在只是兼容入口，本质上会转到根目录 `upgrade.sh`。
+脚本会拉取指定镜像版本并重启 Compose 服务；发布或回滚后检查：
 
-## 9. GitHub Actions 自动部署
+```bash
+docker compose ps
+curl http://127.0.0.1:8000/health
+```
 
-如果你不想每次手动 SSH 到服务器执行 `bash upgrade.sh`，也可以开启仓库里的 GitHub Actions 自动部署。
+## 9. GitHub Actions 镜像发布
 
 相关文件：
 
-- [.github/deploy/github-actions.deploy.sh](../.github/deploy/github-actions.deploy.sh)
-- [.github/deploy/github-actions.secrets.example](../.github/deploy/github-actions.secrets.example)
 - `.github/workflows/reminder-deploy.yml`
+- [.github/deploy/github-actions.secrets.example](../.github/deploy/github-actions.secrets.example)
 
-说明：
-
-- 真正的 workflow 文件必须放在 `.github/workflows/`
-- `.github/deploy/github-actions.deploy.sh` 会在服务器上调用 `upgrade.sh`
-- `.github/deploy/github-actions.secrets.example` 用来说明 GitHub 仓库需要配置哪些 Secrets 和 Variables
-
-至少需要在 GitHub 仓库里配置这些认证 Secrets 之一：
-
-- `DEPLOY_SSH_KEY` 或 `DEPLOY_PASSWORD`
-
-推荐配置这些 Variables：
-
-- `DEPLOY_HOST=your-server-ip-or-domain`
-- `DEPLOY_PORT=22`
-- `DEPLOY_USER=your-server-user`
-- `DEPLOY_APP_DIR=/opt/reminder`
-- `DEPLOY_BRANCH=master`
-- `DEPLOY_ENABLE_NGINX_SYNC=1`
-
-`DEPLOY_HOST`、`DEPLOY_PORT`、`DEPLOY_USER` 现在既支持放在 Variables，也支持放在 Secrets；更推荐放在 Variables，管理起来更直观。
-
-默认行为：
-
-- push 到 `master` 时自动执行前端类型检查和后端编译检查
-- 也支持在 GitHub Actions 页面手动触发
-- 先做 Vue 前端类型检查和后端源码编译检查
-- 只有手动触发并把 `run_deploy` 选成 `true` 时，检查通过后才会 SSH 到服务器执行部署脚本
-
-如果你当前服务器还是 FinalShell 这类“用户名 + 密码”登录方式，也可以先直接配置：
-
-- `DEPLOY_HOST`
-- `DEPLOY_USER`
-- `DEPLOY_PASSWORD`
-
-这时 workflow 会自动切到密码登录模式，不强制要求先准备 SSH key。
+GitHub Actions 使用仓库自带的 `GITHUB_TOKEN` 发布 GHCR 镜像；不需要为源码 SSH 部署配置 `DEPLOY_*` 凭据。服务器拉取私有镜像所需的只读 package 凭据与 Actions 发布凭据相互独立，详见 secrets 示例文件。
 
 ## 10. 常用排查命令
 
@@ -251,12 +230,12 @@ docker compose logs -f migrate
 sudo tail -f /var/log/nginx/error.log
 ```
 
-如果升级失败，优先检查：
+如果镜像发布或拉取失败，优先检查：
 
-- `git remote -v` 是否正确
-- 服务器 SSH key 是否有拉取权限
-- 当前目录是不是仓库根目录
-- `.env` 是否还在
+- GitHub Actions 对应 `vX.Y.Z` 标签的构建是否完成
+- `APP_IMAGE_REPOSITORY` 和 `APP_IMAGE_TAG` 是否正确
+- 服务器是否已执行 `docker login ghcr.io` 并拥有 package read 权限
+- 服务器 `.env` 是否还在
 - `docker compose ps` 里是不是有未健康的基础服务
 
 ### Milvus 占用磁盘太大

@@ -8,7 +8,8 @@ x-app-base: &app-base
       PYTHON_VERSION: ${PYTHON_VERSION:-3.12}
       PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
       PIP_EXTRA_INDEX_URL: ${PIP_EXTRA_INDEX_URL:-}
-  image: reminder-app:local
+  image: ${APP_IMAGE_REPOSITORY:-reminder-app}:${APP_IMAGE_TAG:-local}
+  pull_policy: ${APP_IMAGE_PULL_POLICY:-missing}
   restart: unless-stopped
   init: true
   env_file:
