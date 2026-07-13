@@ -227,6 +227,8 @@ export interface QueryRouteDecision {
   reason: string;
 }
 
+export type AnswerMode = "kb_qa" | "memory_query" | "profile_query" | "analysis_query" | "general_chat";
+
 export interface ChatSourceItem {
   source_id: string;
   knowledge_base_id: string | null;

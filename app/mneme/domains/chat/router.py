@@ -108,6 +108,7 @@ async def create_chat_message_api(
         session_id=session_id,
         question=payload.question,
         top_k=payload.top_k,
+        answer_mode=payload.answer_mode,
         expected_knowledge_base_id=None,
     )
     return success_response(

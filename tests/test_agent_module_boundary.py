@@ -5,9 +5,8 @@ import pytest
 
 from app.mneme.agent.adapters.rag_answer import RagAnswerEngine
 from app.mneme.agent.contracts import AgentRequest, AgentResponse
-from app.mneme.agent.router import route_query as agent_route_query
+from app.mneme.agent.router import route_answer_mode
 from app.mneme.agent.service import MnemeAgent
-from app.mneme.domains.retrieval.query_router import route_query as legacy_route_query
 
 ROOT = Path(__file__).resolve().parents[1]
 AGENT_CORE_FILES = (
@@ -41,6 +40,7 @@ def test_agent_request_preserves_empty_question_routing_compatibility():
     )
 
     assert request.question == ""
+    assert request.answer_mode == "kb_qa"
 
 
 def test_agent_run_uses_the_answer_engine_boundary():
@@ -114,6 +114,7 @@ def test_rag_adapter_preserves_request_and_raw_response_fields(monkeypatch):
         knowledge_base_id="kb_1",
         user_id=9,
         top_k=6,
+        answer_mode="memory_query",
         llm_config={"model_name": "model_1"},
     )
 
@@ -125,6 +126,7 @@ def test_rag_adapter_preserves_request_and_raw_response_fields(monkeypatch):
         "knowledge_base_id": "kb_1",
         "user_id": 9,
         "top_k": 6,
+        "answer_mode": "memory_query",
         "llm_config": {"model_name": "model_1"},
     }
     assert response.sources[0]["source_chunk_ids"] == ["chunk_1", "chunk_2"]
@@ -132,18 +134,21 @@ def test_rag_adapter_preserves_request_and_raw_response_fields(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "question",
+    ("answer_mode", "target_pipeline", "requires_retrieval"),
     [
-        "hello",
-        "please upload this file",
-        "describe my profile",
-        "show my recent trend",
-        "what do you remember",
-        "explain the architecture",
+        ("kb_qa", "evidence_rag", True),
+        ("memory_query", "memory_rag", True),
+        ("profile_query", "profile", False),
+        ("analysis_query", "growth_analysis", False),
+        ("general_chat", "general_chat", False),
     ],
 )
-def test_agent_router_preserves_legacy_routing_behavior(question):
-    assert agent_route_query(question) == legacy_route_query(question)
+def test_agent_routes_the_user_selected_answer_mode(answer_mode, target_pipeline, requires_retrieval):
+    route = route_answer_mode(answer_mode)
+
+    assert route.query_type == answer_mode
+    assert route.target_pipeline == target_pipeline
+    assert route.requires_retrieval is requires_retrieval
 
 
 def test_online_answer_consumers_use_the_agent_entry_point():

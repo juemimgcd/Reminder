@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mneme.agent.adapters import build_mneme_agent
-from app.mneme.agent.contracts import AgentRequest
+from app.mneme.agent.contracts import AgentRequest, AnswerMode
 from app.mneme.crud.ai_model_config import get_default_ai_model_config
 from app.mneme.crud.chat_message import create_chat_message, delete_chat_messages, list_chat_messages
 from app.mneme.crud.chat_session import (
@@ -167,6 +167,7 @@ async def ask_in_chat_session(
     session_id: str,
     question: str,
     top_k: int,
+    answer_mode: AnswerMode = "kb_qa",
     expected_knowledge_base_id: str | None = None,
 ) -> tuple[ChatSession, list[ChatMessage]]:
     session = await require_owned_chat_session(db, current_user=current_user, session_id=session_id)
@@ -187,6 +188,7 @@ async def ask_in_chat_session(
             knowledge_base_id=session.knowledge_base_id,
             user_id=current_user.id,
             top_k=top_k,
+            answer_mode=answer_mode,
             llm_config=llm_config,
         )
     )

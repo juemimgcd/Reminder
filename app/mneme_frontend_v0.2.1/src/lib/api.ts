@@ -2,6 +2,7 @@ import previewApi, { isPreviewMode, PREVIEW_API_BASE_URL, PREVIEW_TOKEN } from "
 import type {
   AiModelConfigData,
   AiModelConfigListData,
+  AnswerMode,
   ApiResponse,
   AuthTokenData,
   ChatSessionDetailData,
@@ -380,7 +381,7 @@ const realApi = {
   },
   chatQuery(
     token: string,
-    payload: { question: string; knowledge_base_id: string; top_k?: number; session_id?: string | null },
+    payload: { question: string; knowledge_base_id: string; answer_mode: AnswerMode; top_k?: number; session_id?: string | null },
   ) {
     return request<ChatQueryData>("/kb/chat/query", {
       method: "POST",
@@ -388,6 +389,7 @@ const realApi = {
       body: {
         question: payload.question,
         knowledge_base_id: payload.knowledge_base_id,
+        answer_mode: payload.answer_mode,
         top_k: payload.top_k ?? 4,
         session_id: payload.session_id ?? null,
       },
@@ -415,12 +417,13 @@ const realApi = {
       token,
     });
   },
-  sendChatSessionMessage(token: string, sessionId: string, payload: { question: string; top_k?: number }) {
+  sendChatSessionMessage(token: string, sessionId: string, payload: { question: string; answer_mode: AnswerMode; top_k?: number }) {
     return request<ChatSessionDetailData>(`/kb/chat/sessions/${sessionId}/messages`, {
       method: "POST",
       token,
       body: {
         question: payload.question,
+        answer_mode: payload.answer_mode,
         top_k: payload.top_k ?? 4,
       },
     });

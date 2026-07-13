@@ -10,6 +10,13 @@ const { t } = useI18n();
 const historyCollapsed = ref(window.matchMedia("(max-width: 1023px)").matches);
 const activeSession = computed(() => props.workspace.chatSessions.value.find((session) => session.id === props.workspace.activeChatSessionId.value));
 const activeModel = computed(() => props.workspace.aiModelConfigs.value.find((config) => config.id === props.workspace.activeAiModelConfigId.value));
+const answerModes = [
+  { value: "kb_qa", label: "Knowledge base" },
+  { value: "memory_query", label: "Long-term memory" },
+  { value: "profile_query", label: "Profile" },
+  { value: "analysis_query", label: "Growth" },
+  { value: "general_chat", label: "General chat" },
+] as const;
 </script>
 
 <template>
@@ -45,7 +52,9 @@ const activeModel = computed(() => props.workspace.aiModelConfigs.value.find((co
       </div>
 
       <form data-testid="workspace-chat-command" class="composer" @submit.prevent="workspace.sendChatMessage">
-        <div class="context-chip">Context: Node B</div>
+        <div data-testid="answer-mode-selector" class="answer-modes" aria-label="Answer mode">
+          <button v-for="mode in answerModes" :key="mode.value" type="button" :class="{ active: workspace.chatAnswerMode.value === mode.value }" :aria-pressed="workspace.chatAnswerMode.value === mode.value" @click="workspace.chatAnswerMode.value = mode.value">{{ mode.label }}</button>
+        </div>
         <div><textarea v-model="workspace.chatQuestion.value" :placeholder="t('ai.placeholder')" /><button aria-label="Send message"><Send class="size-5" /></button></div>
         <small>{{ t("ai.disclaimer") }}</small>
       </form>
@@ -88,10 +97,12 @@ h1, h2, p { margin: 0; }
 .sources > span { width: 100%; color: var(--text-tertiary); font: 0.64rem var(--font-mono); text-transform: uppercase; }
 .sources button { padding: 0.25rem 0.4rem; color: var(--accent); background: var(--accent-soft); border: 0; border-radius: 0.3rem; font-size: 0.66rem; }
 .composer { position: sticky; bottom: 0; padding: 0.75rem max(1rem, calc((100% - 820px) / 2)) 1rem; background: color-mix(in srgb, var(--bg-canvas) 94%, transparent); border-top: 1px solid var(--border-muted); }
-.context-chip { width: fit-content; margin-bottom: 0.35rem; padding: 0.2rem 0.45rem; color: var(--text-secondary); background: var(--bg-elevated); border-radius: 0.3rem; font-size: 0.66rem; }
+.answer-modes { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.45rem; }
+.answer-modes button { width: auto; height: auto; padding: 0.3rem 0.55rem; color: var(--text-secondary); background: var(--bg-elevated); border: 1px solid transparent; border-radius: 999px; font-size: 0.68rem; }
+.answer-modes button.active { color: var(--accent); background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
 .composer > div:nth-child(2) { display: flex; align-items: end; gap: 0.5rem; padding: 0.55rem; background: var(--bg-panel); border: 1px solid var(--border-muted); border-radius: 0.5rem; }
 .composer textarea { min-height: 2.8rem; flex: 1; resize: none; background: transparent; border: 0; outline: 0; }
-.composer button { display: grid; width: 2.5rem; height: 2.5rem; place-items: center; color: var(--accent-contrast); background: var(--accent); border: 0; border-radius: 0.4rem; }
+.composer > div:nth-child(2) > button { display: grid; width: 2.5rem; height: 2.5rem; place-items: center; color: var(--accent-contrast); background: var(--accent); border: 0; border-radius: 0.4rem; }
 .composer > small { display: block; margin-top: 0.4rem; text-align: center; }
 @media (max-width: 1023px) { .ai-layout, .ai-layout--collapsed { grid-template-columns: minmax(0, 1fr); } .ai-history-panel { position: absolute; inset: 0 auto 0 0; width: min(84vw, 320px); box-shadow: var(--shadow-float); } .ai-history-panel[aria-hidden="true"] { display: none; } .ai-history-panel header button { display: grid; place-items: center; color: var(--text-secondary); background: transparent; border: 0; } .rail-toggle { left: 0.4rem; } }
 @media (max-width: 767px) { .chat-header { padding-left: 3rem; } .delete-chat span { display: none; } .messages { padding: 1rem; } .composer { padding: 0.65rem; } }
