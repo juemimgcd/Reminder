@@ -1,20 +1,23 @@
 from collections.abc import Awaitable, Callable
 from datetime import datetime
 
-from app.mneme.conf.database import open_write_session
-from app.mneme.conf.logging import log_event
 from app.mneme.clients.document_loader_client import load_langchain_documents
 from app.mneme.clients.text_splitter_client import split_documents
+from app.mneme.conf.config import settings
+from app.mneme.conf.database import open_write_session
+from app.mneme.conf.logging import log_event
 from app.mneme.crud.chunk import create_chunks
 from app.mneme.crud.document import update_document_status
-from app.mneme.models.document import Document
-from app.mneme.schemas.document import DocumentIndexPipelineResult
+from app.mneme.domains.documents.agent_projection import build_document_projection_batches
 from app.mneme.domains.memory.service import rebuild_memory_entries_for_document
 from app.mneme.domains.tasks.outbox import (
+    enqueue_document_agent_projection,
     enqueue_document_graph_sync_event,
     enqueue_document_vector_reindex_event,
     process_outbox_event_by_id,
 )
+from app.mneme.models.document import Document
+from app.mneme.schemas.document import DocumentIndexPipelineResult
 
 
 async def emit_stage(
@@ -127,34 +130,59 @@ async def run_document_index_pipeline(
     )
 
     await emit_stage("memory_extracting", on_stage_change=on_stage_change)
-    memory_result = await rebuild_memory_entries_for_document(document=doc)
+    if settings.MEMORY_AGENT_ENABLED:
+        memory_result = {"deleted_entry_count": 0, "entry_count": 0}
+    else:
+        memory_result = await rebuild_memory_entries_for_document(document=doc)
 
     await emit_stage("embedding", on_stage_change=on_stage_change)
     await emit_stage("vector_upserting", on_stage_change=on_stage_change)
-    vector_event = await enqueue_document_vector_reindex_event(
-        document_id=doc.id,
-        operation_id=f"document-index-{doc.id}-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
-        delete_existing=True,
-    )
-    vector_outbox_result = await process_outbox_event_by_id(event_id=vector_event.id)
-    vector_result = vector_outbox_result["result"]
-    log_event(
-        "document_pipeline",
-        "info",
-        "document_index.vector_upsert_completed",
-        document_id=doc.id,
-        batch_count=vector_result["batch_count"],
-        batch_size=vector_result["batch_size"],
-        indexed_vector_count=vector_result["total_count"],
-    )
+    if settings.MEMORY_AGENT_ENABLED:
+        async with open_write_session() as db:
+            final_document = await update_document_status(
+                db,
+                document_id=doc.id,
+                status="indexed",
+            )
+            if final_document is None:
+                raise RuntimeError("document disappeared before projection enqueue")
+            doc = final_document
+            projection_batches = await build_document_projection_batches(
+                db,
+                document=doc,
+            )
+            for event in projection_batches:
+                await enqueue_document_agent_projection(db, event=event)
+        vector_result = {
+            "batch_count": len(projection_batches),
+            "batch_size": 50,
+            "total_count": len(chunk_docs),
+        }
+    else:
+        vector_event = await enqueue_document_vector_reindex_event(
+            document_id=doc.id,
+            operation_id=f"document-index-{doc.id}-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
+            delete_existing=True,
+        )
+        vector_outbox_result = await process_outbox_event_by_id(event_id=vector_event.id)
+        vector_result = vector_outbox_result["result"]
+        log_event(
+            "document_pipeline",
+            "info",
+            "document_index.vector_upsert_completed",
+            document_id=doc.id,
+            batch_count=vector_result["batch_count"],
+            batch_size=vector_result["batch_size"],
+            indexed_vector_count=vector_result["total_count"],
+        )
 
-    final_document = await update_document_status_with_projection(
-        document_id=doc.id,
-        status="indexed",
-        enqueue_projection=True,
-    )
-    if final_document:
-        doc = final_document
+        final_document = await update_document_status_with_projection(
+            document_id=doc.id,
+            status="indexed",
+            enqueue_projection=True,
+        )
+        if final_document:
+            doc = final_document
 
     log_event(
         "document_pipeline",

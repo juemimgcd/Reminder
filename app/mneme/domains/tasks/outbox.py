@@ -1,3 +1,4 @@
+import hashlib
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -30,6 +31,7 @@ from app.mneme.domains.tasks.outbox_http import apply_memory_agent_http_event
 from app.mneme.models.chunk import Chunk
 from app.mneme.models.document import Document
 from app.mneme.models.outbox_event import OutboxEvent
+from app.mneme.schemas.memory_agent import MemoryAgentEvent
 from app.mneme.utils.exceptions import BusinessException
 
 OUTBOX_PENDING = "pending"
@@ -250,6 +252,107 @@ async def mark_outbox_failed(*, event: OutboxEvent, exc: Exception) -> None:
             ),
             last_error=_bounded_error_detail(event=event, exc=exc),
         )
+
+
+async def _enqueue_memory_agent_event(
+        db: AsyncSession,
+        *,
+        event: MemoryAgentEvent,
+        aggregate_type: str,
+        aggregate_id: str,
+) -> OutboxEvent:
+    return await enqueue_outbox_event(
+        db=db,
+        event_type=event.event_type,
+        aggregate_type=aggregate_type,
+        aggregate_id=aggregate_id,
+        target_backend=settings.MEMORY_AGENT_OUTBOX_TARGET,
+        payload=event.model_dump(mode="json"),
+        operation_id=event.event_id,
+    )
+
+
+async def enqueue_document_agent_projection(
+        db: AsyncSession,
+        *,
+        event: MemoryAgentEvent,
+) -> OutboxEvent:
+    if event.event_type != "document.projection.upserted":
+        raise ValueError("document projection enqueue requires a projection event")
+    document_id = str(event.payload["document_id"])
+    return await _enqueue_memory_agent_event(
+        db,
+        event=event,
+        aggregate_type="document",
+        aggregate_id=document_id,
+    )
+
+
+async def enqueue_document_deleted(
+        db: AsyncSession,
+        *,
+        owner_id: int,
+        knowledge_base_id: str,
+        document_id: str,
+        source_version: datetime,
+) -> OutboxEvent:
+    source_version_text = source_version.isoformat()
+    event = MemoryAgentEvent(
+        event_id=_deletion_event_id("document-deleted", document_id, source_version_text),
+        event_type="document.deleted",
+        occurred_at=source_version,
+        owner_id=owner_id,
+        knowledge_base_id=knowledge_base_id,
+        payload={
+            "owner_id": owner_id,
+            "knowledge_base_id": knowledge_base_id,
+            "document_id": document_id,
+            "source_version": source_version_text,
+        },
+    )
+    return await _enqueue_memory_agent_event(
+        db,
+        event=event,
+        aggregate_type="document",
+        aggregate_id=document_id,
+    )
+
+
+async def enqueue_knowledge_base_deleted(
+        db: AsyncSession,
+        *,
+        owner_id: int,
+        knowledge_base_id: str,
+        source_version: datetime,
+) -> OutboxEvent:
+    source_version_text = source_version.isoformat()
+    event = MemoryAgentEvent(
+        event_id=_deletion_event_id(
+            "knowledge-base-deleted",
+            knowledge_base_id,
+            source_version_text,
+        ),
+        event_type="knowledge_base.deleted",
+        occurred_at=source_version,
+        owner_id=owner_id,
+        knowledge_base_id=knowledge_base_id,
+        payload={
+            "owner_id": owner_id,
+            "knowledge_base_id": knowledge_base_id,
+            "source_version": source_version_text,
+        },
+    )
+    return await _enqueue_memory_agent_event(
+        db,
+        event=event,
+        aggregate_type="knowledge_base",
+        aggregate_id=knowledge_base_id,
+    )
+
+
+def _deletion_event_id(prefix: str, *identity_parts: str) -> str:
+    identity = "\0".join(identity_parts)
+    return f"{prefix}:{hashlib.sha256(identity.encode('utf-8')).hexdigest()}"
 
 
 def _bounded_error_detail(*, event: OutboxEvent, exc: Exception) -> str:
