@@ -9,6 +9,7 @@ from services.memory_agent.models.memory_relation import MemoryRelation
 from services.memory_agent.models.memory_revision import MemoryRevision
 from services.memory_agent.models.memory_settings import MemorySettings
 from services.memory_agent.models.projection_batch import DocumentProjectionBatch
+from services.memory_agent.models.source_deletion_fence import SourceDeletionFence
 
 __all__ = [
     "Base",
@@ -22,4 +23,5 @@ __all__ = [
     "MemoryRelation",
     "MemoryRevision",
     "MemorySettings",
+    "SourceDeletionFence",
 ]

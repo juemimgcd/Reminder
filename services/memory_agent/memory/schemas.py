@@ -117,8 +117,11 @@ class DocumentMemoryObservedPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     document_id: str = Field(min_length=1, max_length=128)
+    projection_id: str = Field(min_length=1, max_length=64)
     chunk_id: str = Field(min_length=1, max_length=128)
-    source_version: str = Field(min_length=1, max_length=128)
+    document_version: str = Field(min_length=1, max_length=128)
+    content_hash: str = Field(min_length=64, max_length=64)
+    excerpt_hash: str = Field(min_length=64, max_length=64)
     observed_at: datetime
     excerpt: str = Field(min_length=1, max_length=MAX_EXCERPT_LENGTH)
 

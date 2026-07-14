@@ -46,6 +46,7 @@ class EvidenceInput:
     minimum_text: str
     content_hash: str
     occurred_at: datetime
+    source_document_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -70,6 +71,7 @@ async def _persist_evidence(
             knowledge_base_id=knowledge_base_id,
             source_type=item.source_type,
             source_id=item.source_id,
+            source_document_id=item.source_document_id,
             source_version=item.source_version,
             content_hash=item.content_hash,
         )
@@ -82,6 +84,7 @@ async def _persist_evidence(
                 knowledge_base_id=knowledge_base_id,
                 source_type=item.source_type,
                 source_id=item.source_id,
+                source_document_id=item.source_document_id,
                 source_version=item.source_version,
                 minimum_text=item.minimum_text,
                 content_hash=item.content_hash,
@@ -99,6 +102,11 @@ async def _persist_evidence(
             raise RuntimeError("evidence upsert did not return a durable row")
         if evidence.knowledge_base_id != knowledge_base_id:
             raise ValueError("evidence identity resolved outside owner scope")
+        if item.source_document_id is not None:
+            if evidence.source_document_id is None:
+                evidence.source_document_id = item.source_document_id
+            elif evidence.source_document_id != item.source_document_id:
+                raise ValueError("evidence identity resolved outside document scope")
         stored.append(evidence)
     return stored
 

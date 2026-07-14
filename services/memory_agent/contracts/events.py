@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 EventType = Literal[
     "document.projection.upserted",
@@ -23,6 +23,13 @@ class AgentEventEnvelope(BaseModel):
     owner_id: int
     knowledge_base_id: str | None = None
     payload: dict[str, Any]
+
+    @field_validator("occurred_at")
+    @classmethod
+    def occurred_at_must_have_timezone(cls, value: datetime) -> datetime:
+        if value.utcoffset() is None:
+            raise ValueError("occurred_at must include a timezone")
+        return value
 
 
 class EventReceipt(BaseModel):

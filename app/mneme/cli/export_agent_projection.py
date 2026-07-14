@@ -119,8 +119,9 @@ async def run_backfill(args: argparse.Namespace) -> dict[str, int]:
             projection_events = await build_document_projection_batches(
                 db, document=document, batch_size=args.batch_size
             )
-            observation_events = await build_document_memory_observation_events(
-                db, document=document
+            observation_events = build_document_memory_observation_events(
+                document=document,
+                projection_events=projection_events,
             )
         projection_id = str(projection_events[0].payload["projection_id"])
         document_version = str(projection_events[0].payload["document_version"])
@@ -228,9 +229,16 @@ async def run_backfill(args: argparse.Namespace) -> dict[str, int]:
         document = documents_by_id.get(memory.document_id)
         if document is None:
             raise ValueError(f"legacy memory {memory.id} has no scoped indexed document")
+        async with open_read_session() as db:
+            legacy_projection_events = await build_document_projection_batches(
+                db,
+                document=document,
+                batch_size=args.batch_size,
+            )
         event = build_legacy_document_memory_observed_event(
             document=document,
             memory=memory,
+            projection_events=legacy_projection_events,
         )
         async with open_write_session() as db:
             outbox_event = await enqueue_document_memory_observed(db, event=event)

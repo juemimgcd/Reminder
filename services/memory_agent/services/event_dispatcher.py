@@ -17,6 +17,10 @@ from services.memory_agent.services.deletion import (
     handle_document_deleted,
     handle_knowledge_base_deleted,
 )
+from services.memory_agent.services.deletion_fences import (
+    FenceSource,
+    event_is_blocked_by_deletion,
+)
 from services.memory_agent.services.memory_events import (
     MalformedMemoryEvent,
     handle_document_memory_observed,
@@ -50,6 +54,11 @@ async def handle_document_projection_upserted(event: AgentEventEnvelope) -> None
         payload = DocumentProjectionPayload.model_validate(event.payload)
     except ValidationError as exc:
         raise ProjectionIntegrityError("invalid document projection payload") from exc
+    if await event_is_blocked_by_deletion(
+        event,
+        sources=[FenceSource(source_type="document", source_id=payload.document_id)],
+    ):
+        return
     receipt = await stage_projection_batch(
         payload,
         owner_id=event.owner_id,

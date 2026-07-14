@@ -61,6 +61,7 @@ class Evidence(Base):
     knowledge_base_id: Mapped[str | None] = mapped_column(String(128))
     source_type: Mapped[str] = mapped_column(String(64), nullable=False)
     source_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    source_document_id: Mapped[str | None] = mapped_column(String(128), index=True)
     source_version: Mapped[str] = mapped_column(String(128), nullable=False)
     minimum_text: Mapped[str] = mapped_column(Text, nullable=False)
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)

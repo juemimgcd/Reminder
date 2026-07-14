@@ -157,9 +157,9 @@ async def run_document_index_pipeline(
             )
             for event in projection_batches:
                 await enqueue_document_agent_projection(db, event=event)
-            memory_observations = await build_document_memory_observation_events(
-                db,
+            memory_observations = build_document_memory_observation_events(
                 document=doc,
+                projection_events=projection_batches,
             )
             for event in memory_observations:
                 await enqueue_document_memory_observed(db, event=event)

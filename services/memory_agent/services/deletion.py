@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from sqlalchemy import delete, func, select
+from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.memory_agent.contracts.events import AgentEventEnvelope
@@ -15,6 +15,11 @@ from services.memory_agent.models.memory_candidate import MemoryCandidate
 from services.memory_agent.models.memory_revision import MemoryRevision
 from services.memory_agent.models.projection_batch import DocumentProjectionBatch
 from services.memory_agent.repositories.memories import lock_memory_slot
+from services.memory_agent.services.deletion_fences import (
+    FenceSource,
+    advance_deletion_fences,
+    event_is_blocked_by_deletion,
+)
 
 
 class SourceDeletionError(ValueError):
@@ -124,12 +129,15 @@ async def delete_source_evidence(
     knowledge_base_id: str | None,
     source_type: str | None = None,
     source_ids: set[str] | None = None,
+    source_document_id: str | None = None,
     delete_entire_scope: bool = False,
     projection_ids: set[str] | None = None,
 ) -> DeletionResult:
     if delete_entire_scope and knowledge_base_id is None:
         raise SourceDeletionError("entire-scope deletion requires a knowledge base")
-    if not delete_entire_scope and (not source_type or not source_ids):
+    if not delete_entire_scope and (
+        not source_type or (not source_ids and source_document_id is None)
+    ):
         deleted_projection_ids = tuple(sorted(projection_ids or set()))
         return DeletionResult(
             status="succeeded",
@@ -152,9 +160,22 @@ async def delete_source_evidence(
         _scope(Evidence.knowledge_base_id, knowledge_base_id),
     ]
     if not delete_entire_scope:
-        evidence_filter.extend(
-            [Evidence.source_type == source_type, Evidence.source_id.in_(source_ids or set())]
-        )
+        source_filters = []
+        if source_ids:
+            source_filters.append(
+                and_(
+                    Evidence.source_type == source_type,
+                    Evidence.source_id.in_(source_ids),
+                )
+            )
+        if source_document_id is not None:
+            source_filters.append(
+                and_(
+                    Evidence.source_type == "document",
+                    Evidence.source_document_id == source_document_id,
+                )
+            )
+        evidence_filter.append(or_(*source_filters))
 
     evidence_ids = set(
         await db.scalars(
@@ -442,6 +463,7 @@ async def delete_document_projection(
         knowledge_base_id=knowledge_base_id,
         source_type="document",
         source_ids=chunk_ids,
+        source_document_id=document_id,
         projection_ids=projection_ids,
     )
 
@@ -457,7 +479,32 @@ async def handle_document_deleted(event: AgentEventEnvelope) -> DeletionResult:
     except ValueError as exc:
         raise SourceDeletionError("invalid document deletion payload") from exc
     _validate_scope(event, payload)
+    if await event_is_blocked_by_deletion(
+        event,
+        sources=[FenceSource(source_type="document", source_id=payload.document_id)],
+    ):
+        async with open_write_session() as db:
+            return await delete_source_evidence(
+                db,
+                owner_id=event.owner_id,
+                knowledge_base_id=payload.knowledge_base_id,
+                source_type="document",
+                source_ids=set(),
+            )
     async with open_write_session() as db:
+        advanced = await advance_deletion_fences(
+            db,
+            event=event,
+            primary=FenceSource(source_type="document", source_id=payload.document_id),
+        )
+        if not advanced:
+            return await delete_source_evidence(
+                db,
+                owner_id=event.owner_id,
+                knowledge_base_id=payload.knowledge_base_id,
+                source_type="document",
+                source_ids=set(),
+            )
         return await delete_document_projection(
             db,
             owner_id=event.owner_id,
@@ -473,6 +520,22 @@ async def handle_knowledge_base_deleted(event: AgentEventEnvelope) -> DeletionRe
         raise SourceDeletionError("invalid knowledge base deletion payload") from exc
     _validate_scope(event, payload)
     async with open_write_session() as db:
+        advanced = await advance_deletion_fences(
+            db,
+            event=event,
+            primary=FenceSource(
+                source_type="knowledge_base",
+                source_id=payload.knowledge_base_id,
+            ),
+        )
+        if not advanced:
+            return await delete_source_evidence(
+                db,
+                owner_id=event.owner_id,
+                knowledge_base_id=payload.knowledge_base_id,
+                source_type="document",
+                source_ids=set(),
+            )
         projection_ids = set(
             await db.scalars(
                 select(DocumentProjection.projection_id)
@@ -504,7 +567,45 @@ async def handle_conversation_deleted(event: AgentEventEnvelope) -> DeletionResu
     except ValueError as exc:
         raise SourceDeletionError("invalid conversation deletion payload") from exc
     _validate_scope(event, payload)
+    if await event_is_blocked_by_deletion(
+        event,
+        sources=[
+            FenceSource(source_type="conversation", source_id=payload.session_id),
+            *[
+                FenceSource(source_type="explicit_request", source_id=message_id)
+                for message_id in payload.message_ids
+            ],
+        ],
+    ):
+        async with open_write_session() as db:
+            return await delete_source_evidence(
+                db,
+                owner_id=event.owner_id,
+                knowledge_base_id=event.knowledge_base_id,
+                source_type="conversation",
+                source_ids=set(),
+            )
     async with open_write_session() as db:
+        advanced = await advance_deletion_fences(
+            db,
+            event=event,
+            primary=FenceSource(
+                source_type="conversation",
+                source_id=payload.session_id,
+            ),
+            additional=[
+                FenceSource(source_type="explicit_request", source_id=message_id)
+                for message_id in payload.message_ids
+            ],
+        )
+        if not advanced:
+            return await delete_source_evidence(
+                db,
+                owner_id=event.owner_id,
+                knowledge_base_id=event.knowledge_base_id,
+                source_type="conversation",
+                source_ids=set(),
+            )
         conversation_result = await delete_source_evidence(
             db,
             owner_id=event.owner_id,

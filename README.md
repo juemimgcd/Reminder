@@ -190,6 +190,16 @@ Conversation deletion carries the complete stable message-ID list in one Postgre
 JSON/HTTP event; no arbitrary item cap can turn a large-conversation privacy deletion
 into a terminal validation failure.
 
+Memory Agent persists deletion fences ordered by the event envelope
+`(occurred_at, event_id)`. The envelope order is authoritative; document source version
+remains a provenance/snapshot identity and does not replace event ordering. Every
+document, conversation, and explicit-request write checks both its source fence and the
+knowledge-base fence. Events older than or equal to a fence succeed idempotently without
+writing, including projection batches that first arrive after deletion. A strictly newer
+event may proceed. Fence advancement and source cleanup commit in the same transaction
+while the owner/knowledge-base advisory lock is held, so correctness does not depend on
+Celery delivery order.
+
 Dry-run a source rebuild without writing Outbox or Agent state:
 
 ```bash
@@ -225,6 +235,14 @@ are re-extracted from stored evidence text, filtered secrets are not exported, o
 with chunks can be projected, and a deleted source cannot be rebuilt after its Mneme
 content has itself been deleted.
 
+Each document-memory observation is bound to a projection ID, document version, full
+chunk content hash, and excerpt hash. The Agent verifies owner/knowledge-base/document,
+chunk membership, version, hashes, and excerpt membership against an accepted projection
+batch before storing evidence. If its projection batch has not arrived, the observation
+stays pending and retries; invalid bindings fail terminally. Evidence stores the verified
+document ID, so document deletion removes all document evidence directly, with chunk-ID
+fallback for rows created before that column existed.
+
 Report Agent projection state without mutating projection or memory tables:
 
 ```bash
@@ -232,7 +250,8 @@ python -m services.memory_agent.cli.backfill --owner-id 42 --knowledge-base-id k
 python -m services.memory_agent.cli.backfill --resume-from PROJECTION_ID --batch-size 100 --dry-run
 ```
 
-The report includes staged, active, failed, superseded, hash, batch, stable chunk-key,
+The report includes staged, active, failed, superseded, hash, canonical per-batch payload
+hash, batch, stable chunk-key,
 and scope-mismatch counts. Active chunks are mapped to staged payloads by
 `(chunk_index, chunk_id)` with exact key-set, content-hash, projection, document,
 version, owner, and knowledge-base checks. It prints only safe IDs, booleans, and

@@ -6,7 +6,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.memory_agent.contracts.events import AgentEventEnvelope
-from services.memory_agent.database import engine, open_write_session
+from services.memory_agent.database import engine, open_read_session, open_write_session
 from services.memory_agent.memory.extraction import extract_candidates
 from services.memory_agent.memory.identity import (
     evidence_identity,
@@ -25,13 +25,23 @@ from services.memory_agent.memory.schemas import (
     MemorySettingsChangedPayload,
 )
 from services.memory_agent.memory.sensitivity import classify_sensitivity, contains_secret
+from services.memory_agent.models.document_projection import DocumentProjection
 from services.memory_agent.models.evidence import Evidence, candidate_evidence
 from services.memory_agent.models.inbox_event import InboxEvent
 from services.memory_agent.models.memory_candidate import MemoryCandidate
 from services.memory_agent.models.memory_settings import MemorySettings
+from services.memory_agent.models.projection_batch import DocumentProjectionBatch
+from services.memory_agent.services.deletion_fences import (
+    FenceSource,
+    event_is_blocked_by_deletion,
+)
 
 
 class MalformedMemoryEvent(ValueError):
+    pass
+
+
+class ProjectionObservationNotReady(RuntimeError):
     pass
 
 
@@ -163,6 +173,7 @@ async def _already_reconciled(
         knowledge_base_id=knowledge_base_id,
         source_type=reconciliation_evidence.source_type,
         source_id=reconciliation_evidence.source_id,
+        source_document_id=reconciliation_evidence.source_document_id,
         source_version=reconciliation_evidence.source_version,
         content_hash=reconciliation_evidence.content_hash,
     )
@@ -216,6 +227,7 @@ async def _extract_and_reconcile(
         stored_evidence = ReconciliationEvidenceInput(
             source_type=evidence.source_type,
             source_id=evidence.source_id,
+            source_document_id=document_id,
             source_version=evidence.source_version,
             minimum_text=candidate.evidence_quote,
             content_hash=content_hash,
@@ -255,6 +267,13 @@ async def _extract_and_reconcile(
 
 async def handle_conversation_completed(event: AgentEventEnvelope) -> None:
     payload = _payload(ConversationCompletedPayload, event)
+    if await event_is_blocked_by_deletion(
+        event,
+        sources=[
+            FenceSource(source_type="conversation", source_id=payload.session_id)
+        ],
+    ):
+        return
     if not await _automatic_conversation_enabled(event):
         return
     excerpt = (
@@ -277,6 +296,14 @@ async def handle_conversation_completed(event: AgentEventEnvelope) -> None:
 
 async def handle_user_memory_requested(event: AgentEventEnvelope) -> None:
     payload = _payload(MemoryRequestedPayload, event)
+    if await event_is_blocked_by_deletion(
+        event,
+        sources=[
+            FenceSource(source_type="conversation", source_id=payload.session_id),
+            FenceSource(source_type="explicit_request", source_id=payload.message_id),
+        ],
+    ):
+        return
     await _extract_and_reconcile(
         EvidenceInput(
             source_type="explicit_request",
@@ -297,11 +324,61 @@ async def handle_document_memory_observed(event: AgentEventEnvelope) -> None:
         raise MalformedMemoryEvent("document memory observations require a knowledge base")
     if payload.observed_at != event.occurred_at:
         raise MalformedMemoryEvent("document memory observation time does not match envelope")
+    if await event_is_blocked_by_deletion(
+        event,
+        sources=[FenceSource(source_type="document", source_id=payload.document_id)],
+    ):
+        return
+    if hashlib.sha256(payload.excerpt.encode("utf-8")).hexdigest() != payload.excerpt_hash:
+        raise MalformedMemoryEvent("document memory excerpt hash mismatch")
+    async with open_read_session() as db:
+        projection = await db.get(DocumentProjection, payload.projection_id)
+        if projection is None:
+            raise ProjectionObservationNotReady("document projection has not arrived")
+        if (
+            projection.owner_id != event.owner_id
+            or projection.knowledge_base_id != event.knowledge_base_id
+            or projection.document_id != payload.document_id
+            or projection.document_version != payload.document_version
+        ):
+            raise MalformedMemoryEvent("document memory projection scope mismatch")
+        if projection.status == "staging":
+            raise ProjectionObservationNotReady("document projection is not active")
+        if projection.status != "active":
+            raise MalformedMemoryEvent("document memory projection is not active")
+        batches = list(
+            await db.scalars(
+                select(DocumentProjectionBatch).where(
+                    DocumentProjectionBatch.projection_id == payload.projection_id
+                )
+            )
+        )
+    matching_chunks = [
+        chunk
+        for batch in batches
+        for chunk in batch.chunks
+        if chunk.get("chunk_id") == payload.chunk_id
+    ]
+    if not matching_chunks:
+        raise MalformedMemoryEvent("document memory chunk is absent from projection")
+    if len(matching_chunks) != 1:
+        raise MalformedMemoryEvent("document memory chunk is duplicated in projection")
+    stored_chunk = matching_chunks[0]
+    stored_content = stored_chunk.get("content")
+    stored_content_hash = stored_chunk.get("content_hash")
+    if (
+        not isinstance(stored_content, str)
+        or stored_content_hash != payload.content_hash
+        or hashlib.sha256(stored_content.encode("utf-8")).hexdigest()
+        != payload.content_hash
+        or payload.excerpt not in stored_content
+    ):
+        raise MalformedMemoryEvent("document memory chunk binding mismatch")
     await _extract_and_reconcile(
         EvidenceInput(
             source_type="document",
             source_id=payload.chunk_id,
-            source_version=payload.source_version,
+            source_version=payload.document_version,
             excerpt=payload.excerpt,
             occurred_at=payload.observed_at,
         ),

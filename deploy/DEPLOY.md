@@ -303,6 +303,16 @@ provenance and original time, applies non-explicit governance, and skips secret-
 evidence; it cannot reconstruct Mneme content that
 was already deleted.
 
+Memory Agent migration `20260714_04` adds persistent source-deletion fences and verified
+document identity on evidence. Run the Agent migration before enabling the new workers.
+Fence order is the envelope `(occurred_at, event_id)`; source version is provenance only.
+Old/equal source events are idempotent skips, while strictly newer valid events may
+proceed. Knowledge-base fences cover every document, conversation, and explicit-request
+source in that owner/KB scope. Observation delivery may race projection delivery: a
+missing projection batch is transient and remains pending for retry, while a mismatched
+projection/document/chunk/version/hash binding is terminal. Do not purge deletion-fence
+rows during ordinary backfill or projection rebuild operations.
+
 ## 9. GitHub Actions 镜像发布
 
 相关文件：

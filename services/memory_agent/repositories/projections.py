@@ -21,7 +21,7 @@ class ProjectionIntegrityError(ValueError):
     """The projection payload is deterministically invalid and must not be retried."""
 
 
-def _batch_payload_hash(payload: DocumentProjectionPayload) -> str:
+def projection_batch_payload_hash(payload: DocumentProjectionPayload) -> str:
     serialized = json.dumps(
         [chunk.model_dump(mode="json") for chunk in payload.chunks],
         ensure_ascii=False,
@@ -95,7 +95,7 @@ async def store_projection_batch(
     if projection.status == "failed":
         raise ProjectionIntegrityError("cannot replay a failed projection")
 
-    payload_hash = _batch_payload_hash(payload)
+    payload_hash = projection_batch_payload_hash(payload)
     existing = await db.scalar(
         select(DocumentProjectionBatch).where(
             DocumentProjectionBatch.projection_id == payload.projection_id,

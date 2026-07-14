@@ -5,10 +5,12 @@ import json
 
 from sqlalchemy import select
 
+from services.memory_agent.contracts.events import DocumentProjectionPayload
 from services.memory_agent.database import engine, open_read_session
 from services.memory_agent.models.document_chunk import DocumentChunk
 from services.memory_agent.models.document_projection import DocumentProjection
 from services.memory_agent.models.projection_batch import DocumentProjectionBatch
+from services.memory_agent.repositories.projections import projection_batch_payload_hash
 
 
 def _raw_chunk_map(raw_chunks: list[dict]) -> tuple[dict[tuple[int, str], dict], bool]:
@@ -59,6 +61,7 @@ async def projection_report(args: argparse.Namespace) -> dict:
         "failed": 0,
         "superseded": 0,
         "hash_mismatch": 0,
+        "batch_hash_mismatch": 0,
         "batch_mismatch": 0,
         "chunk_key_mismatch": 0,
         "scope_mismatch": 0,
@@ -75,6 +78,25 @@ async def projection_report(args: argparse.Namespace) -> dict:
             )
             batch_indexes = [batch.batch_index for batch in batches]
             batch_mismatch = batch_indexes != list(range(projection.batch_count))
+            batch_hash_mismatch = False
+            for batch in batches:
+                try:
+                    canonical_payload = DocumentProjectionPayload(
+                        projection_id=projection.projection_id,
+                        document_id=projection.document_id,
+                        document_version=projection.document_version,
+                        file_name=projection.file_name,
+                        batch_index=batch.batch_index,
+                        batch_count=projection.batch_count,
+                        aggregate_hash=projection.aggregate_hash,
+                        chunks=batch.chunks,
+                    )
+                except ValueError:
+                    batch_hash_mismatch = True
+                    continue
+                batch_hash_mismatch = batch_hash_mismatch or (
+                    projection_batch_payload_hash(canonical_payload) != batch.payload_hash
+                )
             raw_chunks = [chunk for batch in batches for chunk in batch.chunks]
             raw_map, raw_hashes_match = _raw_chunk_map(raw_chunks)
             raw_keys = sorted(raw_map)
@@ -128,6 +150,7 @@ async def projection_report(args: argparse.Namespace) -> dict:
             status_key = "staged" if projection.status == "staging" else projection.status
             counts[status_key] += 1
             counts["hash_mismatch"] += int(hash_mismatch)
+            counts["batch_hash_mismatch"] += int(batch_hash_mismatch)
             counts["batch_mismatch"] += int(batch_mismatch)
             counts["chunk_key_mismatch"] += int(chunk_key_mismatch)
             counts["scope_mismatch"] += int(scope_mismatch)
@@ -139,6 +162,7 @@ async def projection_report(args: argparse.Namespace) -> dict:
                     "batch_count": len(batches),
                     "chunk_count": len(raw_chunks),
                     "batch_mismatch": batch_mismatch,
+                    "batch_hash_mismatch": batch_hash_mismatch,
                     "chunk_key_mismatch": chunk_key_mismatch,
                     "scope_mismatch": scope_mismatch,
                     "hash_mismatch": hash_mismatch,

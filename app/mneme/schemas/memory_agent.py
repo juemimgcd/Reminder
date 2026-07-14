@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
 AnswerMode = Literal[
     "kb_qa",
@@ -39,6 +39,13 @@ class MemoryAgentEvent(BaseModel):
     knowledge_base_id: str | None = None
     payload: dict[str, Any]
 
+    @field_validator("occurred_at")
+    @classmethod
+    def occurred_at_must_have_timezone(cls, value: datetime) -> datetime:
+        if value.utcoffset() is None:
+            raise ValueError("occurred_at must include a timezone")
+        return value
+
 
 class DocumentChunkPayload(BaseModel):
     chunk_id: str
@@ -64,8 +71,11 @@ class DocumentMemoryObservedPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     document_id: str = Field(min_length=1, max_length=128)
+    projection_id: str = Field(min_length=1, max_length=64)
     chunk_id: str = Field(min_length=1, max_length=128)
-    source_version: str = Field(min_length=1, max_length=128)
+    document_version: str = Field(min_length=1, max_length=128)
+    content_hash: str = Field(min_length=64, max_length=64)
+    excerpt_hash: str = Field(min_length=64, max_length=64)
     observed_at: datetime
     excerpt: str = Field(min_length=1, max_length=20_000)
 
