@@ -22,6 +22,7 @@ def upgrade() -> None:
     op.create_table(
         "memory_evidence",
         sa.Column("evidence_id", sa.String(length=64), nullable=False),
+        sa.Column("identity_hash", sa.String(length=64), nullable=False),
         sa.Column("owner_id", sa.Integer(), nullable=False),
         sa.Column("knowledge_base_id", sa.String(length=128), nullable=True),
         sa.Column("source_type", sa.String(length=64), nullable=False),
@@ -32,14 +33,7 @@ def upgrade() -> None:
         sa.Column("occurred_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.PrimaryKeyConstraint("evidence_id"),
-        sa.UniqueConstraint(
-            "owner_id",
-            "knowledge_base_id",
-            "source_type",
-            "source_id",
-            "source_version",
-            "content_hash",
-        ),
+        sa.UniqueConstraint("identity_hash"),
     )
     op.create_index(
         "ix_memory_evidence_owner_scope",
@@ -126,8 +120,13 @@ def upgrade() -> None:
         sa.Column("valid_to", sa.DateTime(timezone=True), nullable=True),
         sa.Column("reason", sa.String(length=128), nullable=False),
         sa.Column("actor", sa.String(length=128), nullable=False),
+        sa.CheckConstraint(
+            "valid_to IS NULL OR valid_to >= valid_from",
+            name="ck_memory_revisions_valid_interval",
+        ),
         sa.ForeignKeyConstraint(["memory_id"], ["canonical_memories.memory_id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("revision_id"),
+        sa.UniqueConstraint("revision_id", "memory_id"),
     )
     op.create_index(
         op.f("ix_memory_revisions_memory_id"),
@@ -139,13 +138,21 @@ def upgrade() -> None:
         "memory_revisions",
         ["owner_id", "knowledge_base_id"],
     )
+    op.create_index(
+        "uq_memory_revisions_open_memory",
+        "memory_revisions",
+        ["memory_id"],
+        unique=True,
+        postgresql_where=sa.text("valid_to IS NULL"),
+    )
     op.create_foreign_key(
-        "fk_canonical_memories_active_revision_id",
+        "fk_canonical_memories_active_revision",
         "canonical_memories",
         "memory_revisions",
-        ["active_revision_id"],
-        ["revision_id"],
-        ondelete="SET NULL",
+        ["active_revision_id", "memory_id"],
+        ["revision_id", "memory_id"],
+        deferrable=True,
+        initially="DEFERRED",
     )
 
     op.create_table(
@@ -163,6 +170,7 @@ def upgrade() -> None:
         sa.Column("status", sa.String(length=16), server_default="pending", nullable=False),
         sa.Column("extraction_provenance", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("conflicting_memory_id", sa.String(length=64), nullable=True),
+        sa.Column("conflicting_revision_id", sa.String(length=64), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("decided_at", sa.DateTime(timezone=True), nullable=True),
         sa.CheckConstraint(
@@ -182,8 +190,9 @@ def upgrade() -> None:
             name="ck_memory_candidates_confidence",
         ),
         sa.ForeignKeyConstraint(
-            ["conflicting_memory_id"],
-            ["canonical_memories.memory_id"],
+            ["conflicting_revision_id", "conflicting_memory_id"],
+            ["memory_revisions.revision_id", "memory_revisions.memory_id"],
+            name="fk_memory_candidates_conflicting_revision",
             ondelete="SET NULL",
         ),
         sa.PrimaryKeyConstraint("candidate_id"),
@@ -256,10 +265,11 @@ def downgrade() -> None:
     op.drop_index("ix_memory_candidates_owner_scope_status", table_name="memory_candidates")
     op.drop_table("memory_candidates")
     op.drop_constraint(
-        "fk_canonical_memories_active_revision_id",
+        "fk_canonical_memories_active_revision",
         "canonical_memories",
         type_="foreignkey",
     )
+    op.drop_index("uq_memory_revisions_open_memory", table_name="memory_revisions")
     op.drop_index("ix_memory_revisions_owner_scope", table_name="memory_revisions")
     op.drop_index(op.f("ix_memory_revisions_memory_id"), table_name="memory_revisions")
     op.drop_table("memory_revisions")

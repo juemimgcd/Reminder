@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, Text, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, Text, UniqueConstraint, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from services.memory_agent.models.base import Base
@@ -8,7 +8,20 @@ from services.memory_agent.models.base import Base
 
 class MemoryRevision(Base):
     __tablename__ = "memory_revisions"
-    __table_args__ = (Index("ix_memory_revisions_owner_scope", "owner_id", "knowledge_base_id"),)
+    __table_args__ = (
+        CheckConstraint(
+            "valid_to IS NULL OR valid_to >= valid_from",
+            name="ck_memory_revisions_valid_interval",
+        ),
+        UniqueConstraint("revision_id", "memory_id"),
+        Index("ix_memory_revisions_owner_scope", "owner_id", "knowledge_base_id"),
+        Index(
+            "uq_memory_revisions_open_memory",
+            "memory_id",
+            unique=True,
+            postgresql_where=text("valid_to IS NULL"),
+        ),
+    )
 
     revision_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     memory_id: Mapped[str] = mapped_column(

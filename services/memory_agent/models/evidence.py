@@ -8,7 +8,6 @@ from sqlalchemy import (
     String,
     Table,
     Text,
-    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -53,18 +52,11 @@ revision_evidence = Table(
 class Evidence(Base):
     __tablename__ = "memory_evidence"
     __table_args__ = (
-        UniqueConstraint(
-            "owner_id",
-            "knowledge_base_id",
-            "source_type",
-            "source_id",
-            "source_version",
-            "content_hash",
-        ),
         Index("ix_memory_evidence_owner_scope", "owner_id", "knowledge_base_id"),
     )
 
     evidence_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    identity_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     owner_id: Mapped[int] = mapped_column(nullable=False)
     knowledge_base_id: Mapped[str | None] = mapped_column(String(128))
     source_type: Mapped[str] = mapped_column(String(64), nullable=False)

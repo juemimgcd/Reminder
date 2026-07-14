@@ -1,7 +1,17 @@
 from datetime import datetime
 from typing import Literal
 
-from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, Index, String, Text, func, text
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    Float,
+    ForeignKeyConstraint,
+    Index,
+    String,
+    Text,
+    func,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from services.memory_agent.models.base import Base
@@ -21,6 +31,13 @@ class CanonicalMemory(Base):
             name="ck_canonical_memories_status",
         ),
         CheckConstraint("confidence >= 0 AND confidence <= 1", name="ck_canonical_memories_confidence"),
+        ForeignKeyConstraint(
+            ["active_revision_id", "memory_id"],
+            ["memory_revisions.revision_id", "memory_revisions.memory_id"],
+            name="fk_canonical_memories_active_revision",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
         Index("ix_canonical_memories_owner_scope_status", "owner_id", "knowledge_base_id", "status"),
         Index(
             "uq_canonical_memories_active_kb_fingerprint",
@@ -50,9 +67,7 @@ class CanonicalMemory(Base):
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
     retrieval_weight: Mapped[float] = mapped_column(Float, nullable=False, server_default="1")
     status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="active")
-    active_revision_id: Mapped[str | None] = mapped_column(
-        ForeignKey("memory_revisions.revision_id", ondelete="SET NULL")
-    )
+    active_revision_id: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

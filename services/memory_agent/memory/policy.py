@@ -17,6 +17,8 @@ def classify_candidate(
         raise ValueError("unsupported sensitivity")
     if sensitivity == "secret":
         return "reject"
+    if not 0 <= confidence <= 1:
+        raise ValueError("confidence must be between 0 and 1")
     if explicit_request:
         return "promote"
     if has_conflict or sensitivity == "sensitive" or confidence < AUTO_PROMOTION_CONFIDENCE:
