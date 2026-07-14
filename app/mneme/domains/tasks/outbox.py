@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from langchain_core.documents import Document as LCDocument
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mneme.clients.vector_store_client import (
     add_documents_to_vector_store_in_batches,
@@ -23,12 +24,12 @@ from app.mneme.crud.outbox_event import (
     update_outbox_event_status,
 )
 from app.mneme.crud.user import get_user_by_id
+from app.mneme.domains.graph.projection import sync_document_memory_projection
+from app.mneme.domains.tasks.outbox_http import apply_memory_agent_http_event
 from app.mneme.models.chunk import Chunk
 from app.mneme.models.document import Document
 from app.mneme.models.outbox_event import OutboxEvent
-from app.mneme.domains.graph.projection import sync_document_memory_projection
 from app.mneme.utils.exceptions import BusinessException
-
 
 OUTBOX_PENDING = "pending"
 OUTBOX_RUNNING = "running"
@@ -101,6 +102,7 @@ async def enqueue_outbox_event(
         target_backend: str,
         payload: dict[str, Any],
         operation_id: str,
+        db: AsyncSession | None = None,
 ) -> OutboxEvent:
     idempotency_key = build_outbox_idempotency_key(
         event_type=event_type,
@@ -108,25 +110,57 @@ async def enqueue_outbox_event(
         aggregate_id=aggregate_id,
         operation_id=operation_id,
     )
-    async with open_write_session() as db:
-        existing = await get_outbox_event_by_idempotency_key(
+    if db is not None:
+        return await _create_outbox_event_if_missing(
             db,
             idempotency_key=idempotency_key,
-        )
-        if existing:
-            return existing
-
-        return await create_outbox_event(
-            db,
-            event_id=build_outbox_event_id(),
             event_type=event_type,
             aggregate_type=aggregate_type,
             aggregate_id=aggregate_id,
             target_backend=target_backend,
             payload=payload,
-            idempotency_key=idempotency_key,
-            max_attempts=settings.OUTBOX_EVENT_MAX_ATTEMPTS,
         )
+
+    async with open_write_session() as managed_db:
+        return await _create_outbox_event_if_missing(
+            managed_db,
+            idempotency_key=idempotency_key,
+            event_type=event_type,
+            aggregate_type=aggregate_type,
+            aggregate_id=aggregate_id,
+            target_backend=target_backend,
+            payload=payload,
+        )
+
+
+async def _create_outbox_event_if_missing(
+        db: AsyncSession,
+        *,
+        idempotency_key: str,
+        event_type: str,
+        aggregate_type: str,
+        aggregate_id: str,
+        target_backend: str,
+        payload: dict[str, Any],
+) -> OutboxEvent:
+    existing = await get_outbox_event_by_idempotency_key(
+        db,
+        idempotency_key=idempotency_key,
+    )
+    if existing:
+        return existing
+
+    return await create_outbox_event(
+        db,
+        event_id=build_outbox_event_id(),
+        event_type=event_type,
+        aggregate_type=aggregate_type,
+        aggregate_id=aggregate_id,
+        target_backend=target_backend,
+        payload=payload,
+        idempotency_key=idempotency_key,
+        max_attempts=settings.OUTBOX_EVENT_MAX_ATTEMPTS,
+    )
 
 
 async def enqueue_document_vector_reindex_event(
@@ -203,8 +237,14 @@ async def mark_outbox_failed(*, event: OutboxEvent, exc: Exception) -> None:
             next_attempt_at=None if status == OUTBOX_DEAD_LETTER else calculate_next_attempt_at(
                 attempt_count=next_attempt_count,
             ),
-            last_error=str(exc),
+            last_error=_bounded_error_detail(event=event, exc=exc),
         )
+
+
+def _bounded_error_detail(*, event: OutboxEvent, exc: Exception) -> str:
+    if event.target_backend == settings.MEMORY_AGENT_OUTBOX_TARGET and isinstance(exc, BusinessException):
+        return exc.message[:2000]
+    return str(exc)
 
 
 async def load_outbox_event_snapshot(*, event_id: str) -> OutboxEvent | None:
@@ -257,7 +297,11 @@ async def apply_graph_sync_event(event: OutboxEvent) -> dict[str, int | str]:
         user = await get_user_by_id(db, user_id=document.user_id)
         memory_entries = await list_memory_entries_by_document_id(db, document_id=document.id)
         if not knowledge_base or not user:
-            raise BusinessException(message="graph outbox event missing user or knowledge base", code=5019, status_code=500)
+            raise BusinessException(
+                message="graph outbox event missing user or knowledge base",
+                code=5019,
+                status_code=500,
+            )
         await sync_document_memory_projection(
             db,
             user=user,
@@ -274,7 +318,9 @@ async def apply_graph_sync_event(event: OutboxEvent) -> dict[str, int | str]:
     }
 
 
-async def apply_outbox_event(event: OutboxEvent) -> dict[str, int | str]:
+async def apply_outbox_event(event: OutboxEvent) -> dict[str, Any]:
+    if event.target_backend == settings.MEMORY_AGENT_OUTBOX_TARGET:
+        return await apply_memory_agent_http_event(event)
     if event.event_type == EVENT_DOCUMENT_VECTOR_REINDEX:
         return await apply_vector_reindex_event(event)
     if event.event_type == EVENT_DOCUMENT_GRAPH_SYNC:
@@ -296,10 +342,15 @@ async def process_outbox_event_by_id(*, event_id: str) -> dict[str, Any]:
     try:
         result = await apply_outbox_event(event)
     except Exception as exc:
-        app_logger.bind(module="outbox").exception(
+        log_message = (
             f"outbox event failed event_id={event.id} event_type={event.event_type} "
-            f"target_backend={event.target_backend} error_type={type(exc).__name__} error={exc}"
+            f"target_backend={event.target_backend} error_type={type(exc).__name__}"
         )
+        logger = app_logger.bind(module="outbox")
+        if event.target_backend == settings.MEMORY_AGENT_OUTBOX_TARGET:
+            logger.error(log_message)
+        else:
+            logger.exception(f"{log_message} error={exc}")
         await mark_outbox_failed(event=event, exc=exc)
         raise
 
