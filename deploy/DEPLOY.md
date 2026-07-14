@@ -116,11 +116,12 @@ IMAGE_TAG=v1.2.3 bash deploy/release-image.sh
 `deploy/release-image.sh` 当前只管理 Mneme 的 `migrate`、`app` 和 `worker`，尚未拉起或更新 Memory Agent。脚本成功后必须继续执行以下补充序列；每条 `docker compose run` 都会把数据库初始化或迁移失败作为非零退出码返回，失败时不要继续启动 Agent API/worker：
 
 ```bash
+set -euo pipefail
 docker compose pull memory-agent-db-init memory-agent-migrate memory-agent-api memory-agent-worker
 docker compose up -d postgres redis
 docker compose run --rm --no-deps memory-agent-db-init
 docker compose run --rm --no-deps memory-agent-migrate
-docker compose up -d --no-build --no-deps --force-recreate memory-agent-api memory-agent-worker
+docker compose up -d --wait --wait-timeout 180 --no-build --no-deps --force-recreate memory-agent-api memory-agent-worker
 docker compose exec memory-agent-api python -c "from urllib.request import urlopen; print(urlopen('http://127.0.0.1:8010/health/readiness').read().decode())"
 ```
 
@@ -226,11 +227,12 @@ IMAGE_TAG=v1.2.3 bash deploy/release-image.sh
 `release-image.sh` 尚不管理 Memory Agent。每次 Mneme 发布脚本成功后，都要执行与首次启动相同的 Agent 补充序列，保证 Agent 不会继续运行旧镜像：
 
 ```bash
+set -euo pipefail
 docker compose pull memory-agent-db-init memory-agent-migrate memory-agent-api memory-agent-worker
 docker compose up -d postgres redis
 docker compose run --rm --no-deps memory-agent-db-init
 docker compose run --rm --no-deps memory-agent-migrate
-docker compose up -d --no-build --no-deps --force-recreate memory-agent-api memory-agent-worker
+docker compose up -d --wait --wait-timeout 180 --no-build --no-deps --force-recreate memory-agent-api memory-agent-worker
 docker compose exec memory-agent-api python -c "from urllib.request import urlopen; print(urlopen('http://127.0.0.1:8010/health/readiness').read().decode())"
 ```
 
@@ -244,11 +246,12 @@ IMAGE_TAG=v1.2.2 bash deploy/release-image.sh
 回滚 Mneme 后同样必须用已经写回 `.env` 的旧镜像标签重新拉取、迁移并强制重建 Agent 服务，否则 Agent 会停留在新版本镜像：
 
 ```bash
+set -euo pipefail
 docker compose pull memory-agent-db-init memory-agent-migrate memory-agent-api memory-agent-worker
 docker compose up -d postgres redis
 docker compose run --rm --no-deps memory-agent-db-init
 docker compose run --rm --no-deps memory-agent-migrate
-docker compose up -d --no-build --no-deps --force-recreate memory-agent-api memory-agent-worker
+docker compose up -d --wait --wait-timeout 180 --no-build --no-deps --force-recreate memory-agent-api memory-agent-worker
 docker compose exec memory-agent-api python -c "from urllib.request import urlopen; print(urlopen('http://127.0.0.1:8010/health/readiness').read().decode())"
 ```
 
