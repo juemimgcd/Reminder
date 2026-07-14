@@ -104,6 +104,12 @@ def upgrade() -> None:
         sa.Column("chunk_id", sa.String(length=128), nullable=False),
         sa.Column("chunk_index", sa.Integer(), nullable=False),
         sa.Column("content", sa.Text(), nullable=False),
+        sa.Column(
+            "search_vector",
+            postgresql.TSVECTOR(),
+            sa.Computed("to_tsvector('simple'::regconfig, content)", persisted=True),
+            nullable=False,
+        ),
         sa.Column("content_hash", sa.String(length=64), nullable=False),
         sa.Column("page_no", sa.Integer(), nullable=True),
         sa.Column("section_path", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
@@ -131,6 +137,12 @@ def upgrade() -> None:
         postgresql_ops={"embedding": "vector_cosine_ops"},
     )
     op.create_index(
+        "ix_document_chunks_search_vector_gin",
+        "document_chunks",
+        ["search_vector"],
+        postgresql_using="gin",
+    )
+    op.create_index(
         op.f("ix_document_chunks_projection_id"),
         "document_chunks",
         ["projection_id"],
@@ -147,6 +159,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_index("uq_document_chunks_active_chunk_id", table_name="document_chunks")
     op.drop_index(op.f("ix_document_chunks_projection_id"), table_name="document_chunks")
+    op.drop_index("ix_document_chunks_search_vector_gin", table_name="document_chunks")
     op.drop_index("ix_document_chunks_embedding_hnsw", table_name="document_chunks")
     op.drop_index("ix_document_chunks_active_scope", table_name="document_chunks")
     op.drop_table("document_chunks")

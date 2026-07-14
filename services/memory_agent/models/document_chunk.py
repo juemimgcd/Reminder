@@ -1,8 +1,8 @@
 from typing import Any
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import Boolean, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import Boolean, Computed, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column
 
 from services.memory_agent.config import settings
@@ -29,6 +29,11 @@ class DocumentChunk(Base):
             postgresql_ops={"embedding": "vector_cosine_ops"},
         ),
         Index(
+            "ix_document_chunks_search_vector_gin",
+            "search_vector",
+            postgresql_using="gin",
+        ),
+        Index(
             "ix_document_chunks_active_scope",
             "owner_id",
             "knowledge_base_id",
@@ -49,6 +54,11 @@ class DocumentChunk(Base):
     chunk_id: Mapped[str] = mapped_column(String(128), nullable=False)
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    search_vector: Mapped[Any] = mapped_column(
+        TSVECTOR,
+        Computed("to_tsvector('simple'::regconfig, content)", persisted=True),
+        nullable=False,
+    )
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     page_no: Mapped[int | None] = mapped_column(Integer)
     section_path: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
