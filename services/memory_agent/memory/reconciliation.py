@@ -122,8 +122,10 @@ async def _create_memory(
     actor: str,
     evidence_ids: list[str],
 ) -> CanonicalMemory:
+    memory_id = new_id()
+    revision_id = new_id()
     memory = CanonicalMemory(
-        memory_id=new_id(),
+        memory_id=memory_id,
         owner_id=owner_id,
         knowledge_base_id=knowledge_base_id,
         memory_type=memory_type,
@@ -133,12 +135,13 @@ async def _create_memory(
         fingerprint=fingerprint,
         confidence=confidence,
         status="active",
+        active_revision_id=revision_id,
     )
     db.add(memory)
     await db.flush()
     revision = MemoryRevision(
-        revision_id=new_id(),
-        memory_id=memory.memory_id,
+        revision_id=revision_id,
+        memory_id=memory_id,
         owner_id=owner_id,
         knowledge_base_id=knowledge_base_id,
         subject=subject,
@@ -157,8 +160,6 @@ async def _create_memory(
         owner_id=owner_id,
         knowledge_base_id=knowledge_base_id,
     )
-    memory.active_revision_id = revision.revision_id
-    await db.flush()
     return memory
 
 

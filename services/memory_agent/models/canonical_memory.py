@@ -67,7 +67,7 @@ class CanonicalMemory(Base):
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
     retrieval_weight: Mapped[float] = mapped_column(Float, nullable=False, server_default="1")
     status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="active")
-    active_revision_id: Mapped[str | None] = mapped_column(String(64))
+    active_revision_id: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

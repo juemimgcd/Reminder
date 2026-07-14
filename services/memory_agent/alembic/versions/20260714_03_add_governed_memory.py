@@ -69,7 +69,7 @@ def upgrade() -> None:
         sa.Column("confidence", sa.Float(), nullable=False),
         sa.Column("retrieval_weight", sa.Float(), server_default="1", nullable=False),
         sa.Column("status", sa.String(length=16), server_default="active", nullable=False),
-        sa.Column("active_revision_id", sa.String(length=64), nullable=True),
+        sa.Column("active_revision_id", sa.String(length=64), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.CheckConstraint(
@@ -256,8 +256,161 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("revision_id", "evidence_id"),
     )
 
+    op.execute(
+        """
+        CREATE FUNCTION mneme_assert_canonical_active_revision(p_memory_id varchar)
+        RETURNS void
+        LANGUAGE plpgsql
+        AS $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM canonical_memories WHERE memory_id = p_memory_id
+            ) AND NOT EXISTS (
+                SELECT 1
+                FROM canonical_memories AS memory
+                JOIN memory_revisions AS revision
+                  ON revision.revision_id = memory.active_revision_id
+                 AND revision.memory_id = memory.memory_id
+                WHERE memory.memory_id = p_memory_id
+                  AND revision.valid_to IS NULL
+            ) THEN
+                RAISE EXCEPTION 'canonical memory % must point to its open revision', p_memory_id
+                    USING ERRCODE = '23514';
+            END IF;
+        END;
+        $$
+        """
+    )
+    op.execute(
+        """
+        CREATE FUNCTION mneme_enforce_canonical_active_revision()
+        RETURNS trigger
+        LANGUAGE plpgsql
+        AS $$
+        BEGIN
+            IF TG_TABLE_NAME = 'canonical_memories' THEN
+                PERFORM mneme_assert_canonical_active_revision(NEW.memory_id);
+            ELSIF TG_OP = 'INSERT' THEN
+                PERFORM mneme_assert_canonical_active_revision(NEW.memory_id);
+            ELSIF TG_OP = 'DELETE' THEN
+                PERFORM mneme_assert_canonical_active_revision(OLD.memory_id);
+            ELSE
+                PERFORM mneme_assert_canonical_active_revision(OLD.memory_id);
+                IF NEW.memory_id IS DISTINCT FROM OLD.memory_id THEN
+                    PERFORM mneme_assert_canonical_active_revision(NEW.memory_id);
+                END IF;
+            END IF;
+            RETURN NULL;
+        END;
+        $$
+        """
+    )
+    op.execute(
+        """
+        CREATE CONSTRAINT TRIGGER enforce_canonical_active_revision_on_memory
+        AFTER INSERT OR UPDATE ON canonical_memories
+        DEFERRABLE INITIALLY DEFERRED
+        FOR EACH ROW
+        EXECUTE FUNCTION mneme_enforce_canonical_active_revision()
+        """
+    )
+    op.execute(
+        """
+        CREATE CONSTRAINT TRIGGER enforce_canonical_active_revision_on_revision
+        AFTER INSERT OR UPDATE OR DELETE ON memory_revisions
+        DEFERRABLE INITIALLY DEFERRED
+        FOR EACH ROW
+        EXECUTE FUNCTION mneme_enforce_canonical_active_revision()
+        """
+    )
+
+    op.execute(
+        """
+        CREATE FUNCTION mneme_enforce_memory_relation_scope()
+        RETURNS trigger
+        LANGUAGE plpgsql
+        AS $$
+        BEGIN
+            IF TG_TABLE_NAME = 'canonical_memories' AND EXISTS (
+                SELECT 1
+                FROM memory_relations AS relation
+                JOIN canonical_memories AS source_memory
+                  ON source_memory.memory_id = relation.source_memory_id
+                JOIN canonical_memories AS target_memory
+                  ON target_memory.memory_id = relation.target_memory_id
+                WHERE (
+                    source_memory.memory_id = NEW.memory_id
+                    OR target_memory.memory_id = NEW.memory_id
+                ) AND (
+                    source_memory.owner_id <> relation.owner_id
+                    OR source_memory.knowledge_base_id
+                        IS DISTINCT FROM relation.knowledge_base_id
+                    OR target_memory.owner_id <> relation.owner_id
+                    OR target_memory.knowledge_base_id
+                        IS DISTINCT FROM relation.knowledge_base_id
+                )
+            ) THEN
+                RAISE EXCEPTION 'memory % scope change would invalidate a relation',
+                    NEW.memory_id USING ERRCODE = '23514';
+            ELSIF TG_TABLE_NAME = 'memory_relations' AND EXISTS (
+                SELECT 1 FROM memory_relations WHERE relation_id = NEW.relation_id
+            ) AND NOT EXISTS (
+                SELECT 1
+                FROM memory_relations AS relation
+                JOIN canonical_memories AS source_memory
+                  ON source_memory.memory_id = relation.source_memory_id
+                JOIN canonical_memories AS target_memory
+                  ON target_memory.memory_id = relation.target_memory_id
+                WHERE relation.relation_id = NEW.relation_id
+                  AND source_memory.owner_id = relation.owner_id
+                  AND source_memory.knowledge_base_id
+                      IS NOT DISTINCT FROM relation.knowledge_base_id
+                  AND target_memory.owner_id = relation.owner_id
+                  AND target_memory.knowledge_base_id
+                      IS NOT DISTINCT FROM relation.knowledge_base_id
+            ) THEN
+                RAISE EXCEPTION 'memory relation % endpoints must match owner and knowledge-base scope',
+                    NEW.relation_id USING ERRCODE = '23514';
+            END IF;
+            RETURN NULL;
+        END;
+        $$
+        """
+    )
+    op.execute(
+        """
+        CREATE CONSTRAINT TRIGGER enforce_memory_relation_scope
+        AFTER INSERT OR UPDATE ON memory_relations
+        DEFERRABLE INITIALLY DEFERRED
+        FOR EACH ROW
+        EXECUTE FUNCTION mneme_enforce_memory_relation_scope()
+        """
+    )
+    op.execute(
+        """
+        CREATE CONSTRAINT TRIGGER enforce_memory_relation_scope_on_memory
+        AFTER UPDATE ON canonical_memories
+        DEFERRABLE INITIALLY DEFERRED
+        FOR EACH ROW
+        EXECUTE FUNCTION mneme_enforce_memory_relation_scope()
+        """
+    )
+
 
 def downgrade() -> None:
+    op.execute(
+        "DROP TRIGGER enforce_memory_relation_scope_on_memory ON canonical_memories"
+    )
+    op.execute("DROP TRIGGER enforce_memory_relation_scope ON memory_relations")
+    op.execute("DROP FUNCTION mneme_enforce_memory_relation_scope()")
+    op.execute(
+        "DROP TRIGGER enforce_canonical_active_revision_on_revision ON memory_revisions"
+    )
+    op.execute(
+        "DROP TRIGGER enforce_canonical_active_revision_on_memory ON canonical_memories"
+    )
+    op.execute("DROP FUNCTION mneme_enforce_canonical_active_revision()")
+    op.execute("DROP FUNCTION mneme_assert_canonical_active_revision(varchar)")
     op.drop_table("memory_revision_evidence")
     op.drop_table("memory_candidate_evidence")
     op.drop_index("ix_memory_relations_owner_scope", table_name="memory_relations")
