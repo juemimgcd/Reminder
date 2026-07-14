@@ -34,7 +34,6 @@ def evidence_identity(
     source_id: str,
     source_version: str,
     content_hash: str,
-    source_document_id: str | None = None,
 ) -> str:
     values: list[str | int | None] = [
         owner_id,
@@ -44,8 +43,6 @@ def evidence_identity(
         source_version,
         content_hash,
     ]
-    if source_document_id is not None:
-        values.append(source_document_id)
     identity = _canonical_identity("mneme:evidence-identity", values)
     return hashlib.sha256(identity).hexdigest()
 

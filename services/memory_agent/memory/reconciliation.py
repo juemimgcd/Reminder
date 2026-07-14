@@ -57,6 +57,10 @@ class ReconciliationResult:
     reinforced: bool = False
 
 
+class EvidenceProvenanceError(ValueError):
+    pass
+
+
 async def _persist_evidence(
     db: AsyncSession,
     *,
@@ -71,7 +75,6 @@ async def _persist_evidence(
             knowledge_base_id=knowledge_base_id,
             source_type=item.source_type,
             source_id=item.source_id,
-            source_document_id=item.source_document_id,
             source_version=item.source_version,
             content_hash=item.content_hash,
         )
@@ -106,7 +109,9 @@ async def _persist_evidence(
             if evidence.source_document_id is None:
                 evidence.source_document_id = item.source_document_id
             elif evidence.source_document_id != item.source_document_id:
-                raise ValueError("evidence identity resolved outside document scope")
+                raise EvidenceProvenanceError(
+                    "evidence identity resolved outside document scope"
+                )
         stored.append(evidence)
     return stored
 

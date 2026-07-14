@@ -16,7 +16,10 @@ from services.memory_agent.memory.identity import (
 from services.memory_agent.memory.reconciliation import (
     EvidenceInput as ReconciliationEvidenceInput,
 )
-from services.memory_agent.memory.reconciliation import reconcile_candidate
+from services.memory_agent.memory.reconciliation import (
+    EvidenceProvenanceError,
+    reconcile_candidate,
+)
 from services.memory_agent.memory.schemas import (
     ConversationCompletedPayload,
     DocumentMemoryObservedPayload,
@@ -173,10 +176,31 @@ async def _already_reconciled(
         knowledge_base_id=knowledge_base_id,
         source_type=reconciliation_evidence.source_type,
         source_id=reconciliation_evidence.source_id,
-        source_document_id=reconciliation_evidence.source_document_id,
         source_version=reconciliation_evidence.source_version,
         content_hash=reconciliation_evidence.content_hash,
     )
+    evidence = await db.scalar(
+        select(Evidence)
+        .where(
+            Evidence.identity_hash == identity_hash,
+            Evidence.owner_id == owner_id,
+            Evidence.knowledge_base_id.is_(None)
+            if knowledge_base_id is None
+            else Evidence.knowledge_base_id == knowledge_base_id,
+        )
+        .with_for_update()
+    )
+    if evidence is None:
+        return False
+    source_document_id = reconciliation_evidence.source_document_id
+    if source_document_id is not None:
+        if evidence.source_document_id is None:
+            evidence.source_document_id = source_document_id
+            await db.flush()
+        elif evidence.source_document_id != source_document_id:
+            raise EvidenceProvenanceError(
+                "evidence identity resolved outside document scope"
+            )
     fingerprint = memory_fingerprint(
         subject=normalize_memory_text(candidate.subject),
         predicate=normalize_memory_text(candidate.predicate),
@@ -192,8 +216,11 @@ async def _already_reconciled(
             .join(Evidence, Evidence.evidence_id == candidate_evidence.c.evidence_id)
             .where(
                 MemoryCandidate.owner_id == owner_id,
+                MemoryCandidate.knowledge_base_id.is_(None)
+                if knowledge_base_id is None
+                else MemoryCandidate.knowledge_base_id == knowledge_base_id,
                 MemoryCandidate.fingerprint == fingerprint,
-                Evidence.identity_hash == identity_hash,
+                Evidence.evidence_id == evidence.evidence_id,
             )
             .limit(1)
         )

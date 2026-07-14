@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from services.memory_agent.contracts.events import AgentEventEnvelope, DocumentProjectionPayload
 from services.memory_agent.database import engine
 from services.memory_agent.memory.extraction import TerminalExtractionError
+from services.memory_agent.memory.reconciliation import EvidenceProvenanceError
 from services.memory_agent.models.inbox_event import InboxEvent
 from services.memory_agent.services.deletion import (
     SourceDeletionError,
@@ -138,6 +139,7 @@ async def dispatch_inbox_event(event_id: str) -> EventProcessResult:
                 except (
                     ProjectionIntegrityError,
                     MalformedMemoryEvent,
+                    EvidenceProvenanceError,
                     SourceDeletionError,
                     TerminalExtractionError,
                 ) as exc:

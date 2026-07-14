@@ -241,7 +241,11 @@ chunk membership, version, hashes, and excerpt membership against an accepted pr
 batch before storing evidence. If its projection batch has not arrived, the observation
 stays pending and retries; invalid bindings fail terminally. Evidence stores the verified
 document ID, so document deletion removes all document evidence directly, with chunk-ID
-fallback for rows created before that column existed.
+fallback for rows created before that column existed. The document ID is provenance, not
+part of the stable Evidence identity (owner, nullable knowledge base, source type/ID,
+source version, and content hash). A verified replay safely fills a legacy null document
+ID before its idempotency short-circuit; a conflicting existing ID fails terminally and
+is never overwritten. Migration does not guess or backfill this provenance.
 
 Report Agent projection state without mutating projection or memory tables:
 
