@@ -8,7 +8,7 @@ from services.memory_agent.contracts.common import AnswerMode, ModelInvocationCo
 class AnswerRequest(BaseModel):
     request_id: str
     owner_id: int
-    knowledge_base_id: str
+    knowledge_base_id: str | None = None
     session_id: str | None = None
     message_id: str
     question: str = Field(min_length=1)

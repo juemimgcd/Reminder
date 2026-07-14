@@ -1,3 +1,4 @@
+from services.memory_agent.models.answer_run import AnswerRun
 from services.memory_agent.models.base import Base
 from services.memory_agent.models.canonical_memory import CanonicalMemory
 from services.memory_agent.models.document_chunk import DocumentChunk
@@ -13,6 +14,7 @@ from services.memory_agent.models.source_deletion_fence import SourceDeletionFen
 
 __all__ = [
     "Base",
+    "AnswerRun",
     "CanonicalMemory",
     "DocumentChunk",
     "DocumentProjection",
