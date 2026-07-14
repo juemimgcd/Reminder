@@ -4,6 +4,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from langchain_core.documents import Document as LCDocument
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mneme.clients.memory_agent_client import MemoryAgentRetryable
@@ -19,9 +21,7 @@ from app.mneme.crud.document import get_document_by_id
 from app.mneme.crud.knowledge_base import get_knowledge_base_by_id
 from app.mneme.crud.memory_entry import list_memory_entries_by_document_id
 from app.mneme.crud.outbox_event import (
-    create_outbox_event,
     get_outbox_event_by_id,
-    get_outbox_event_by_idempotency_key,
     list_dispatchable_outbox_events,
     update_outbox_event_status,
 )
@@ -148,24 +148,31 @@ async def _create_outbox_event_if_missing(
         target_backend: str,
         payload: dict[str, Any],
 ) -> OutboxEvent:
-    existing = await get_outbox_event_by_idempotency_key(
-        db,
-        idempotency_key=idempotency_key,
+    result = await db.execute(
+        insert(OutboxEvent)
+        .values(
+            id=build_outbox_event_id(),
+            event_type=event_type,
+            aggregate_type=aggregate_type,
+            aggregate_id=aggregate_id,
+            target_backend=target_backend,
+            payload=payload,
+            idempotency_key=idempotency_key,
+            max_attempts=settings.OUTBOX_EVENT_MAX_ATTEMPTS,
+        )
+        .on_conflict_do_nothing(index_elements=[OutboxEvent.idempotency_key])
+        .returning(OutboxEvent)
     )
-    if existing:
-        return existing
+    inserted = result.scalar_one_or_none()
+    if inserted is not None:
+        return inserted
 
-    return await create_outbox_event(
-        db,
-        event_id=build_outbox_event_id(),
-        event_type=event_type,
-        aggregate_type=aggregate_type,
-        aggregate_id=aggregate_id,
-        target_backend=target_backend,
-        payload=payload,
-        idempotency_key=idempotency_key,
-        max_attempts=settings.OUTBOX_EVENT_MAX_ATTEMPTS,
+    existing = await db.scalar(
+        select(OutboxEvent).where(OutboxEvent.idempotency_key == idempotency_key)
     )
+    if existing is None:
+        raise RuntimeError("outbox idempotency conflict row could not be loaded")
+    return existing
 
 
 async def enqueue_document_vector_reindex_event(
@@ -298,7 +305,13 @@ async def enqueue_document_deleted(
 ) -> OutboxEvent:
     source_version_text = source_version.isoformat()
     event = MemoryAgentEvent(
-        event_id=_deletion_event_id("document-deleted", document_id, source_version_text),
+        event_id=_deletion_event_id(
+            "document-deleted",
+            str(owner_id),
+            knowledge_base_id,
+            document_id,
+            source_version_text,
+        ),
         event_type="document.deleted",
         occurred_at=source_version,
         owner_id=owner_id,
@@ -329,6 +342,7 @@ async def enqueue_knowledge_base_deleted(
     event = MemoryAgentEvent(
         event_id=_deletion_event_id(
             "knowledge-base-deleted",
+            str(owner_id),
             knowledge_base_id,
             source_version_text,
         ),

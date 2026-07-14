@@ -11,6 +11,7 @@ from services.memory_agent.contracts.events import AgentEventEnvelope, DocumentP
 from services.memory_agent.database import engine
 from services.memory_agent.models.inbox_event import InboxEvent
 from services.memory_agent.services.projections import (
+    IncompleteProjectionError,
     ProjectionIntegrityError,
     finalize_projection,
     stage_projection_batch,
@@ -36,8 +37,10 @@ async def handle_document_projection_upserted(event: AgentEventEnvelope) -> None
         owner_id=event.owner_id,
         knowledge_base_id=event.knowledge_base_id,
     )
-    if receipt.is_final_batch:
+    try:
         await finalize_projection(receipt.projection_id)
+    except IncompleteProjectionError:
+        return
 
 
 async def handle_document_deleted(event: AgentEventEnvelope) -> None:
