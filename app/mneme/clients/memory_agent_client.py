@@ -29,12 +29,17 @@ class MemoryAgentUnavailable(BusinessException):
         return self.message
 
 
-class MemoryAgentRejected(BusinessException):
-    def __init__(self, message: str, *, status_code: int):
-        super().__init__(message=message, code=4025, status_code=status_code)
+class MemoryAgentRetryable(MemoryAgentUnavailable):
+    pass
 
-    def __str__(self) -> str:
-        return self.message
+
+class MemoryAgentPermanentFailure(MemoryAgentUnavailable):
+    pass
+
+
+class MemoryAgentRejected(MemoryAgentPermanentFailure):
+    def __init__(self, message: str, *, status_code: int):
+        BusinessException.__init__(self, message=message, code=4025, status_code=status_code)
 
 
 class MemoryAgentClient:
@@ -65,7 +70,7 @@ class MemoryAgentClient:
         try:
             return EventReceipt.model_validate(response.json())
         except ValueError as exc:
-            raise MemoryAgentUnavailable("memory agent returned an invalid event receipt") from exc
+            raise MemoryAgentPermanentFailure("memory agent returned an invalid event receipt") from exc
 
     async def create_answer(self, request: MemoryAgentAnswerRequest) -> MemoryAgentAnswerResponse:
         response = await self._post_json(
@@ -77,7 +82,7 @@ class MemoryAgentClient:
         try:
             return MemoryAgentAnswerResponse.model_validate(response.json())
         except ValueError as exc:
-            raise MemoryAgentUnavailable("memory agent returned an invalid answer response") from exc
+            raise MemoryAgentPermanentFailure("memory agent returned an invalid answer response") from exc
 
     async def _post_json(
         self,
@@ -88,11 +93,15 @@ class MemoryAgentClient:
         scope: str,
     ) -> httpx.Response:
         if not settings.MEMORY_AGENT_SERVICE_JWT_SECRET.get_secret_value():
-            raise MemoryAgentUnavailable("memory agent service credentials are not configured")
+            raise MemoryAgentPermanentFailure("memory agent service credentials are not configured")
 
         attempts = max(1, settings.EXTERNAL_RETRY_MAX_ATTEMPTS)
+        try:
+            service_token = _create_service_token(scope=scope)
+        except Exception as exc:
+            raise MemoryAgentPermanentFailure("memory agent service token creation failed") from exc
         headers = {
-            "Authorization": f"Bearer {_create_service_token(scope=scope)}",
+            "Authorization": f"Bearer {service_token}",
             "Content-Type": "application/json",
             "X-Request-ID": request_id,
         }
@@ -101,9 +110,13 @@ class MemoryAgentClient:
                 response = await self._client.post(path, json=payload, headers=headers)
             except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
                 if attempt == attempts:
-                    raise MemoryAgentUnavailable("memory agent connection failed") from exc
+                    raise MemoryAgentRetryable("memory agent connection failed") from exc
                 await _retry_delay(attempt)
                 continue
+            except httpx.HTTPError as exc:
+                raise MemoryAgentPermanentFailure("memory agent transport failed") from exc
+            except Exception as exc:
+                raise MemoryAgentPermanentFailure("memory agent request failed") from exc
 
             if response.status_code in RETRYABLE_STATUS_CODES and attempt < attempts:
                 await _retry_delay(attempt)
@@ -112,10 +125,12 @@ class MemoryAgentClient:
                 message = f"memory agent HTTP {response.status_code}: {_http_error_reason(response.status_code)}"
                 if 400 <= response.status_code < 500:
                     raise MemoryAgentRejected(message, status_code=response.status_code)
-                raise MemoryAgentUnavailable(message)
+                if response.status_code in RETRYABLE_STATUS_CODES:
+                    raise MemoryAgentRetryable(message)
+                raise MemoryAgentPermanentFailure(message)
             return response
 
-        raise MemoryAgentUnavailable("memory agent request failed")
+        raise MemoryAgentPermanentFailure("memory agent request failed")
 
 
 def _create_service_token(*, scope: str) -> str:

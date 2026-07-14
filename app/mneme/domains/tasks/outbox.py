@@ -5,7 +5,7 @@ from typing import Any
 from langchain_core.documents import Document as LCDocument
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.mneme.clients.memory_agent_client import MemoryAgentRejected
+from app.mneme.clients.memory_agent_client import MemoryAgentRetryable
 from app.mneme.clients.vector_store_client import (
     add_documents_to_vector_store_in_batches,
     delete_documents_from_vector_store,
@@ -227,18 +227,18 @@ async def mark_outbox_succeeded(*, event_id: str) -> None:
 
 async def mark_outbox_failed(*, event: OutboxEvent, exc: Exception) -> None:
     next_attempt_count = event.attempt_count + 1
-    permanent_rejection = (
-        event.target_backend == settings.MEMORY_AGENT_OUTBOX_TARGET
-        and isinstance(exc, MemoryAgentRejected)
+    attempts_exhausted = should_dead_letter(
+        attempt_count=next_attempt_count,
+        max_attempts=event.max_attempts,
     )
-    status = (
-        OUTBOX_DEAD_LETTER
-        if permanent_rejection or should_dead_letter(
-            attempt_count=next_attempt_count,
-            max_attempts=event.max_attempts,
+    if event.target_backend == settings.MEMORY_AGENT_OUTBOX_TARGET:
+        status = (
+            OUTBOX_FAILED
+            if isinstance(exc, MemoryAgentRetryable) and not attempts_exhausted
+            else OUTBOX_DEAD_LETTER
         )
-        else OUTBOX_FAILED
-    )
+    else:
+        status = OUTBOX_DEAD_LETTER if attempts_exhausted else OUTBOX_FAILED
     async with open_write_session() as db:
         await update_outbox_event_status(
             db,
