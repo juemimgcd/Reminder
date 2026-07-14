@@ -37,6 +37,8 @@ for (const testId of [
   'data-testid="ai-history-rail"',
   'data-testid="workspace-chat-command"',
   'data-testid="answer-mode-selector"',
+  'data-testid="answer-mode-description"',
+  'data-testid="answer-mode-badge"',
 ]) {
   assert.ok(vueSource.includes(testId), `Expected the composed Vue workspace to expose ${testId}`);
 }

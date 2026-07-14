@@ -11,12 +11,14 @@ const historyCollapsed = ref(window.matchMedia("(max-width: 1023px)").matches);
 const activeSession = computed(() => props.workspace.chatSessions.value.find((session) => session.id === props.workspace.activeChatSessionId.value));
 const activeModel = computed(() => props.workspace.aiModelConfigs.value.find((config) => config.id === props.workspace.activeAiModelConfigId.value));
 const answerModes = [
-  { value: "kb_qa", label: "Knowledge base" },
-  { value: "memory_query", label: "Long-term memory" },
-  { value: "profile_query", label: "Profile" },
-  { value: "analysis_query", label: "Growth" },
-  { value: "general_chat", label: "General chat" },
+  { value: "kb_qa", label: "Knowledge base", description: "Answer from indexed documents and supporting memory." },
+  { value: "memory_query", label: "Long-term memory", description: "Answer only from stored memory evidence." },
+  { value: "profile_query", label: "Profile", description: "Summarize stable themes, abilities, and expression style." },
+  { value: "analysis_query", label: "Growth", description: "Analyze recent focus, progress, blockers, and next actions." },
+  { value: "general_chat", label: "General chat", description: "Answer without using knowledge-base evidence." },
 ] as const;
+const selectedAnswerMode = computed(() => answerModes.find((mode) => mode.value === props.workspace.chatAnswerMode.value) ?? answerModes[0]);
+const answerModeLabel = (queryType?: string | null) => answerModes.find((mode) => mode.value === queryType)?.label ?? "Assistant";
 </script>
 
 <template>
@@ -43,7 +45,7 @@ const answerModes = [
         <template v-if="workspace.chatMessages.value.length">
           <article v-for="message in workspace.chatMessages.value" :key="message.id" :class="['message', `message--${message.role}`]">
             <div class="message-avatar"><component :is="message.role === 'user' ? MessageSquare : Bot" class="size-4" /></div>
-            <div><small>{{ message.role === "user" ? "You" : "Mneme" }} · {{ message.role === "assistant" ? "Analysis Complete" : "Today, 14:03" }}</small><p>{{ message.content }}</p><div v-if="message.sources.length" class="sources"><span>Referenced Context Nodes</span><button v-for="source in message.sources" :key="source.source_id">{{ source.document_id }}</button></div></div>
+            <div><small>{{ message.role === "user" ? "You" : "Mneme" }} · {{ message.role === "assistant" ? "Analysis Complete" : "Today, 14:03" }}</small><span v-if="message.role === 'assistant' && message.route" data-testid="answer-mode-badge" class="answer-mode-badge">{{ answerModeLabel(message.route.query_type) }}</span><p>{{ message.content }}</p><div v-if="message.sources.length" class="sources"><span>Referenced Context Nodes</span><button v-for="source in message.sources" :key="source.source_id">{{ source.document_id }}</button></div></div>
           </article>
         </template>
         <UiEmptyState v-else :title="t('ai.emptyTitle')" :description="t('ai.emptyDescription')">
@@ -55,6 +57,7 @@ const answerModes = [
         <div data-testid="answer-mode-selector" class="answer-modes" aria-label="Answer mode">
           <button v-for="mode in answerModes" :key="mode.value" type="button" :class="{ active: workspace.chatAnswerMode.value === mode.value }" :aria-pressed="workspace.chatAnswerMode.value === mode.value" @click="workspace.chatAnswerMode.value = mode.value">{{ mode.label }}</button>
         </div>
+        <small data-testid="answer-mode-description" class="answer-mode-description">{{ selectedAnswerMode.description }}</small>
         <div><textarea v-model="workspace.chatQuestion.value" :placeholder="t('ai.placeholder')" /><button aria-label="Send message"><Send class="size-5" /></button></div>
         <small>{{ t("ai.disclaimer") }}</small>
       </form>
@@ -100,9 +103,11 @@ h1, h2, p { margin: 0; }
 .answer-modes { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.45rem; }
 .answer-modes button { width: auto; height: auto; padding: 0.3rem 0.55rem; color: var(--text-secondary); background: var(--bg-elevated); border: 1px solid transparent; border-radius: 999px; font-size: 0.68rem; }
 .answer-modes button.active { color: var(--accent); background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
-.composer > div:nth-child(2) { display: flex; align-items: end; gap: 0.5rem; padding: 0.55rem; background: var(--bg-panel); border: 1px solid var(--border-muted); border-radius: 0.5rem; }
+.answer-mode-description { display: block; margin-bottom: 0.45rem; color: var(--text-secondary); text-align: left; }
+.answer-mode-badge { display: inline-block; margin: 0 0 0 0.35rem; padding: 0.12rem 0.35rem; color: var(--accent); background: var(--accent-soft); border-radius: 999px; font: 0.62rem var(--font-mono); }
+.composer > div:nth-child(3) { display: flex; align-items: end; gap: 0.5rem; padding: 0.55rem; background: var(--bg-panel); border: 1px solid var(--border-muted); border-radius: 0.5rem; }
 .composer textarea { min-height: 2.8rem; flex: 1; resize: none; background: transparent; border: 0; outline: 0; }
-.composer > div:nth-child(2) > button { display: grid; width: 2.5rem; height: 2.5rem; place-items: center; color: var(--accent-contrast); background: var(--accent); border: 0; border-radius: 0.4rem; }
+.composer > div:nth-child(3) > button { display: grid; width: 2.5rem; height: 2.5rem; place-items: center; color: var(--accent-contrast); background: var(--accent); border: 0; border-radius: 0.4rem; }
 .composer > small { display: block; margin-top: 0.4rem; text-align: center; }
 @media (max-width: 1023px) { .ai-layout, .ai-layout--collapsed { grid-template-columns: minmax(0, 1fr); } .ai-history-panel { position: absolute; inset: 0 auto 0 0; width: min(84vw, 320px); box-shadow: var(--shadow-float); } .ai-history-panel[aria-hidden="true"] { display: none; } .ai-history-panel header button { display: grid; place-items: center; color: var(--text-secondary); background: transparent; border: 0; } .rail-toggle { left: 0.4rem; } }
 @media (max-width: 767px) { .chat-header { padding-left: 3rem; } .delete-chat span { display: none; } .messages { padding: 1rem; } .composer { padding: 0.65rem; } }

@@ -685,7 +685,7 @@ const previewApi = {
         content: `Preview answer for: ${payload.question}`,
         sources: [],
         citations: [],
-        route: { query_type: "preview", requires_retrieval: true, target_pipeline: "mock", confidence: "medium", reason: "Preview session message." },
+        route: { query_type: payload.answer_mode, requires_retrieval: payload.answer_mode !== "general_chat", target_pipeline: "mock", confidence: "medium", reason: "Preview session message." },
         model_config_id: "model-preview-deepseek",
         created_at: createdAt,
       },
