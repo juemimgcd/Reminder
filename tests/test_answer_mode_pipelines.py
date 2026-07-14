@@ -2,14 +2,31 @@ import asyncio
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock
 
+import pytest
+
 import app.mneme.domains.retrieval.context_service as context_service
 from app.mneme.agent.orchestrator import generate_rag_answer, get_evidence_prompt_for_mode
-from app.mneme.agent.router import retrieval_scope_for_answer_mode
+from app.mneme.agent.router import retrieval_scope_for_answer_mode, route_answer_mode
 
 
-def test_answer_modes_use_fixed_retrieval_scopes():
-    assert retrieval_scope_for_answer_mode("kb_qa") == "hybrid"
-    assert retrieval_scope_for_answer_mode("memory_query") == "memory_only"
+@pytest.mark.parametrize(
+    ("answer_mode", "target_pipeline", "requires_retrieval", "retrieval_scope"),
+    [
+        ("kb_qa", "evidence_rag", True, "hybrid"),
+        ("memory_query", "memory_rag", True, "memory_only"),
+        ("profile_query", "profile", False, None),
+        ("analysis_query", "growth_analysis", False, None),
+        ("general_chat", "general_chat", False, None),
+    ],
+)
+def test_answer_mode_contract(answer_mode, target_pipeline, requires_retrieval, retrieval_scope):
+    route = route_answer_mode(answer_mode)
+
+    assert route.query_type == answer_mode
+    assert route.target_pipeline == target_pipeline
+    assert route.requires_retrieval is requires_retrieval
+    if retrieval_scope is not None:
+        assert retrieval_scope_for_answer_mode(answer_mode) == retrieval_scope
 
 
 def test_memory_only_context_skips_document_retrieval(monkeypatch):
