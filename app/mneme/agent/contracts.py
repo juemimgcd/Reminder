@@ -3,6 +3,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 AnswerMode = Literal["kb_qa", "memory_query", "profile_query", "analysis_query", "general_chat"]
+RetrievalScope = Literal["hybrid", "memory_only"]
 
 
 class AgentRequest(BaseModel):
