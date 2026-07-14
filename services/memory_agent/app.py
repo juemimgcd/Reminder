@@ -1,7 +1,7 @@
-from fastapi import APIRouter, FastAPI
+from fastapi import FastAPI
 
-health_router = APIRouter()
-event_router = APIRouter()
+from services.memory_agent.api.events import router as event_router
+from services.memory_agent.api.health import router as health_router
 
 
 def create_memory_agent_app() -> FastAPI:
