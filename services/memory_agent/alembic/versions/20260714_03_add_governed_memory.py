@@ -50,6 +50,8 @@ def upgrade() -> None:
             server_default="false",
             nullable=False,
         ),
+        sa.Column("last_event_occurred_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("last_event_id", sa.String(length=128), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.PrimaryKeyConstraint("owner_id"),

@@ -1,4 +1,5 @@
 import hashlib
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -47,9 +48,26 @@ BACKEND_MILVUS = "milvus"
 BACKEND_NEO4J = "neo4j"
 MAX_MEMORY_AGENT_ERROR_LENGTH = 2000
 
+_SECRET_PATTERNS = (
+    re.compile(r"-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----"),
+    re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
+    re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,})\b"),
+    re.compile(r"\bBearer\s+[A-Za-z0-9._~+/=-]{16,}", re.IGNORECASE),
+    re.compile(r"\beyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b"),
+    re.compile(
+        r"\b(?:password|passwd|pwd|api[_-]?key|access[_-]?token|secret)\s*[:=]\s*[^\s,;]{6,}",
+        re.IGNORECASE,
+    ),
+    re.compile(r"\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?)://[^\s:/]+:[^\s@]+@", re.IGNORECASE),
+)
+
 
 def build_outbox_event_id() -> str:
     return f"outbox_{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
+
+
+def _contains_secret(text: str) -> bool:
+    return any(pattern.search(text) is not None for pattern in _SECRET_PATTERNS)
 
 
 def build_outbox_idempotency_key(
@@ -295,6 +313,99 @@ async def enqueue_document_agent_projection(
     )
 
 
+def _memory_event_id(prefix: str, *identity_parts: str) -> str:
+    identity = "\0".join(identity_parts)
+    return f"{prefix}:{hashlib.sha256(identity.encode('utf-8')).hexdigest()}"
+
+
+async def enqueue_conversation_completed(
+    db: AsyncSession,
+    *,
+    owner_id: int,
+    knowledge_base_id: str,
+    session_id: str,
+    user_message_id: str,
+    user_content: str,
+    user_created_at: datetime,
+    assistant_message_id: str,
+    assistant_content: str,
+    assistant_created_at: datetime,
+) -> OutboxEvent | None:
+    if _contains_secret(user_content) or _contains_secret(assistant_content):
+        return None
+    event = MemoryAgentEvent(
+        event_id=_memory_event_id(
+            "conversation-completed",
+            str(owner_id),
+            session_id,
+            user_message_id,
+            assistant_message_id,
+        ),
+        event_type="conversation.completed",
+        occurred_at=assistant_created_at,
+        owner_id=owner_id,
+        knowledge_base_id=knowledge_base_id,
+        payload={
+            "session_id": session_id,
+            "user_message": {
+                "id": user_message_id,
+                "content": user_content[:20_000],
+                "created_at": user_created_at.isoformat(),
+            },
+            "assistant_message": {
+                "id": assistant_message_id,
+                "content": assistant_content[:20_000],
+                "created_at": assistant_created_at.isoformat(),
+            },
+        },
+    )
+    return await _enqueue_memory_agent_event(
+        db,
+        event=event,
+        aggregate_type="conversation",
+        aggregate_id=session_id,
+    )
+
+
+async def enqueue_user_memory_requested(
+    db: AsyncSession,
+    *,
+    owner_id: int,
+    knowledge_base_id: str,
+    session_id: str,
+    message_id: str,
+    excerpt: str,
+    message_created_at: datetime,
+) -> OutboxEvent | None:
+    if _contains_secret(excerpt):
+        return None
+    event = MemoryAgentEvent(
+        event_id=_memory_event_id(
+            "memory-requested",
+            str(owner_id),
+            session_id,
+            message_id,
+            message_created_at.isoformat(),
+        ),
+        event_type="user.memory_requested",
+        occurred_at=message_created_at,
+        owner_id=owner_id,
+        knowledge_base_id=knowledge_base_id,
+        payload={
+            "session_id": session_id,
+            "message_id": message_id,
+            "message_created_at": message_created_at.isoformat(),
+            "excerpt": excerpt[:20_000],
+        },
+    )
+    return await _enqueue_memory_agent_event(
+        db,
+        event=event,
+        aggregate_type="chat_message",
+        aggregate_id=message_id,
+    )
+
+
 async def enqueue_document_deleted(
         db: AsyncSession,
         *,
@@ -365,8 +476,7 @@ async def enqueue_knowledge_base_deleted(
 
 
 def _deletion_event_id(prefix: str, *identity_parts: str) -> str:
-    identity = "\0".join(identity_parts)
-    return f"{prefix}:{hashlib.sha256(identity.encode('utf-8')).hexdigest()}"
+    return _memory_event_id(prefix, *identity_parts)
 
 
 def _bounded_error_detail(*, event: OutboxEvent, exc: Exception) -> str:

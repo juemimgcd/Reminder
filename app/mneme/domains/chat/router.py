@@ -9,10 +9,12 @@ from app.mneme.domains.chat.service import (
     get_chat_session_detail,
     list_chat_sessions,
     message_to_data,
+    remember_chat_message,
     update_chat_session,
 )
 from app.mneme.models.user import User
 from app.mneme.schemas.chat_session import (
+    ChatMessageRememberData,
     ChatSessionCreateRequest,
     ChatSessionData,
     ChatSessionDetailData,
@@ -22,7 +24,6 @@ from app.mneme.schemas.chat_session import (
 )
 from app.mneme.utils.auth import get_current_user
 from app.mneme.utils.response import success_response
-
 
 router = APIRouter(prefix="/kb/chat/sessions", tags=["chat"])
 
@@ -117,4 +118,23 @@ async def create_chat_message_api(
             messages=[message_to_data(message) for message in messages],
         ),
         message="chat message created",
+    )
+
+
+@router.post("/{session_id}/messages/{message_id}/remember")
+async def remember_chat_message_api(
+    session_id: str,
+    message_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_write_database),
+):
+    message, requested = await remember_chat_message(
+        db,
+        current_user=current_user,
+        session_id=session_id,
+        message_id=message_id,
+    )
+    return success_response(
+        data=ChatMessageRememberData(message_id=message.id, requested=requested),
+        message="memory requested",
     )

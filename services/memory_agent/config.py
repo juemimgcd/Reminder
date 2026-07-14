@@ -19,6 +19,10 @@ class MemoryAgentSettings(BaseSettings):
     CELERY_QUEUE: str = "memory_agent"
     EMBEDDING_DIMENSION: int = 1024
     EMBEDDING_MODEL_NAME: str = "BAAI/bge-m3"
+    EXTRACTION_LLM_BASE_URL: str = ""
+    EXTRACTION_LLM_API_KEY: SecretStr = SecretStr("")
+    EXTRACTION_LLM_MODEL: str = ""
+    EXTRACTION_LLM_TEMPERATURE: float = 0.0
 
 
 settings = MemoryAgentSettings()

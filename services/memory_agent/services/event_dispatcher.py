@@ -10,6 +10,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from services.memory_agent.contracts.events import AgentEventEnvelope, DocumentProjectionPayload
 from services.memory_agent.database import engine
 from services.memory_agent.models.inbox_event import InboxEvent
+from services.memory_agent.services.memory_events import (
+    MalformedMemoryEvent,
+    handle_document_projection,
+    handle_memory_settings_changed,
+    is_retry_attempt,
+)
+from services.memory_agent.services.memory_events import (
+    handle_conversation_completed as process_conversation_completed,
+)
+from services.memory_agent.services.memory_events import (
+    handle_user_memory_requested as process_user_memory_requested,
+)
 from services.memory_agent.services.projections import (
     IncompleteProjectionError,
     ProjectionIntegrityError,
@@ -38,9 +50,11 @@ async def handle_document_projection_upserted(event: AgentEventEnvelope) -> None
         knowledge_base_id=event.knowledge_base_id,
     )
     try:
-        await finalize_projection(receipt.projection_id)
+        activated = await finalize_projection(receipt.projection_id)
     except IncompleteProjectionError:
         return
+    if activated or await is_retry_attempt(event.event_id):
+        await handle_document_projection(event, projection_id=receipt.projection_id)
 
 
 async def handle_document_deleted(event: AgentEventEnvelope) -> None:
@@ -52,7 +66,7 @@ async def handle_knowledge_base_deleted(event: AgentEventEnvelope) -> None:
 
 
 async def handle_conversation_completed(event: AgentEventEnvelope) -> None:
-    pass
+    await process_conversation_completed(event)
 
 
 async def handle_conversation_deleted(event: AgentEventEnvelope) -> None:
@@ -60,11 +74,11 @@ async def handle_conversation_deleted(event: AgentEventEnvelope) -> None:
 
 
 async def handle_user_memory_requested(event: AgentEventEnvelope) -> None:
-    pass
+    await process_user_memory_requested(event)
 
 
 async def handle_user_memory_settings_changed(event: AgentEventEnvelope) -> None:
-    pass
+    await handle_memory_settings_changed(event)
 
 
 EVENT_HANDLERS: dict[str, EventHandler] = {
@@ -106,7 +120,7 @@ async def dispatch_inbox_event(event_id: str) -> EventProcessResult:
                 try:
                     handler = EVENT_HANDLERS[event.event_type]
                     await handler(event)
-                except ProjectionIntegrityError as exc:
+                except (ProjectionIntegrityError, MalformedMemoryEvent) as exc:
                     async with session.begin():
                         row = await session.scalar(
                             select(InboxEvent)
@@ -116,7 +130,7 @@ async def dispatch_inbox_event(event_id: str) -> EventProcessResult:
                         if row is not None and row.status == "pending":
                             row.status = "failed"
                             row.processed_at = datetime.now(UTC)
-                            row.last_error = f"projection event rejected: {exc}"[:2000]
+                            row.last_error = f"event rejected: {exc}"[:2000]
                     return EventProcessResult(event_id=event_id, status="failed")
                 except Exception as exc:
                     async with session.begin():
@@ -126,8 +140,8 @@ async def dispatch_inbox_event(event_id: str) -> EventProcessResult:
                             .with_for_update()
                         )
                         if row is not None and row.status == "pending":
-                            row.last_error = str(exc)[:2000]
-                    raise
+                            row.last_error = f"{type(exc).__name__}: event processing failed"
+                    raise RuntimeError(f"{event.event_type} processing failed") from None
 
                 async with session.begin():
                     row = await session.scalar(

@@ -60,3 +60,8 @@ class ChatSessionMessageRequest(BaseModel):
     question: str = Field(..., min_length=1)
     top_k: int = Field(default=4, ge=1, le=10)
     answer_mode: AnswerMode = "kb_qa"
+
+
+class ChatMessageRememberData(BaseModel):
+    message_id: str
+    requested: bool

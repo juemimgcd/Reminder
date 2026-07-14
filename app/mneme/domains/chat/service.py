@@ -1,10 +1,12 @@
 import uuid
 from datetime import datetime, timezone
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mneme.agent.adapters import build_mneme_agent
 from app.mneme.agent.contracts import AgentRequest, AnswerMode
+from app.mneme.conf.config import settings
 from app.mneme.crud.ai_model_config import get_default_ai_model_config
 from app.mneme.crud.chat_message import create_chat_message, delete_chat_messages, list_chat_messages
 from app.mneme.crud.chat_session import (
@@ -21,6 +23,10 @@ from app.mneme.crud.chat_session import (
 )
 from app.mneme.crud.knowledge_base import get_knowledge_base_by_id
 from app.mneme.domains.settings.ai_models import ai_model_config_runtime_kwargs
+from app.mneme.domains.tasks.outbox import (
+    enqueue_conversation_completed,
+    enqueue_user_memory_requested,
+)
 from app.mneme.models.chat_message import ChatMessage
 from app.mneme.models.chat_session import ChatSession
 from app.mneme.models.knowledge_base import KnowledgeBase
@@ -223,5 +229,58 @@ async def ask_in_chat_session(
     session.message_count = (session.message_count or 0) + 2
     session.last_message_at = now
     await db.flush()
+    if settings.MEMORY_AGENT_ENABLED:
+        await enqueue_conversation_completed(
+            db,
+            owner_id=current_user.id,
+            knowledge_base_id=session.knowledge_base_id,
+            session_id=session.id,
+            user_message_id=user_message.id,
+            user_content=user_message.content,
+            user_created_at=user_message.created_at,
+            assistant_message_id=assistant_message.id,
+            assistant_content=assistant_message.content,
+            assistant_created_at=assistant_message.created_at,
+        )
     await db.refresh(session)
     return session, [user_message, assistant_message]
+
+
+async def remember_chat_message(
+    db: AsyncSession,
+    *,
+    current_user: User,
+    session_id: str,
+    message_id: str,
+) -> tuple[ChatMessage, bool]:
+    session = await require_owned_chat_session(
+        db,
+        current_user=current_user,
+        session_id=session_id,
+    )
+    message = await db.scalar(
+        select(ChatMessage).where(
+            ChatMessage.id == message_id,
+            ChatMessage.session_id == session.id,
+            ChatMessage.user_id == current_user.id,
+            ChatMessage.knowledge_base_id == session.knowledge_base_id,
+        )
+    )
+    if message is None:
+        raise BusinessException(message="chat message not found", code=4051, status_code=404)
+    if message.role != "user":
+        raise BusinessException(
+            message="only user messages can be remembered",
+            code=4052,
+            status_code=400,
+        )
+    event = await enqueue_user_memory_requested(
+        db,
+        owner_id=current_user.id,
+        knowledge_base_id=session.knowledge_base_id,
+        session_id=session.id,
+        message_id=message.id,
+        excerpt=message.content,
+        message_created_at=message.created_at,
+    )
+    return message, event is not None
