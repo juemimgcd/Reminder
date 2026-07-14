@@ -19,9 +19,8 @@ from services.memory_agent.services.deletion import (
 )
 from services.memory_agent.services.memory_events import (
     MalformedMemoryEvent,
-    handle_document_projection,
+    handle_document_memory_observed,
     handle_memory_settings_changed,
-    is_retry_attempt,
 )
 from services.memory_agent.services.memory_events import (
     handle_conversation_completed as process_conversation_completed,
@@ -57,11 +56,9 @@ async def handle_document_projection_upserted(event: AgentEventEnvelope) -> None
         knowledge_base_id=event.knowledge_base_id,
     )
     try:
-        activated = await finalize_projection(receipt.projection_id)
+        await finalize_projection(receipt.projection_id)
     except IncompleteProjectionError:
         return
-    if activated or await is_retry_attempt(event.event_id):
-        await handle_document_projection(event, projection_id=receipt.projection_id)
 
 
 async def handle_conversation_completed(event: AgentEventEnvelope) -> None:
@@ -78,6 +75,7 @@ async def handle_user_memory_settings_changed(event: AgentEventEnvelope) -> None
 
 EVENT_HANDLERS: dict[str, EventHandler] = {
     "document.projection.upserted": handle_document_projection_upserted,
+    "document.memory.observed": handle_document_memory_observed,
     "document.deleted": handle_document_deleted,
     "knowledge_base.deleted": handle_knowledge_base_deleted,
     "conversation.completed": handle_conversation_completed,

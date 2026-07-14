@@ -316,6 +316,24 @@ async def enqueue_document_agent_projection(
     )
 
 
+async def enqueue_document_memory_observed(
+        db: AsyncSession,
+        *,
+        event: MemoryAgentEvent,
+) -> OutboxEvent | None:
+    if event.event_type != "document.memory.observed":
+        raise ValueError("document memory enqueue requires an observation event")
+    excerpt = event.payload.get("excerpt")
+    if not isinstance(excerpt, str) or _contains_secret(excerpt):
+        return None
+    return await _enqueue_memory_agent_event(
+        db,
+        event=event,
+        aggregate_type="document",
+        aggregate_id=str(event.payload["document_id"]),
+    )
+
+
 def _memory_event_id(prefix: str, *identity_parts: str) -> str:
     identity = "\0".join(identity_parts)
     return f"{prefix}:{hashlib.sha256(identity.encode('utf-8')).hexdigest()}"

@@ -275,7 +275,10 @@ docker compose exec app python -m app.mneme.cli.export_agent_projection --owner-
 Persist the checkpoint outside an ephemeral container if the job must survive
 container replacement. It is atomically advanced after every durable batch/event;
 re-running from the checkpoint is safe because projection events and Outbox rows are
-idempotent. Explicit resume accepts a document or projection ID and optional completed
+idempotent. The checkpoint binds the document version, snapshot hash, projection batch
+count, and event index. A new projection for the same document restarts at batch zero;
+an identity or batch-count conflict under the same projection ID aborts. Explicit
+resume accepts a document or projection ID and optional completed
 batch index:
 
 ```bash
@@ -293,8 +296,11 @@ Source deletion is asynchronous after Mneme commits its deletion event. Keep the
 Outbox worker and Memory Agent worker running and monitor dead letters before treating
 privacy deletion as complete. The event contains only owner/knowledge-base/session or
 document identifiers, stable message identifiers, source version/time, and no source
-text. Agent replay is an idempotent success. Legacy backfill re-extracts stored
-summaries and skips secret-matching records; it cannot reconstruct Mneme content that
+text. The complete message-ID list is carried without an arbitrary item cap, including
+for large conversations. Agent replay is an idempotent success. Legacy backfill uses
+the same strict online `document.memory.observed` event, retains real document/chunk
+provenance and original time, applies non-explicit governance, and skips secret-matching
+evidence; it cannot reconstruct Mneme content that
 was already deleted.
 
 ## 9. GitHub Actions 镜像发布

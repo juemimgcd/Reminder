@@ -13,6 +13,7 @@ from services.memory_agent.models.document_projection import DocumentProjection
 from services.memory_agent.models.evidence import Evidence, candidate_evidence, revision_evidence
 from services.memory_agent.models.memory_candidate import MemoryCandidate
 from services.memory_agent.models.memory_revision import MemoryRevision
+from services.memory_agent.models.projection_batch import DocumentProjectionBatch
 from services.memory_agent.repositories.memories import lock_memory_slot
 
 
@@ -43,7 +44,7 @@ class ConversationDeletedPayload(BaseModel):
     owner_id: int = Field(gt=0)
     knowledge_base_id: str | None = Field(default=None, max_length=128)
     session_id: str = Field(min_length=1, max_length=128)
-    message_ids: list[str] = Field(default_factory=list, max_length=10_000)
+    message_ids: list[str] = Field(default_factory=list)
     source_version: datetime
 
     @model_validator(mode="after")
@@ -62,10 +63,12 @@ class DeletionResult:
     projection_ids: tuple[str, ...]
     evidence_ids: tuple[str, ...]
     candidate_ids: tuple[str, ...]
+    revision_ids: tuple[str, ...]
     memory_ids: tuple[str, ...]
     deleted_projection_count: int
     deleted_evidence_count: int
     deleted_candidate_count: int
+    deleted_revision_count: int
     deleted_memory_count: int
     recalculated_memory_count: int
 
@@ -134,10 +137,12 @@ async def delete_source_evidence(
             projection_ids=deleted_projection_ids,
             evidence_ids=(),
             candidate_ids=(),
+            revision_ids=(),
             memory_ids=(),
             deleted_projection_count=len(deleted_projection_ids),
             deleted_evidence_count=0,
             deleted_candidate_count=0,
+            deleted_revision_count=0,
             deleted_memory_count=0,
             recalculated_memory_count=0,
         )
@@ -255,6 +260,7 @@ async def delete_source_evidence(
         )
 
     deleted_memory_ids: set[str] = set()
+    deleted_revision_ids: set[str] = set()
     recalculated_memory_ids: set[str] = set()
     if memory_ids:
         memories = list(
@@ -270,18 +276,95 @@ async def delete_source_evidence(
             )
         )
         for memory in memories:
-            evidence_count = int(
-                await db.scalar(
-                    select(func.count(func.distinct(revision_evidence.c.evidence_id))).where(
-                        revision_evidence.c.revision_id == memory.active_revision_id
+            revisions = list(
+                await db.scalars(
+                    select(MemoryRevision)
+                    .where(
+                        MemoryRevision.memory_id == memory.memory_id,
+                        MemoryRevision.owner_id == owner_id,
+                        _scope(MemoryRevision.knowledge_base_id, knowledge_base_id),
                     )
+                    .order_by(MemoryRevision.valid_from, MemoryRevision.revision_id)
+                    .with_for_update()
                 )
-                or 0
             )
-            if evidence_count == 0:
+            revision_evidence_counts = {
+                revision.revision_id: int(
+                    await db.scalar(
+                        select(func.count(func.distinct(revision_evidence.c.evidence_id))).where(
+                            revision_evidence.c.revision_id == revision.revision_id
+                        )
+                    )
+                    or 0
+                )
+                for revision in revisions
+            }
+            supported_revisions = [
+                revision
+                for revision in revisions
+                if revision_evidence_counts[revision.revision_id] > 0
+            ]
+            if not supported_revisions:
+                deleted_revision_ids.update(
+                    revision.revision_id for revision in revisions
+                )
                 deleted_memory_ids.add(memory.memory_id)
                 await db.delete(memory)
                 continue
+
+            selected_revision = max(
+                supported_revisions,
+                key=lambda revision: (revision.valid_from, revision.revision_id),
+            )
+            active_revision = next(
+                (
+                    revision
+                    for revision in revisions
+                    if revision.revision_id == memory.active_revision_id
+                ),
+                None,
+            )
+            if active_revision is None:
+                raise RuntimeError("canonical memory active revision is missing")
+            if selected_revision.revision_id != active_revision.revision_id:
+                now = datetime.now(UTC)
+                active_revision.valid_to = max(active_revision.valid_from, now)
+                await db.flush()
+                selected_revision.valid_to = None
+                memory.active_revision_id = selected_revision.revision_id
+                memory.subject = selected_revision.subject
+                memory.predicate = selected_revision.predicate
+                memory.value = selected_revision.value
+                memory.fingerprint = selected_revision.fingerprint
+                memory.status = "active"
+                await db.flush()
+
+            unsupported_revision_ids = {
+                revision.revision_id
+                for revision in revisions
+                if revision_evidence_counts[revision.revision_id] == 0
+            }
+            if unsupported_revision_ids:
+                deleted_revision_ids.update(
+                    await db.scalars(
+                        delete(MemoryRevision)
+                        .where(MemoryRevision.revision_id.in_(unsupported_revision_ids))
+                        .returning(MemoryRevision.revision_id)
+                    )
+                )
+
+            evidence_count = int(
+                await db.scalar(
+                    select(func.count(func.distinct(revision_evidence.c.evidence_id)))
+                    .select_from(MemoryRevision)
+                    .join(
+                        revision_evidence,
+                        revision_evidence.c.revision_id == MemoryRevision.revision_id,
+                    )
+                    .where(MemoryRevision.memory_id == memory.memory_id)
+                )
+                or 0
+            )
             confidence_ceiling = 1.0 - (0.5**evidence_count)
             memory.confidence = min(memory.confidence, confidence_ceiling)
             recalculated_memory_ids.add(memory.memory_id)
@@ -293,10 +376,12 @@ async def delete_source_evidence(
         projection_ids=deleted_projection_ids,
         evidence_ids=tuple(sorted(evidence_ids)),
         candidate_ids=tuple(sorted(deleted_candidate_ids)),
+        revision_ids=tuple(sorted(deleted_revision_ids)),
         memory_ids=tuple(sorted(deleted_memory_ids)),
         deleted_projection_count=len(deleted_projection_ids),
         deleted_evidence_count=deleted_evidence_count,
         deleted_candidate_count=len(deleted_candidate_ids),
+        deleted_revision_count=len(deleted_revision_ids),
         deleted_memory_count=len(deleted_memory_ids),
         recalculated_memory_count=len(recalculated_memory_ids),
     )
@@ -331,6 +416,19 @@ async def delete_document_projection(
                     DocumentChunk.projection_id.in_(projection_ids)
                 )
             )
+        )
+        batches = list(
+            await db.scalars(
+                select(DocumentProjectionBatch).where(
+                    DocumentProjectionBatch.projection_id.in_(projection_ids)
+                )
+            )
+        )
+        chunk_ids.update(
+            str(chunk["chunk_id"])
+            for batch in batches
+            for chunk in batch.chunks
+            if isinstance(chunk.get("chunk_id"), str) and chunk["chunk_id"]
         )
         await db.execute(
             delete(DocumentProjection).where(
@@ -427,6 +525,7 @@ async def handle_conversation_deleted(event: AgentEventEnvelope) -> DeletionResu
             projection_ids=(),
             evidence_ids=tuple(sorted(set(conversation_result.evidence_ids + explicit_result.evidence_ids))),
             candidate_ids=tuple(sorted(set(conversation_result.candidate_ids + explicit_result.candidate_ids))),
+            revision_ids=tuple(sorted(set(conversation_result.revision_ids + explicit_result.revision_ids))),
             memory_ids=tuple(sorted(set(conversation_result.memory_ids + explicit_result.memory_ids))),
             deleted_projection_count=0,
             deleted_evidence_count=(
@@ -434,6 +533,9 @@ async def handle_conversation_deleted(event: AgentEventEnvelope) -> DeletionResu
             ),
             deleted_candidate_count=(
                 conversation_result.deleted_candidate_count + explicit_result.deleted_candidate_count
+            ),
+            deleted_revision_count=(
+                conversation_result.deleted_revision_count + explicit_result.deleted_revision_count
             ),
             deleted_memory_count=(
                 conversation_result.deleted_memory_count + explicit_result.deleted_memory_count

@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 EventType = Literal[
     "document.projection.upserted",
+    "document.memory.observed",
     "document.deleted",
     "knowledge_base.deleted",
     "conversation.completed",

@@ -9,10 +9,14 @@ from pathlib import Path
 from sqlalchemy import select
 
 from app.mneme.conf.database import engine, open_read_session, open_write_session
-from app.mneme.domains.documents.agent_projection import build_document_projection_batches
+from app.mneme.domains.documents.agent_projection import (
+    build_document_memory_observation_events,
+    build_document_projection_batches,
+    build_legacy_document_memory_observed_event,
+)
 from app.mneme.domains.tasks.outbox import (
     enqueue_document_agent_projection,
-    enqueue_user_memory_requested,
+    enqueue_document_memory_observed,
 )
 from app.mneme.models.document import Document
 from app.mneme.models.memory_entry import MemoryEntry
@@ -25,6 +29,10 @@ class Checkpoint:
     kind: str
     source_id: str
     projection_id: str | None
+    document_version: str | None
+    snapshot_identity: str | None
+    projection_batch_count: int | None
+    event_index: int | None
     batch_index: int | None
     event_id: str | None
     status: str
@@ -44,12 +52,11 @@ def _load_checkpoint(path: Path) -> Checkpoint | None:
     if not path.exists():
         return None
     raw = json.loads(path.read_text(encoding="utf-8"))
+    raw.setdefault("document_version", None)
+    raw.setdefault("snapshot_identity", None)
+    raw.setdefault("projection_batch_count", None)
+    raw.setdefault("event_index", raw.get("batch_index"))
     return Checkpoint(**raw)
-
-
-def _synthetic_id(prefix: str, source_id: str) -> str:
-    digest = hashlib.sha256(source_id.encode("utf-8")).hexdigest()
-    return f"{prefix}_{digest[:48]}"
 
 
 async def _documents(
@@ -86,7 +93,7 @@ def _past_checkpoint(
     checkpoint_order = kind_order.get(checkpoint.kind, -1)
     if current_order != checkpoint_order:
         return current_order > checkpoint_order
-    if kind == "document" and checkpoint.projection_id == projection_id:
+    if kind == "document" and checkpoint.source_id == source_id:
         return True
     return source_id > checkpoint.source_id
 
@@ -98,18 +105,39 @@ async def run_backfill(args: argparse.Namespace) -> dict[str, int]:
 
     counts = {
         "document_events": 0,
+        "document_memory_events": 0,
         "legacy_memory_events": 0,
         "secret_filtered": 0,
         "dry_run_events": 0,
     }
-    for document in await _documents(
+    documents = await _documents(
         owner_id=args.owner_id, knowledge_base_id=args.knowledge_base_id
-    ):
+    )
+    documents_by_id = {document.id: document for document in documents}
+    for document in documents:
         async with open_read_session() as db:
-            events = await build_document_projection_batches(
+            projection_events = await build_document_projection_batches(
                 db, document=document, batch_size=args.batch_size
             )
-        projection_id = str(events[0].payload["projection_id"])
+            observation_events = await build_document_memory_observation_events(
+                db, document=document
+            )
+        projection_id = str(projection_events[0].payload["projection_id"])
+        document_version = str(projection_events[0].payload["document_version"])
+        snapshot_identity = str(projection_events[0].payload["aggregate_hash"])
+        events = [*projection_events, *observation_events]
+        if (
+            checkpoint is not None
+            and checkpoint.kind == "document"
+            and checkpoint.source_id == document.id
+            and checkpoint.projection_id == projection_id
+        ):
+            if checkpoint.document_version not in {None, document_version}:
+                raise ValueError("checkpoint document version conflicts with projection ID")
+            if checkpoint.snapshot_identity not in {None, snapshot_identity}:
+                raise ValueError("checkpoint snapshot conflicts with projection ID")
+            if checkpoint.projection_batch_count not in {None, len(projection_events)}:
+                raise ValueError("checkpoint batch count differs; resume with the original batch size")
         if not explicit_document_resume_seen:
             if args.resume_from not in {document.id, projection_id}:
                 continue
@@ -121,19 +149,26 @@ async def run_backfill(args: argparse.Namespace) -> dict[str, int]:
             checkpoint=checkpoint,
         ):
             continue
-        for event in events:
-            batch_index = int(event.payload["batch_index"])
+        for event_index, event in enumerate(events):
+            batch_index = (
+                int(event.payload["batch_index"])
+                if event.event_type == "document.projection.upserted"
+                else None
+            )
             if (
                 (
                     checkpoint is not None
                     and checkpoint.kind == "document"
                     and checkpoint.projection_id == projection_id
-                    and checkpoint.batch_index is not None
-                    and batch_index <= checkpoint.batch_index
+                    and checkpoint.document_version in {None, document_version}
+                    and checkpoint.snapshot_identity in {None, snapshot_identity}
+                    and checkpoint.event_index is not None
+                    and event_index <= checkpoint.event_index
                 )
                 or (
                     args.resume_from in {document.id, projection_id}
                     and args.resume_batch_index is not None
+                    and batch_index is not None
                     and batch_index <= args.resume_batch_index
                 )
             ):
@@ -142,19 +177,34 @@ async def run_backfill(args: argparse.Namespace) -> dict[str, int]:
                 counts["dry_run_events"] += 1
                 continue
             async with open_write_session() as db:
-                await enqueue_document_agent_projection(db, event=event)
+                if event.event_type == "document.projection.upserted":
+                    await enqueue_document_agent_projection(db, event=event)
+                    status = "accepted"
+                else:
+                    outbox_event = await enqueue_document_memory_observed(db, event=event)
+                    status = "accepted" if outbox_event is not None else "secret_filtered"
             _atomic_checkpoint(
                 checkpoint_path,
                 Checkpoint(
                     kind="document",
                     source_id=document.id,
                     projection_id=projection_id,
+                    document_version=document_version,
+                    snapshot_identity=snapshot_identity,
+                    projection_batch_count=len(projection_events),
+                    event_index=event_index,
                     batch_index=batch_index,
                     event_id=event.event_id,
-                    status="accepted",
+                    status=status,
                 ),
             )
-            counts["document_events"] += 1
+            if event.event_type == "document.projection.upserted":
+                counts["document_events"] += 1
+            else:
+                if status == "secret_filtered":
+                    counts["secret_filtered"] += 1
+                else:
+                    counts["document_memory_events"] += 1
 
     for memory in await _legacy_memories(
         owner_id=args.owner_id, knowledge_base_id=args.knowledge_base_id
@@ -175,17 +225,15 @@ async def run_backfill(args: argparse.Namespace) -> dict[str, int]:
         if args.dry_run:
             counts["dry_run_events"] += 1
             continue
-        occurred_at = memory.first_seen_at
+        document = documents_by_id.get(memory.document_id)
+        if document is None:
+            raise ValueError(f"legacy memory {memory.id} has no scoped indexed document")
+        event = build_legacy_document_memory_observed_event(
+            document=document,
+            memory=memory,
+        )
         async with open_write_session() as db:
-            outbox_event = await enqueue_user_memory_requested(
-                db,
-                owner_id=memory.user_id,
-                knowledge_base_id=memory.knowledge_base_id,
-                session_id=_synthetic_id("legacy_session", memory.id),
-                message_id=_synthetic_id("legacy_message", memory.id),
-                excerpt=memory.summary,
-                message_created_at=occurred_at,
-            )
+            outbox_event = await enqueue_document_memory_observed(db, event=event)
         status = "accepted" if outbox_event is not None else "secret_filtered"
         _atomic_checkpoint(
             checkpoint_path,
@@ -193,6 +241,12 @@ async def run_backfill(args: argparse.Namespace) -> dict[str, int]:
                 kind="legacy_memory",
                 source_id=memory.id,
                 projection_id=None,
+                document_version=document.updated_at.isoformat(),
+                snapshot_identity=hashlib.sha256(
+                    event.payload["excerpt"].encode("utf-8")
+                ).hexdigest(),
+                projection_batch_count=None,
+                event_index=0,
                 batch_index=None,
                 event_id=outbox_event.payload["event_id"] if outbox_event is not None else None,
                 status=status,

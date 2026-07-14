@@ -6,7 +6,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.memory_agent.contracts.events import AgentEventEnvelope
-from services.memory_agent.database import engine, open_read_session, open_write_session
+from services.memory_agent.database import engine, open_write_session
 from services.memory_agent.memory.extraction import extract_candidates
 from services.memory_agent.memory.identity import (
     evidence_identity,
@@ -19,13 +19,12 @@ from services.memory_agent.memory.reconciliation import (
 from services.memory_agent.memory.reconciliation import reconcile_candidate
 from services.memory_agent.memory.schemas import (
     ConversationCompletedPayload,
+    DocumentMemoryObservedPayload,
     EvidenceInput,
     MemoryRequestedPayload,
     MemorySettingsChangedPayload,
 )
 from services.memory_agent.memory.sensitivity import classify_sensitivity, contains_secret
-from services.memory_agent.models.document_chunk import DocumentChunk
-from services.memory_agent.models.document_projection import DocumentProjection
 from services.memory_agent.models.evidence import Evidence, candidate_evidence
 from services.memory_agent.models.inbox_event import InboxEvent
 from services.memory_agent.models.memory_candidate import MemoryCandidate
@@ -197,6 +196,7 @@ async def _extract_and_reconcile(
     owner_id: int,
     knowledge_base_id: str | None,
     explicit_request: bool,
+    document_id: str | None = None,
 ) -> None:
     if contains_secret(evidence.excerpt):
         return
@@ -243,6 +243,7 @@ async def _extract_and_reconcile(
                 evidence=[stored_evidence],
                 extraction_provenance={
                     "source_type": evidence.source_type,
+                    **({"document_id": document_id} if document_id is not None else {}),
                     "evidence_start": candidate.evidence_start,
                     "evidence_end": candidate.evidence_end,
                     "temporal_hints": candidate.temporal_hints.model_dump(mode="json"),
@@ -290,44 +291,22 @@ async def handle_user_memory_requested(event: AgentEventEnvelope) -> None:
     )
 
 
-async def handle_document_projection(
-    event: AgentEventEnvelope,
-    *,
-    projection_id: str,
-) -> None:
-    async with open_read_session() as db:
-        projection = await db.get(DocumentProjection, projection_id)
-        if projection is None or projection.status != "active":
-            return
-        chunks = list(
-            await db.scalars(
-                select(DocumentChunk)
-                .where(
-                    DocumentChunk.projection_id == projection_id,
-                    DocumentChunk.is_active.is_(True),
-                )
-                .order_by(DocumentChunk.chunk_index)
-            )
-        )
-    occurred_at = projection.activated_at or event.occurred_at
-    for chunk in chunks:
-        await _extract_and_reconcile(
-            EvidenceInput(
-                source_type="document",
-                source_id=chunk.chunk_id,
-                source_version=chunk.document_version,
-                excerpt=chunk.content[:20_000],
-                occurred_at=occurred_at,
-            ),
-            owner_id=event.owner_id,
-            knowledge_base_id=event.knowledge_base_id,
-            explicit_request=False,
-        )
-
-
-async def is_retry_attempt(event_id: str) -> bool:
-    async with open_read_session() as db:
-        attempt_count = await db.scalar(
-            select(InboxEvent.attempt_count).where(InboxEvent.event_id == event_id)
-        )
-    return bool(attempt_count and attempt_count > 1)
+async def handle_document_memory_observed(event: AgentEventEnvelope) -> None:
+    payload = _payload(DocumentMemoryObservedPayload, event)
+    if event.knowledge_base_id is None:
+        raise MalformedMemoryEvent("document memory observations require a knowledge base")
+    if payload.observed_at != event.occurred_at:
+        raise MalformedMemoryEvent("document memory observation time does not match envelope")
+    await _extract_and_reconcile(
+        EvidenceInput(
+            source_type="document",
+            source_id=payload.chunk_id,
+            source_version=payload.source_version,
+            excerpt=payload.excerpt,
+            occurred_at=payload.observed_at,
+        ),
+        owner_id=event.owner_id,
+        knowledge_base_id=event.knowledge_base_id,
+        explicit_request=False,
+        document_id=payload.document_id,
+    )

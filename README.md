@@ -182,8 +182,13 @@ removes all stored projection batches/chunks and document evidence; knowledge-ba
 deletion removes all scoped projections, evidence, candidates, and canonical memory;
 conversation deletion removes conversation evidence by session ID and explicit-request
 evidence by the supplied stable message IDs. Unsupported candidates and canonical
-memories are hard-deleted. Surviving confidence is deterministically capped downward.
+memory revisions are hard-deleted. If the active revision loses support, the newest
+remaining supported revision becomes active before cleanup; the canonical memory is
+deleted only when no revision retains evidence. Surviving confidence is deterministically capped downward.
 Deletion audit results contain identifiers, counts, status, and timestamps only.
+Conversation deletion carries the complete stable message-ID list in one PostgreSQL
+JSON/HTTP event; no arbitrary item cap can turn a large-conversation privacy deletion
+into a terminal validation failure.
 
 Dry-run a source rebuild without writing Outbox or Agent state:
 
@@ -197,9 +202,10 @@ Run the rebuild through the same version-1 online DTO builder and Outbox contrac
 python -m app.mneme.cli.export_agent_projection --owner-id 42 --knowledge-base-id kb_123 --batch-size 50 --checkpoint var/memory-agent-backfill.json
 ```
 
-The checkpoint is atomically replaced after each durable projection batch, accepted
-legacy-memory event, or secret-filtered legacy record. It records source ID,
-projection ID, batch index, event ID, and status, and is loaded automatically on the
+The checkpoint is atomically replaced after each durable projection batch/observation,
+accepted legacy-memory event, or secret-filtered record. It records source ID,
+document version, snapshot hash, projection ID, projection batch count, event index,
+batch index, event ID, and status, and is loaded automatically on the
 next run. To override it, resume a document at a projection/document ID (optionally
 after a batch) or resume legacy memory after a memory ID:
 
@@ -208,10 +214,14 @@ python -m app.mneme.cli.export_agent_projection --resume-from PROJECTION_ID --re
 python -m app.mneme.cli.export_agent_projection --resume-kind legacy_memory --resume-from MEMORY_ID --batch-size 50
 ```
 
-Event and Outbox idempotency makes replay duplicate-safe. Legacy memory uses stable
-synthetic session/message IDs, the original first-seen timestamp, and the online
-`user.memory_requested` secret filter. Limitations: legacy values are re-extracted
-from their stored summaries, filtered secrets are not exported, only indexed documents
+Event and Outbox idempotency makes replay duplicate-safe. If a document keeps its
+source ID but its version/snapshot produces a new projection ID, resume restarts that
+document at projection batch zero. A conflicting version/snapshot or changed batch
+count under the same projection ID aborts instead of skipping data. Online indexing
+and legacy backfill share the strict `document.memory.observed` v1 builder and secret
+filter. Legacy observations retain the real document/chunk IDs, document version,
+original first-seen time, and use non-explicit governance. Limitations: legacy values
+are re-extracted from stored evidence text, filtered secrets are not exported, only indexed documents
 with chunks can be projected, and a deleted source cannot be rebuilt after its Mneme
 content has itself been deleted.
 
@@ -222,8 +232,11 @@ python -m services.memory_agent.cli.backfill --owner-id 42 --knowledge-base-id k
 python -m services.memory_agent.cli.backfill --resume-from PROJECTION_ID --batch-size 100 --dry-run
 ```
 
-The report includes staged, active, failed, superseded, and hash-mismatch counts plus
-safe projection/document identifiers; it never prints source content or failure text.
+The report includes staged, active, failed, superseded, hash, batch, stable chunk-key,
+and scope-mismatch counts. Active chunks are mapped to staged payloads by
+`(chunk_index, chunk_id)` with exact key-set, content-hash, projection, document,
+version, owner, and knowledge-base checks. It prints only safe IDs, booleans, and
+counts; it never prints source content or failure text.
 
 前端类型检查：
 

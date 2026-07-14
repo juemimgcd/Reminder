@@ -113,6 +113,16 @@ class MemoryRequestedPayload(BaseModel):
     excerpt: str = Field(min_length=1, max_length=MAX_EXCERPT_LENGTH)
 
 
+class DocumentMemoryObservedPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    document_id: str = Field(min_length=1, max_length=128)
+    chunk_id: str = Field(min_length=1, max_length=128)
+    source_version: str = Field(min_length=1, max_length=128)
+    observed_at: datetime
+    excerpt: str = Field(min_length=1, max_length=MAX_EXCERPT_LENGTH)
+
+
 class MemorySettingsChangedPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

@@ -144,14 +144,23 @@ async def delete_chat_session(
     session_id: str,
 ) -> int:
     session = await require_owned_chat_session(db, current_user=current_user, session_id=session_id)
-    messages = await list_chat_messages(db, session_id=session.id, user_id=current_user.id)
     if settings.MEMORY_AGENT_ENABLED:
+        message_ids = list(
+            await db.scalars(
+                select(ChatMessage.id)
+                .where(
+                    ChatMessage.session_id == session.id,
+                    ChatMessage.user_id == current_user.id,
+                )
+                .order_by(ChatMessage.id)
+            )
+        )
         await enqueue_conversation_deleted(
             db,
             owner_id=current_user.id,
             knowledge_base_id=session.knowledge_base_id,
             session_id=session.id,
-            message_ids=[message.id for message in messages],
+            message_ids=message_ids,
             source_version=datetime.now(timezone.utc),
         )
     await delete_chat_messages(db, session_id=session_id, user_id=current_user.id)

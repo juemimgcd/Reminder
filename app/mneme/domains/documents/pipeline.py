@@ -8,11 +8,15 @@ from app.mneme.conf.database import open_write_session
 from app.mneme.conf.logging import log_event
 from app.mneme.crud.chunk import create_chunks
 from app.mneme.crud.document import update_document_status
-from app.mneme.domains.documents.agent_projection import build_document_projection_batches
+from app.mneme.domains.documents.agent_projection import (
+    build_document_memory_observation_events,
+    build_document_projection_batches,
+)
 from app.mneme.domains.memory.service import rebuild_memory_entries_for_document
 from app.mneme.domains.tasks.outbox import (
     enqueue_document_agent_projection,
     enqueue_document_graph_sync_event,
+    enqueue_document_memory_observed,
     enqueue_document_vector_reindex_event,
     process_outbox_event_by_id,
 )
@@ -153,6 +157,12 @@ async def run_document_index_pipeline(
             )
             for event in projection_batches:
                 await enqueue_document_agent_projection(db, event=event)
+            memory_observations = await build_document_memory_observation_events(
+                db,
+                document=doc,
+            )
+            for event in memory_observations:
+                await enqueue_document_memory_observed(db, event=event)
         vector_result = {
             "batch_count": len(projection_batches),
             "batch_size": 50,

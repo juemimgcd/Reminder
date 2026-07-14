@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 AnswerMode = Literal[
     "kb_qa",
@@ -12,6 +12,7 @@ AnswerMode = Literal[
 ]
 MemoryAgentEventType = Literal[
     "document.projection.upserted",
+    "document.memory.observed",
     "document.deleted",
     "knowledge_base.deleted",
     "conversation.completed",
@@ -57,6 +58,16 @@ class DocumentProjectionPayload(BaseModel):
     batch_count: int = Field(gt=0)
     aggregate_hash: str
     chunks: list[DocumentChunkPayload]
+
+
+class DocumentMemoryObservedPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    document_id: str = Field(min_length=1, max_length=128)
+    chunk_id: str = Field(min_length=1, max_length=128)
+    source_version: str = Field(min_length=1, max_length=128)
+    observed_at: datetime
+    excerpt: str = Field(min_length=1, max_length=20_000)
 
 
 class EventReceipt(BaseModel):
