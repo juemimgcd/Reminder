@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock
 
 import app.mneme.domains.retrieval.context_service as context_service
-from app.mneme.agent.orchestrator import generate_rag_answer
+from app.mneme.agent.orchestrator import generate_rag_answer, get_evidence_prompt_for_mode
 from app.mneme.agent.router import retrieval_scope_for_answer_mode
 
 
@@ -82,3 +82,19 @@ def test_memory_answer_passes_memory_only_scope_to_context_builder(monkeypatch):
     )
 
     assert captured["retrieval_scope"] == "memory_only"
+
+
+def test_memory_mode_selects_long_term_memory_prompt():
+    prompt = get_evidence_prompt_for_mode("memory_query", "FORMAT")
+    system_text = prompt.messages[0].prompt.template
+
+    assert "long-term memory" in system_text.lower()
+    assert "FORMAT" in system_text
+
+
+def test_knowledge_base_mode_keeps_evidence_prompt():
+    prompt = get_evidence_prompt_for_mode("kb_qa", "FORMAT")
+    system_text = prompt.messages[0].prompt.template
+
+    assert "long-term memory" not in system_text.lower()
+    assert "FORMAT" in system_text
