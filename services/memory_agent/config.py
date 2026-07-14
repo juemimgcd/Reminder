@@ -17,6 +17,8 @@ class MemoryAgentSettings(BaseSettings):
     CELERY_BROKER_URL: str = "redis://localhost:6379/2"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/3"
     CELERY_QUEUE: str = "memory_agent"
+    EMBEDDING_DIMENSION: int = 1024
+    EMBEDDING_MODEL_NAME: str = "BAAI/bge-m3"
 
 
 settings = MemoryAgentSettings()

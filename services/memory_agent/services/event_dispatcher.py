@@ -3,11 +3,13 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal
 
-from sqlalchemy import select
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from services.memory_agent.contracts.events import AgentEventEnvelope
-from services.memory_agent.database import open_write_session
+from services.memory_agent.contracts.events import AgentEventEnvelope, DocumentProjectionPayload
+from services.memory_agent.database import engine
 from services.memory_agent.models.inbox_event import InboxEvent
+from services.memory_agent.services.projections import finalize_projection, stage_projection_batch
 
 EventProcessStatus = Literal["succeeded", "skipped", "not_found"]
 EventHandler = Callable[[AgentEventEnvelope], Awaitable[None]]
@@ -20,7 +22,14 @@ class EventProcessResult:
 
 
 async def handle_document_projection_upserted(event: AgentEventEnvelope) -> None:
-    pass
+    payload = DocumentProjectionPayload.model_validate(event.payload)
+    receipt = await stage_projection_batch(
+        payload,
+        owner_id=event.owner_id,
+        knowledge_base_id=event.knowledge_base_id,
+    )
+    if receipt.is_final_batch:
+        await finalize_projection(receipt.projection_id)
 
 
 async def handle_document_deleted(event: AgentEventEnvelope) -> None:
@@ -59,33 +68,57 @@ EVENT_HANDLERS: dict[str, EventHandler] = {
 
 
 async def dispatch_inbox_event(event_id: str) -> EventProcessResult:
-    processing_error: Exception | None = None
-
-    async with open_write_session() as session:
-        row = await session.scalar(
-            select(InboxEvent).where(InboxEvent.event_id == event_id).with_for_update()
+    async with engine.connect() as connection:
+        acquired = await connection.scalar(
+            text("SELECT pg_try_advisory_lock(hashtextextended(:event_id, 1))"),
+            {"event_id": event_id},
         )
-        if row is None:
-            return EventProcessResult(event_id=event_id, status="not_found")
-        if row.status != "pending":
+        await connection.commit()
+        if not acquired:
             return EventProcessResult(event_id=event_id, status="skipped")
-
-        row.status = "running"
-        row.attempt_count += 1
-        row.last_error = None
-
         try:
-            event = AgentEventEnvelope.model_validate(row.payload)
-            handler = EVENT_HANDLERS[event.event_type]
-            await handler(event)
-        except Exception as exc:
-            row.status = "pending"
-            row.last_error = str(exc)[:2000]
-            processing_error = exc
-        else:
-            row.status = "succeeded"
-            row.processed_at = datetime.now(UTC)
+            async with AsyncSession(bind=connection, expire_on_commit=False) as session:
+                async with session.begin():
+                    row = await session.scalar(
+                        select(InboxEvent)
+                        .where(InboxEvent.event_id == event_id)
+                        .with_for_update()
+                    )
+                    if row is None:
+                        return EventProcessResult(event_id=event_id, status="not_found")
+                    if row.status != "pending":
+                        return EventProcessResult(event_id=event_id, status="skipped")
+                    row.attempt_count += 1
+                    row.last_error = None
+                    event = AgentEventEnvelope.model_validate(row.payload)
 
-    if processing_error is not None:
-        raise processing_error
-    return EventProcessResult(event_id=event_id, status="succeeded")
+                try:
+                    handler = EVENT_HANDLERS[event.event_type]
+                    await handler(event)
+                except Exception as exc:
+                    async with session.begin():
+                        row = await session.scalar(
+                            select(InboxEvent)
+                            .where(InboxEvent.event_id == event_id)
+                            .with_for_update()
+                        )
+                        if row is not None and row.status == "pending":
+                            row.last_error = str(exc)[:2000]
+                    raise
+
+                async with session.begin():
+                    row = await session.scalar(
+                        select(InboxEvent)
+                        .where(InboxEvent.event_id == event_id)
+                        .with_for_update()
+                    )
+                    if row is not None and row.status == "pending":
+                        row.status = "succeeded"
+                        row.processed_at = datetime.now(UTC)
+                return EventProcessResult(event_id=event_id, status="succeeded")
+        finally:
+            await connection.execute(
+                text("SELECT pg_advisory_unlock(hashtextextended(:event_id, 1))"),
+                {"event_id": event_id},
+            )
+            await connection.commit()
