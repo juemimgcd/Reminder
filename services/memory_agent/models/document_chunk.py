@@ -16,6 +16,8 @@ class DocumentChunk(Base):
         UniqueConstraint("projection_id", "chunk_index"),
         Index(
             "uq_document_chunks_active_chunk_id",
+            "owner_id",
+            "knowledge_base_id",
             "chunk_id",
             unique=True,
             postgresql_where=text("is_active"),
@@ -41,7 +43,7 @@ class DocumentChunk(Base):
         index=True,
     )
     owner_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    knowledge_base_id: Mapped[str | None] = mapped_column(String(128))
+    knowledge_base_id: Mapped[str] = mapped_column(String(128), nullable=False)
     document_id: Mapped[str] = mapped_column(String(128), nullable=False)
     document_version: Mapped[str] = mapped_column(String(128), nullable=False)
     chunk_id: Mapped[str] = mapped_column(String(128), nullable=False)

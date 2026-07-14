@@ -3,15 +3,20 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal
 
+from pydantic import ValidationError
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.memory_agent.contracts.events import AgentEventEnvelope, DocumentProjectionPayload
 from services.memory_agent.database import engine
 from services.memory_agent.models.inbox_event import InboxEvent
-from services.memory_agent.services.projections import finalize_projection, stage_projection_batch
+from services.memory_agent.services.projections import (
+    ProjectionIntegrityError,
+    finalize_projection,
+    stage_projection_batch,
+)
 
-EventProcessStatus = Literal["succeeded", "skipped", "not_found"]
+EventProcessStatus = Literal["succeeded", "failed", "skipped", "not_found"]
 EventHandler = Callable[[AgentEventEnvelope], Awaitable[None]]
 
 
@@ -22,7 +27,10 @@ class EventProcessResult:
 
 
 async def handle_document_projection_upserted(event: AgentEventEnvelope) -> None:
-    payload = DocumentProjectionPayload.model_validate(event.payload)
+    try:
+        payload = DocumentProjectionPayload.model_validate(event.payload)
+    except ValidationError as exc:
+        raise ProjectionIntegrityError("invalid document projection payload") from exc
     receipt = await stage_projection_batch(
         payload,
         owner_id=event.owner_id,
@@ -95,6 +103,18 @@ async def dispatch_inbox_event(event_id: str) -> EventProcessResult:
                 try:
                     handler = EVENT_HANDLERS[event.event_type]
                     await handler(event)
+                except ProjectionIntegrityError as exc:
+                    async with session.begin():
+                        row = await session.scalar(
+                            select(InboxEvent)
+                            .where(InboxEvent.event_id == event_id)
+                            .with_for_update()
+                        )
+                        if row is not None and row.status == "pending":
+                            row.status = "failed"
+                            row.processed_at = datetime.now(UTC)
+                            row.last_error = f"projection event rejected: {exc}"[:2000]
+                    return EventProcessResult(event_id=event_id, status="failed")
                 except Exception as exc:
                     async with session.begin():
                         row = await session.scalar(

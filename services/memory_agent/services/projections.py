@@ -15,6 +15,7 @@ from services.memory_agent.database import engine, open_write_session
 from services.memory_agent.models.document_chunk import DocumentChunk
 from services.memory_agent.models.document_projection import DocumentProjection
 from services.memory_agent.repositories.projections import (
+    ProjectionIntegrityError,
     load_projection_batches,
     load_projection_for_update,
     store_projection_batch,
@@ -22,12 +23,11 @@ from services.memory_agent.repositories.projections import (
 from services.memory_agent.services.embeddings import embed_texts
 
 
-class ProjectionIntegrityError(ValueError):
+class IncompleteProjectionError(RuntimeError):
     pass
 
 
-class IncompleteProjectionError(ProjectionIntegrityError):
-    pass
+POSTGRES_INTEGER_MAX = 2_147_483_647
 
 
 @dataclass(frozen=True)
@@ -42,7 +42,7 @@ class ProjectionBatchReceipt:
 class PreparedProjection:
     projection_id: str
     owner_id: int
-    knowledge_base_id: str | None
+    knowledge_base_id: str
     document_id: str
     document_version: str
     chunks: tuple[DocumentChunkPayload, ...]
@@ -58,6 +58,13 @@ def _validate_sha256(value: str, *, field: str) -> None:
         raise ProjectionIntegrityError(f"{field} must be a SHA-256 hex digest") from exc
     if value != value.lower():
         raise ProjectionIntegrityError(f"{field} must use lowercase hexadecimal")
+
+
+def _validate_identifier(value: str, *, field: str, max_length: int) -> None:
+    if not value or len(value) > max_length:
+        raise ProjectionIntegrityError(
+            f"{field} must contain between 1 and {max_length} characters"
+        )
 
 
 def _snapshot_hash(chunks: list[DocumentChunkPayload]) -> str:
@@ -124,10 +131,32 @@ async def stage_projection_batch(
     owner_id: int,
     knowledge_base_id: str | None,
 ) -> ProjectionBatchReceipt:
+    if not knowledge_base_id:
+        raise ProjectionIntegrityError(
+            "document projection events require a non-empty knowledge_base_id"
+        )
+    _validate_identifier(knowledge_base_id, field="knowledge_base_id", max_length=128)
+    _validate_identifier(payload.projection_id, field="projection_id", max_length=64)
+    _validate_identifier(payload.document_id, field="document_id", max_length=128)
+    _validate_identifier(
+        payload.document_version,
+        field="document_version",
+        max_length=128,
+    )
+    _validate_identifier(payload.file_name, field="file_name", max_length=512)
+    if not 1 <= owner_id <= POSTGRES_INTEGER_MAX:
+        raise ProjectionIntegrityError("owner_id is outside the supported integer range")
+    if payload.batch_count > POSTGRES_INTEGER_MAX:
+        raise ProjectionIntegrityError("batch_count is outside the supported integer range")
     if payload.batch_index >= payload.batch_count:
         raise ProjectionIntegrityError("batch_index must be less than batch_count")
     _validate_sha256(payload.aggregate_hash, field="aggregate_hash")
     for chunk in payload.chunks:
+        _validate_identifier(chunk.chunk_id, field="chunk_id", max_length=128)
+        if not 0 <= chunk.chunk_index <= POSTGRES_INTEGER_MAX:
+            raise ProjectionIntegrityError("chunk_index is outside the supported integer range")
+        if chunk.page_no is not None and not -POSTGRES_INTEGER_MAX <= chunk.page_no <= POSTGRES_INTEGER_MAX:
+            raise ProjectionIntegrityError("page_no is outside the supported integer range")
         _validate_sha256(chunk.content_hash, field=f"chunk {chunk.chunk_id} content_hash")
         if hashlib.sha256(chunk.content.encode("utf-8")).hexdigest() != chunk.content_hash:
             raise ProjectionIntegrityError(f"content hash mismatch for chunk {chunk.chunk_id}")
@@ -177,16 +206,11 @@ async def _activate_projection(
 
     scope_filter: list[Any] = [
         DocumentProjection.owner_id == projection.owner_id,
+        DocumentProjection.knowledge_base_id == projection.knowledge_base_id,
         DocumentProjection.document_id == projection.document_id,
         DocumentProjection.status == "active",
         DocumentProjection.projection_id != projection.projection_id,
     ]
-    if projection.knowledge_base_id is None:
-        scope_filter.append(DocumentProjection.knowledge_base_id.is_(None))
-    else:
-        scope_filter.append(
-            DocumentProjection.knowledge_base_id == projection.knowledge_base_id
-        )
     old_projections = list(
         await db.scalars(select(DocumentProjection).where(*scope_filter).with_for_update())
     )

@@ -26,7 +26,7 @@ def upgrade() -> None:
         "document_projections",
         sa.Column("projection_id", sa.String(length=64), nullable=False),
         sa.Column("owner_id", sa.Integer(), nullable=False),
-        sa.Column("knowledge_base_id", sa.String(length=128), nullable=True),
+        sa.Column("knowledge_base_id", sa.String(length=128), nullable=False),
         sa.Column("document_id", sa.String(length=128), nullable=False),
         sa.Column("document_version", sa.String(length=128), nullable=False),
         sa.Column("file_name", sa.String(length=512), nullable=False),
@@ -41,7 +41,12 @@ def upgrade() -> None:
             name="ck_document_projections_status",
         ),
         sa.PrimaryKeyConstraint("projection_id"),
-        sa.UniqueConstraint("document_id", "document_version"),
+        sa.UniqueConstraint(
+            "owner_id",
+            "knowledge_base_id",
+            "document_id",
+            "document_version",
+        ),
     )
     op.create_index(
         op.f("ix_document_projections_document_id"),
@@ -61,7 +66,7 @@ def upgrade() -> None:
     op.create_index(
         "uq_document_projections_active_document_id",
         "document_projections",
-        ["document_id"],
+        ["owner_id", "knowledge_base_id", "document_id"],
         unique=True,
         postgresql_where=sa.text("status = 'active'"),
     )
@@ -93,7 +98,7 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("projection_id", sa.String(length=64), nullable=False),
         sa.Column("owner_id", sa.Integer(), nullable=False),
-        sa.Column("knowledge_base_id", sa.String(length=128), nullable=True),
+        sa.Column("knowledge_base_id", sa.String(length=128), nullable=False),
         sa.Column("document_id", sa.String(length=128), nullable=False),
         sa.Column("document_version", sa.String(length=128), nullable=False),
         sa.Column("chunk_id", sa.String(length=128), nullable=False),
@@ -133,7 +138,7 @@ def upgrade() -> None:
     op.create_index(
         "uq_document_chunks_active_chunk_id",
         "document_chunks",
-        ["chunk_id"],
+        ["owner_id", "knowledge_base_id", "chunk_id"],
         unique=True,
         postgresql_where=sa.text("is_active"),
     )

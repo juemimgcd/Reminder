@@ -17,6 +17,10 @@ class StoredProjectionBatch:
     created: bool
 
 
+class ProjectionIntegrityError(ValueError):
+    """The projection payload is deterministically invalid and must not be retried."""
+
+
 def _batch_payload_hash(payload: DocumentProjectionPayload) -> str:
     serialized = json.dumps(
         [chunk.model_dump(mode="json") for chunk in payload.chunks],
@@ -32,7 +36,7 @@ async def store_projection_batch(
     *,
     payload: DocumentProjectionPayload,
     owner_id: int,
-    knowledge_base_id: str | None,
+    knowledge_base_id: str,
 ) -> StoredProjectionBatch:
     await db.execute(
         insert(DocumentProjection)
@@ -56,12 +60,14 @@ async def store_projection_batch(
     if projection is None:
         conflicting = await db.scalar(
             select(DocumentProjection).where(
+                DocumentProjection.owner_id == owner_id,
+                DocumentProjection.knowledge_base_id == knowledge_base_id,
                 DocumentProjection.document_id == payload.document_id,
                 DocumentProjection.document_version == payload.document_version,
             )
         )
         conflict_id = conflicting.projection_id if conflicting is not None else "unknown"
-        raise ValueError(
+        raise ProjectionIntegrityError(
             "document version is already assigned to a different projection "
             f"({conflict_id})"
         )
@@ -85,7 +91,9 @@ async def store_projection_batch(
         projection.aggregate_hash,
     )
     if stored_metadata != expected_metadata:
-        raise ValueError("projection metadata changed between batches")
+        raise ProjectionIntegrityError("projection metadata changed between batches")
+    if projection.status == "failed":
+        raise ProjectionIntegrityError("cannot replay a failed projection")
 
     payload_hash = _batch_payload_hash(payload)
     existing = await db.scalar(
@@ -96,10 +104,12 @@ async def store_projection_batch(
     )
     if existing is not None:
         if existing.payload_hash != payload_hash:
-            raise ValueError("projection batch payload changed on replay")
+            raise ProjectionIntegrityError("projection batch payload changed on replay")
         return StoredProjectionBatch(batch=existing, created=False)
     if projection.status != "staging":
-        raise ValueError(f"cannot add a batch to a {projection.status} projection")
+        raise ProjectionIntegrityError(
+            f"cannot add a missing batch to a {projection.status} projection"
+        )
 
     batch = DocumentProjectionBatch(
         projection_id=payload.projection_id,

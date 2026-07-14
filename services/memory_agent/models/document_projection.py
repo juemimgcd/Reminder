@@ -9,13 +9,20 @@ from services.memory_agent.models.base import Base
 class DocumentProjection(Base):
     __tablename__ = "document_projections"
     __table_args__ = (
-        UniqueConstraint("document_id", "document_version"),
+        UniqueConstraint(
+            "owner_id",
+            "knowledge_base_id",
+            "document_id",
+            "document_version",
+        ),
         CheckConstraint(
             "status IN ('staging', 'active', 'failed', 'superseded')",
             name="ck_document_projections_status",
         ),
         Index(
             "uq_document_projections_active_document_id",
+            "owner_id",
+            "knowledge_base_id",
             "document_id",
             unique=True,
             postgresql_where=text("status = 'active'"),
@@ -24,7 +31,7 @@ class DocumentProjection(Base):
 
     projection_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     owner_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
-    knowledge_base_id: Mapped[str | None] = mapped_column(String(128), index=True)
+    knowledge_base_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     document_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     document_version: Mapped[str] = mapped_column(String(128), nullable=False)
     file_name: Mapped[str] = mapped_column(String(512), nullable=False)
