@@ -478,6 +478,45 @@ async def enqueue_knowledge_base_deleted(
     )
 
 
+async def enqueue_conversation_deleted(
+        db: AsyncSession,
+        *,
+        owner_id: int,
+        knowledge_base_id: str,
+        session_id: str,
+        message_ids: list[str],
+        source_version: datetime,
+) -> OutboxEvent:
+    source_version_text = source_version.isoformat()
+    stable_message_ids = sorted(set(message_ids))
+    event = MemoryAgentEvent(
+        event_id=_deletion_event_id(
+            "conversation-deleted",
+            str(owner_id),
+            knowledge_base_id,
+            session_id,
+            source_version_text,
+        ),
+        event_type="conversation.deleted",
+        occurred_at=source_version,
+        owner_id=owner_id,
+        knowledge_base_id=knowledge_base_id,
+        payload={
+            "owner_id": owner_id,
+            "knowledge_base_id": knowledge_base_id,
+            "session_id": session_id,
+            "message_ids": stable_message_ids,
+            "source_version": source_version_text,
+        },
+    )
+    return await _enqueue_memory_agent_event(
+        db,
+        event=event,
+        aggregate_type="conversation",
+        aggregate_id=session_id,
+    )
+
+
 def _deletion_event_id(prefix: str, *identity_parts: str) -> str:
     return _memory_event_id(prefix, *identity_parts)
 

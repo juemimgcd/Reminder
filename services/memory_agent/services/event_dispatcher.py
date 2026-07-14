@@ -11,6 +11,12 @@ from services.memory_agent.contracts.events import AgentEventEnvelope, DocumentP
 from services.memory_agent.database import engine
 from services.memory_agent.memory.extraction import TerminalExtractionError
 from services.memory_agent.models.inbox_event import InboxEvent
+from services.memory_agent.services.deletion import (
+    SourceDeletionError,
+    handle_conversation_deleted,
+    handle_document_deleted,
+    handle_knowledge_base_deleted,
+)
 from services.memory_agent.services.memory_events import (
     MalformedMemoryEvent,
     handle_document_projection,
@@ -58,20 +64,8 @@ async def handle_document_projection_upserted(event: AgentEventEnvelope) -> None
         await handle_document_projection(event, projection_id=receipt.projection_id)
 
 
-async def handle_document_deleted(event: AgentEventEnvelope) -> None:
-    pass
-
-
-async def handle_knowledge_base_deleted(event: AgentEventEnvelope) -> None:
-    pass
-
-
 async def handle_conversation_completed(event: AgentEventEnvelope) -> None:
     await process_conversation_completed(event)
-
-
-async def handle_conversation_deleted(event: AgentEventEnvelope) -> None:
-    pass
 
 
 async def handle_user_memory_requested(event: AgentEventEnvelope) -> None:
@@ -119,11 +113,25 @@ async def dispatch_inbox_event(event_id: str) -> EventProcessResult:
                     event = AgentEventEnvelope.model_validate(row.payload)
 
                 try:
+                    scope_identity = f"memory-scope:{event.owner_id}:{event.knowledge_base_id or '<global>'}"
+                    await connection.execute(
+                        text("SELECT pg_advisory_lock(hashtextextended(:identity, 3))"),
+                        {"identity": scope_identity},
+                    )
+                    await connection.commit()
                     handler = EVENT_HANDLERS[event.event_type]
-                    await handler(event)
+                    try:
+                        await handler(event)
+                    finally:
+                        await connection.execute(
+                            text("SELECT pg_advisory_unlock(hashtextextended(:identity, 3))"),
+                            {"identity": scope_identity},
+                        )
+                        await connection.commit()
                 except (
                     ProjectionIntegrityError,
                     MalformedMemoryEvent,
+                    SourceDeletionError,
                     TerminalExtractionError,
                 ) as exc:
                     async with session.begin():

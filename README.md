@@ -173,6 +173,58 @@ Python 编译检查：
 python -m compileall app/mneme alembic main.py
 ```
 
+## Memory Agent deletion and rebuild backfill
+
+When Memory Agent integration is enabled, document, knowledge-base, and conversation
+deletions first write a version-1 deletion event to the caller-owned Mneme transaction.
+The Agent scopes every deletion by owner and nullable knowledge base. Document deletion
+removes all stored projection batches/chunks and document evidence; knowledge-base
+deletion removes all scoped projections, evidence, candidates, and canonical memory;
+conversation deletion removes conversation evidence by session ID and explicit-request
+evidence by the supplied stable message IDs. Unsupported candidates and canonical
+memories are hard-deleted. Surviving confidence is deterministically capped downward.
+Deletion audit results contain identifiers, counts, status, and timestamps only.
+
+Dry-run a source rebuild without writing Outbox or Agent state:
+
+```bash
+python -m app.mneme.cli.export_agent_projection --dry-run --owner-id 42 --knowledge-base-id kb_123 --batch-size 50
+```
+
+Run the rebuild through the same version-1 online DTO builder and Outbox contract:
+
+```bash
+python -m app.mneme.cli.export_agent_projection --owner-id 42 --knowledge-base-id kb_123 --batch-size 50 --checkpoint var/memory-agent-backfill.json
+```
+
+The checkpoint is atomically replaced after each durable projection batch, accepted
+legacy-memory event, or secret-filtered legacy record. It records source ID,
+projection ID, batch index, event ID, and status, and is loaded automatically on the
+next run. To override it, resume a document at a projection/document ID (optionally
+after a batch) or resume legacy memory after a memory ID:
+
+```bash
+python -m app.mneme.cli.export_agent_projection --resume-from PROJECTION_ID --resume-batch-index 3 --batch-size 50
+python -m app.mneme.cli.export_agent_projection --resume-kind legacy_memory --resume-from MEMORY_ID --batch-size 50
+```
+
+Event and Outbox idempotency makes replay duplicate-safe. Legacy memory uses stable
+synthetic session/message IDs, the original first-seen timestamp, and the online
+`user.memory_requested` secret filter. Limitations: legacy values are re-extracted
+from their stored summaries, filtered secrets are not exported, only indexed documents
+with chunks can be projected, and a deleted source cannot be rebuilt after its Mneme
+content has itself been deleted.
+
+Report Agent projection state without mutating projection or memory tables:
+
+```bash
+python -m services.memory_agent.cli.backfill --owner-id 42 --knowledge-base-id kb_123 --batch-size 100
+python -m services.memory_agent.cli.backfill --resume-from PROJECTION_ID --batch-size 100 --dry-run
+```
+
+The report includes staged, active, failed, superseded, and hash-mismatch counts plus
+safe projection/document identifiers; it never prints source content or failure text.
+
 前端类型检查：
 
 ```bash

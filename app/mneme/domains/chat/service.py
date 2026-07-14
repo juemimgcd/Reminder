@@ -25,6 +25,7 @@ from app.mneme.crud.knowledge_base import get_knowledge_base_by_id
 from app.mneme.domains.settings.ai_models import ai_model_config_runtime_kwargs
 from app.mneme.domains.tasks.outbox import (
     enqueue_conversation_completed,
+    enqueue_conversation_deleted,
     enqueue_user_memory_requested,
 )
 from app.mneme.models.chat_message import ChatMessage
@@ -142,7 +143,17 @@ async def delete_chat_session(
     current_user: User,
     session_id: str,
 ) -> int:
-    await require_owned_chat_session(db, current_user=current_user, session_id=session_id)
+    session = await require_owned_chat_session(db, current_user=current_user, session_id=session_id)
+    messages = await list_chat_messages(db, session_id=session.id, user_id=current_user.id)
+    if settings.MEMORY_AGENT_ENABLED:
+        await enqueue_conversation_deleted(
+            db,
+            owner_id=current_user.id,
+            knowledge_base_id=session.knowledge_base_id,
+            session_id=session.id,
+            message_ids=[message.id for message in messages],
+            source_version=datetime.now(timezone.utc),
+        )
     await delete_chat_messages(db, session_id=session_id, user_id=current_user.id)
     return await delete_chat_session_row(db, session_id=session_id, user_id=current_user.id)
 

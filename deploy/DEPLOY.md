@@ -262,6 +262,41 @@ docker compose ps
 curl http://127.0.0.1:8000/health
 ```
 
+### Memory Agent rebuild and deletion operations
+
+Take a Mneme database backup before a large backfill. Preview, then enqueue the
+rebuild from the Mneme application container; no Agent records are written by dry-run:
+
+```bash
+docker compose exec app python -m app.mneme.cli.export_agent_projection --dry-run --owner-id 42 --knowledge-base-id kb_123 --batch-size 50
+docker compose exec app python -m app.mneme.cli.export_agent_projection --owner-id 42 --knowledge-base-id kb_123 --batch-size 50 --checkpoint /tmp/memory-agent-backfill.json
+```
+
+Persist the checkpoint outside an ephemeral container if the job must survive
+container replacement. It is atomically advanced after every durable batch/event;
+re-running from the checkpoint is safe because projection events and Outbox rows are
+idempotent. Explicit resume accepts a document or projection ID and optional completed
+batch index:
+
+```bash
+docker compose exec app python -m app.mneme.cli.export_agent_projection --resume-from PROJECTION_ID --resume-batch-index 3 --batch-size 50 --checkpoint /tmp/memory-agent-backfill.json
+```
+
+Inspect Agent state without bypassing event contracts or changing data:
+
+```bash
+docker compose exec memory-agent-api python -m services.memory_agent.cli.backfill --owner-id 42 --knowledge-base-id kb_123 --batch-size 100
+docker compose exec memory-agent-api python -m services.memory_agent.cli.backfill --resume-from PROJECTION_ID --batch-size 100
+```
+
+Source deletion is asynchronous after Mneme commits its deletion event. Keep the
+Outbox worker and Memory Agent worker running and monitor dead letters before treating
+privacy deletion as complete. The event contains only owner/knowledge-base/session or
+document identifiers, stable message identifiers, source version/time, and no source
+text. Agent replay is an idempotent success. Legacy backfill re-extracts stored
+summaries and skips secret-matching records; it cannot reconstruct Mneme content that
+was already deleted.
+
 ## 9. GitHub Actions 镜像发布
 
 相关文件：
