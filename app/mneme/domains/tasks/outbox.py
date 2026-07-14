@@ -5,6 +5,7 @@ from typing import Any
 from langchain_core.documents import Document as LCDocument
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.mneme.clients.memory_agent_client import MemoryAgentRejected
 from app.mneme.clients.vector_store_client import (
     add_documents_to_vector_store_in_batches,
     delete_documents_from_vector_store,
@@ -42,6 +43,7 @@ EVENT_DOCUMENT_GRAPH_SYNC = "document.graph.sync"
 
 BACKEND_MILVUS = "milvus"
 BACKEND_NEO4J = "neo4j"
+MAX_MEMORY_AGENT_ERROR_LENGTH = 2000
 
 
 def build_outbox_event_id() -> str:
@@ -104,6 +106,7 @@ async def enqueue_outbox_event(
         operation_id: str,
         db: AsyncSession | None = None,
 ) -> OutboxEvent:
+    """Create an Outbox row without taking ownership of a supplied session."""
     idempotency_key = build_outbox_idempotency_key(
         event_type=event_type,
         aggregate_type=aggregate_type,
@@ -224,10 +227,18 @@ async def mark_outbox_succeeded(*, event_id: str) -> None:
 
 async def mark_outbox_failed(*, event: OutboxEvent, exc: Exception) -> None:
     next_attempt_count = event.attempt_count + 1
-    status = OUTBOX_DEAD_LETTER if should_dead_letter(
-        attempt_count=next_attempt_count,
-        max_attempts=event.max_attempts,
-    ) else OUTBOX_FAILED
+    permanent_rejection = (
+        event.target_backend == settings.MEMORY_AGENT_OUTBOX_TARGET
+        and isinstance(exc, MemoryAgentRejected)
+    )
+    status = (
+        OUTBOX_DEAD_LETTER
+        if permanent_rejection or should_dead_letter(
+            attempt_count=next_attempt_count,
+            max_attempts=event.max_attempts,
+        )
+        else OUTBOX_FAILED
+    )
     async with open_write_session() as db:
         await update_outbox_event_status(
             db,
@@ -242,8 +253,9 @@ async def mark_outbox_failed(*, event: OutboxEvent, exc: Exception) -> None:
 
 
 def _bounded_error_detail(*, event: OutboxEvent, exc: Exception) -> str:
-    if event.target_backend == settings.MEMORY_AGENT_OUTBOX_TARGET and isinstance(exc, BusinessException):
-        return exc.message[:2000]
+    if event.target_backend == settings.MEMORY_AGENT_OUTBOX_TARGET:
+        detail = exc.message if isinstance(exc, BusinessException) else "memory agent delivery failed"
+        return detail[:MAX_MEMORY_AGENT_ERROR_LENGTH]
     return str(exc)
 
 

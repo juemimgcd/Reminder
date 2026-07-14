@@ -19,8 +19,6 @@ SERVICE_TOKEN_AUDIENCE = "memory-agent"
 SERVICE_TOKEN_ISSUER = "mneme-backend"
 MAX_SERVICE_TOKEN_LIFETIME = timedelta(minutes=5)
 RETRYABLE_STATUS_CODES = {502, 503, 504}
-MAX_ERROR_DETAIL_LENGTH = 1000
-_REDACTED_RESPONSE_KEYS = {"body", "content", "input", "payload", "question", "source", "text"}
 
 
 class MemoryAgentUnavailable(BusinessException):
@@ -111,8 +109,7 @@ class MemoryAgentClient:
                 await _retry_delay(attempt)
                 continue
             if response.is_error:
-                detail = _safe_response_detail(response)
-                message = f"memory agent HTTP {response.status_code}: {detail}"
+                message = f"memory agent HTTP {response.status_code}: {_http_error_reason(response.status_code)}"
                 if 400 <= response.status_code < 500:
                     raise MemoryAgentRejected(message, status_code=response.status_code)
                 raise MemoryAgentUnavailable(message)
@@ -150,25 +147,12 @@ def _answer_request_payload(request: MemoryAgentAnswerRequest) -> dict[str, Any]
     return payload
 
 
-def _safe_response_detail(response: httpx.Response) -> str:
-    try:
-        content = response.json()
-    except ValueError:
-        return "non-JSON error response"
-
-    detail = content.get("detail", "request failed") if isinstance(content, dict) else content
-    return str(_redact_private_response_data(detail))[:MAX_ERROR_DETAIL_LENGTH]
-
-
-def _redact_private_response_data(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {
-            key: "<redacted>" if key.lower() in _REDACTED_RESPONSE_KEYS else _redact_private_response_data(item)
-            for key, item in value.items()
-        }
-    if isinstance(value, list):
-        return [_redact_private_response_data(item) for item in value]
-    return value
+def _http_error_reason(status_code: int) -> str:
+    if 400 <= status_code < 500:
+        return "request rejected"
+    if status_code in RETRYABLE_STATUS_CODES:
+        return "service temporarily unavailable"
+    return "service request failed"
 
 
 async def _retry_delay(attempt: int) -> None:
