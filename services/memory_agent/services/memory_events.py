@@ -29,9 +29,14 @@ from services.memory_agent.memory.schemas import (
 )
 from services.memory_agent.memory.sensitivity import classify_sensitivity, contains_secret
 from services.memory_agent.models.document_projection import DocumentProjection
-from services.memory_agent.models.evidence import Evidence, candidate_evidence
+from services.memory_agent.models.evidence import (
+    Evidence,
+    candidate_evidence,
+    revision_evidence,
+)
 from services.memory_agent.models.inbox_event import InboxEvent
 from services.memory_agent.models.memory_candidate import MemoryCandidate
+from services.memory_agent.models.memory_revision import MemoryRevision
 from services.memory_agent.models.memory_settings import MemorySettings
 from services.memory_agent.models.projection_batch import DocumentProjectionBatch
 from services.memory_agent.services.deletion_fences import (
@@ -206,21 +211,38 @@ async def _already_reconciled(
         predicate=normalize_memory_text(candidate.predicate),
         value=normalize_memory_text(candidate.value),
     )
+    candidate_id = await db.scalar(
+        select(MemoryCandidate.candidate_id)
+        .join(
+            candidate_evidence,
+            candidate_evidence.c.candidate_id == MemoryCandidate.candidate_id,
+        )
+        .where(
+            MemoryCandidate.owner_id == owner_id,
+            MemoryCandidate.knowledge_base_id.is_(None)
+            if knowledge_base_id is None
+            else MemoryCandidate.knowledge_base_id == knowledge_base_id,
+            MemoryCandidate.fingerprint == fingerprint,
+            candidate_evidence.c.evidence_id == evidence.evidence_id,
+        )
+        .limit(1)
+    )
+    if candidate_id is not None:
+        return True
     return (
         await db.scalar(
-            select(MemoryCandidate.candidate_id)
+            select(MemoryRevision.revision_id)
             .join(
-                candidate_evidence,
-                candidate_evidence.c.candidate_id == MemoryCandidate.candidate_id,
+                revision_evidence,
+                revision_evidence.c.revision_id == MemoryRevision.revision_id,
             )
-            .join(Evidence, Evidence.evidence_id == candidate_evidence.c.evidence_id)
             .where(
-                MemoryCandidate.owner_id == owner_id,
-                MemoryCandidate.knowledge_base_id.is_(None)
+                MemoryRevision.owner_id == owner_id,
+                MemoryRevision.knowledge_base_id.is_(None)
                 if knowledge_base_id is None
-                else MemoryCandidate.knowledge_base_id == knowledge_base_id,
-                MemoryCandidate.fingerprint == fingerprint,
-                Evidence.evidence_id == evidence.evidence_id,
+                else MemoryRevision.knowledge_base_id == knowledge_base_id,
+                MemoryRevision.fingerprint == fingerprint,
+                revision_evidence.c.evidence_id == evidence.evidence_id,
             )
             .limit(1)
         )
