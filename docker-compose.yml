@@ -116,7 +116,7 @@ services:
           echo "Memory Agent database must differ from Mneme database" >&2
           exit 1
         fi
-        psql --set=agent_db="$$MEMORY_AGENT_POSTGRES_DB" --tuples-only --no-align <<'SQL'
+        psql --set=ON_ERROR_STOP=1 --set=agent_db="$$MEMORY_AGENT_POSTGRES_DB" --tuples-only --no-align <<'SQL'
         SELECT format('CREATE DATABASE %I', :'agent_db')
         WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'agent_db')\gexec
         SQL

@@ -82,7 +82,7 @@ cp deploy/env/backend.production.example .env
 
 ### Memory Agent 独立服务边界
 
-Compose 会同时部署 Mneme 和 Memory Agent，但本阶段不切换用户流量：`MEMORY_AGENT_ENABLED=false` 必须保持不变，Nginx 仍然只代理 `127.0.0.1:8000` 的 Mneme 应用。Memory Agent API 仅在 Compose 网络内监听 `memory-agent-api:8010`，不映射宿主机端口。
+Compose 文件定义了 Mneme 和 Memory Agent 两套服务，但本阶段不切换用户流量：`MEMORY_AGENT_ENABLED=false` 必须保持不变，Nginx 仍然只代理 `127.0.0.1:8000` 的 Mneme 应用。Memory Agent API 仅在 Compose 网络内监听 `memory-agent-api:8010`，不映射宿主机端口。
 
 两套服务的运行资源必须保持隔离：
 
@@ -112,6 +112,19 @@ IMAGE_TAG=v1.2.3 bash deploy/release-image.sh
 ```
 
 `docker login ghcr.io` 使用具有 package read 权限的 GitHub token；私有 GHCR 镜像首次拉取前只需登录一次。`IMAGE_TAG` 必须是已经由 GitHub Actions 发布的版本标签。
+
+`deploy/release-image.sh` 当前只管理 Mneme 的 `migrate`、`app` 和 `worker`，尚未拉起或更新 Memory Agent。脚本成功后必须继续执行以下补充序列；每条 `docker compose run` 都会把数据库初始化或迁移失败作为非零退出码返回，失败时不要继续启动 Agent API/worker：
+
+```bash
+docker compose pull memory-agent-db-init memory-agent-migrate memory-agent-api memory-agent-worker
+docker compose up -d postgres redis
+docker compose run --rm --no-deps memory-agent-db-init
+docker compose run --rm --no-deps memory-agent-migrate
+docker compose up -d --no-build --no-deps --force-recreate memory-agent-api memory-agent-worker
+docker compose exec memory-agent-api python -c "from urllib.request import urlopen; print(urlopen('http://127.0.0.1:8010/health/readiness').read().decode())"
+```
+
+最后一条命令必须返回 `{"status":"ready"}`。它从 Agent API 容器内部访问 readiness，不会把 8010 暴露到宿主机或公网。
 
 默认启动不再包含 Milvus standalone，因此不会拉起 `milvus + etcd + minio` 这组三个高磁盘占用服务。需要文档向量索引和 RAG 检索时，在 `.env` 中设置：
 
@@ -210,6 +223,17 @@ cd /opt/reminder
 IMAGE_TAG=v1.2.3 bash deploy/release-image.sh
 ```
 
+`release-image.sh` 尚不管理 Memory Agent。每次 Mneme 发布脚本成功后，都要执行与首次启动相同的 Agent 补充序列，保证 Agent 不会继续运行旧镜像：
+
+```bash
+docker compose pull memory-agent-db-init memory-agent-migrate memory-agent-api memory-agent-worker
+docker compose up -d postgres redis
+docker compose run --rm --no-deps memory-agent-db-init
+docker compose run --rm --no-deps memory-agent-migrate
+docker compose up -d --no-build --no-deps --force-recreate memory-agent-api memory-agent-worker
+docker compose exec memory-agent-api python -c "from urllib.request import urlopen; print(urlopen('http://127.0.0.1:8010/health/readiness').read().decode())"
+```
+
 正常发布不需要在服务器执行 `git pull` 或 `docker compose build`。如需回滚，重新选择已发布的旧版本：
 
 ```bash
@@ -217,7 +241,18 @@ cd /opt/reminder
 IMAGE_TAG=v1.2.2 bash deploy/release-image.sh
 ```
 
-脚本会拉取指定镜像版本并重启 Compose 服务；发布或回滚后检查：
+回滚 Mneme 后同样必须用已经写回 `.env` 的旧镜像标签重新拉取、迁移并强制重建 Agent 服务，否则 Agent 会停留在新版本镜像：
+
+```bash
+docker compose pull memory-agent-db-init memory-agent-migrate memory-agent-api memory-agent-worker
+docker compose up -d postgres redis
+docker compose run --rm --no-deps memory-agent-db-init
+docker compose run --rm --no-deps memory-agent-migrate
+docker compose up -d --no-build --no-deps --force-recreate memory-agent-api memory-agent-worker
+docker compose exec memory-agent-api python -c "from urllib.request import urlopen; print(urlopen('http://127.0.0.1:8010/health/readiness').read().decode())"
+```
+
+脚本和上述补充序列会分别更新 Mneme 与 Memory Agent；发布或回滚后检查：
 
 ```bash
 docker compose ps
