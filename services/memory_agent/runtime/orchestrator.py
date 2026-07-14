@@ -17,6 +17,37 @@ from services.memory_agent.runtime.plans import MODE_PLANS
 from services.memory_agent.runtime.ports import AnswerGenerator, CitationValidator, EvidenceRetriever
 
 POSTGRES_INTEGER_MAX = 2_147_483_647
+DEPENDENCY_ERROR_CODES = {
+    "retrieve": frozenset(
+        {
+            "AGENT_RETRIEVAL_TIMEOUT",
+            "AGENT_RETRIEVAL_UNAVAILABLE",
+            "AGENT_UNAVAILABLE",
+            "AGENT_CAPACITY_EXCEEDED",
+        }
+    ),
+    "generate": frozenset(
+        {
+            "AGENT_MODEL_TIMEOUT",
+            "AGENT_MODEL_UNAVAILABLE",
+            "AGENT_UNAVAILABLE",
+            "AGENT_CAPACITY_EXCEEDED",
+        }
+    ),
+    "citations": frozenset(
+        {
+            "AGENT_CITATION_TIMEOUT",
+            "AGENT_CITATION_UNAVAILABLE",
+            "AGENT_UNAVAILABLE",
+            "AGENT_CAPACITY_EXCEEDED",
+        }
+    ),
+}
+DEFAULT_PHASE_ERROR_CODES = {
+    "retrieve": "AGENT_RETRIEVAL_FAILED",
+    "generate": "AGENT_MODEL_FAILED",
+    "citations": "AGENT_CITATION_FAILED",
+}
 
 
 @dataclass(frozen=True)
@@ -44,6 +75,16 @@ class AnswerRunExecutionError(RuntimeError):
 
 def _elapsed_ms(started: float) -> int:
     return max(0, round((perf_counter() - started) * 1000))
+
+
+def _dependency_error_code(exc: Exception, phase: RunPhase) -> str:
+    default = DEFAULT_PHASE_ERROR_CODES[phase]
+    if not isinstance(exc, RuntimeDependencyError):
+        return default
+    code = exc.error_code
+    if isinstance(code, str) and len(code) <= 64 and code in DEPENDENCY_ERROR_CODES[phase]:
+        return code
+    return default
 
 
 def _validate_request(request: AnswerRequest) -> RetrievalPlan:
@@ -88,7 +129,7 @@ class MemoryAgent:
     async def get_run(self, run_id: str) -> AnswerRunData:
         return await self._runs.get(run_id)
 
-    async def _fail(
+    async def _record_failure(
         self,
         *,
         run_id: str,
@@ -96,15 +137,18 @@ class MemoryAgent:
         started: float,
         error_code: str,
     ) -> None:
-        # Persist the terminal state even when the caller is cancelling this request.
-        await asyncio.shield(
-            self._runs.fail(
-                run_id,
-                phase=phase,
-                duration_ms=_elapsed_ms(started),
-                error_code=error_code,
+        # Failure persistence is best-effort and must not replace the original error/cancellation.
+        try:
+            await asyncio.shield(
+                self._runs.fail(
+                    run_id,
+                    phase=phase,
+                    duration_ms=_elapsed_ms(started),
+                    error_code=error_code,
+                )
             )
-        )
+        except (Exception, asyncio.CancelledError):
+            return
 
     async def _retrieve(
         self,
@@ -139,126 +183,152 @@ class MemoryAgent:
             request=request,
             validation_duration_ms=_elapsed_ms(validate_started),
         )
+        return await self._run_created(request=request, plan=plan, run_id=run_id)
 
-        await self._runs.begin_phase(run_id, previous="validate", phase="retrieve")
-        retrieve_started = perf_counter()
+    async def _run_created(
+        self,
+        *,
+        request: AnswerRequest,
+        plan: RetrievalPlan,
+        run_id: str,
+    ) -> AnswerResponse:
+        phase: RunPhase = "retrieve"
+        phase_started = perf_counter()
         try:
-            async with asyncio.timeout(self._timeouts.retrieve):
-                evidence, expansion_count = await self._retrieve(request, plan)
-        except TimeoutError:
-            code = "AGENT_RETRIEVAL_TIMEOUT"
-            await self._fail(run_id=run_id, phase="retrieve", started=retrieve_started, error_code=code)
-            raise AnswerRunExecutionError(run_id=run_id, error_code=code) from None
-        except asyncio.CancelledError:
-            await self._fail(
-                run_id=run_id,
-                phase="retrieve",
-                started=retrieve_started,
-                error_code="AGENT_RUN_CANCELLED",
+            await self._runs.begin_phase(run_id, previous="validate", phase=phase)
+            try:
+                async with asyncio.timeout(self._timeouts.retrieve):
+                    evidence, expansion_count = await self._retrieve(request, plan)
+            except TimeoutError:
+                code = "AGENT_RETRIEVAL_TIMEOUT"
+                await self._record_failure(
+                    run_id=run_id,
+                    phase=phase,
+                    started=phase_started,
+                    error_code=code,
+                )
+                raise AnswerRunExecutionError(run_id=run_id, error_code=code) from None
+            except Exception as exc:
+                code = _dependency_error_code(exc, phase)
+                await self._record_failure(
+                    run_id=run_id,
+                    phase=phase,
+                    started=phase_started,
+                    error_code=code,
+                )
+                raise AnswerRunExecutionError(run_id=run_id, error_code=code) from None
+
+            await self._runs.record_retrieval(
+                run_id,
+                duration_ms=_elapsed_ms(phase_started),
+                source_ids=[item.source_id for item in evidence],
+                expansion_count=expansion_count,
             )
-            raise
-        except Exception as exc:
-            code = exc.error_code if isinstance(exc, RuntimeDependencyError) else "AGENT_RETRIEVAL_FAILED"
-            await self._fail(run_id=run_id, phase="retrieve", started=retrieve_started, error_code=code)
-            raise AnswerRunExecutionError(run_id=run_id, error_code=code) from None
 
-        await self._runs.record_retrieval(
-            run_id,
-            duration_ms=_elapsed_ms(retrieve_started),
-            source_ids=[item.source_id for item in evidence],
-            expansion_count=expansion_count,
-        )
-
-        await self._runs.begin_phase(run_id, previous="retrieve", phase="generate")
-        generation_started = perf_counter()
-        try:
-            async with asyncio.timeout(self._timeouts.generate):
-                generated = await self._generator.generate(
-                    GenerationRequest(
-                        request_id=request.request_id,
-                        mode=request.answer_mode,
-                        question=request.question,
-                        evidence=evidence,
-                        model=request.model,
+            phase = "generate"
+            phase_started = perf_counter()
+            await self._runs.begin_phase(run_id, previous="retrieve", phase=phase)
+            try:
+                async with asyncio.timeout(self._timeouts.generate):
+                    generated = await self._generator.generate(
+                        GenerationRequest(
+                            request_id=request.request_id,
+                            mode=request.answer_mode,
+                            question=request.question,
+                            evidence=evidence,
+                            model=request.model,
+                        )
                     )
+            except TimeoutError:
+                code = "AGENT_MODEL_TIMEOUT"
+                await self._record_failure(
+                    run_id=run_id,
+                    phase=phase,
+                    started=phase_started,
+                    error_code=code,
                 )
-        except TimeoutError:
-            code = "AGENT_MODEL_TIMEOUT"
-            await self._fail(run_id=run_id, phase="generate", started=generation_started, error_code=code)
-            raise AnswerRunExecutionError(run_id=run_id, error_code=code) from None
-        except asyncio.CancelledError:
-            await self._fail(
+                raise AnswerRunExecutionError(run_id=run_id, error_code=code) from None
+            except Exception as exc:
+                code = _dependency_error_code(exc, phase)
+                await self._record_failure(
+                    run_id=run_id,
+                    phase=phase,
+                    started=phase_started,
+                    error_code=code,
+                )
+                raise AnswerRunExecutionError(run_id=run_id, error_code=code) from None
+
+            await self._runs.record_generation(
                 run_id=run_id,
-                phase="generate",
-                started=generation_started,
+                duration_ms=_elapsed_ms(phase_started),
+                answer=generated,
+            )
+
+            phase = "citations"
+            phase_started = perf_counter()
+            await self._runs.begin_phase(run_id, previous="generate", phase=phase)
+            try:
+                async with asyncio.timeout(self._timeouts.citations):
+                    citation_result = await asyncio.to_thread(
+                        self._citation_validator.validate,
+                        generated,
+                        evidence,
+                    )
+            except TimeoutError:
+                code = "AGENT_CITATION_TIMEOUT"
+                await self._record_failure(
+                    run_id=run_id,
+                    phase=phase,
+                    started=phase_started,
+                    error_code=code,
+                )
+                raise AnswerRunExecutionError(run_id=run_id, error_code=code) from None
+            except Exception as exc:
+                code = _dependency_error_code(exc, phase)
+                await self._record_failure(
+                    run_id=run_id,
+                    phase=phase,
+                    started=phase_started,
+                    error_code=code,
+                )
+                raise AnswerRunExecutionError(run_id=run_id, error_code=code) from None
+
+            insufficient_evidence = (
+                citation_result.insufficient_evidence
+                or generated.insufficient_evidence
+                or (plan.uses_private_sources and not evidence)
+            )
+            await self._runs.complete(
+                run_id,
+                citation_duration_ms=_elapsed_ms(phase_started),
+                confidence=citation_result.confidence,
+                uncertainty=citation_result.uncertainty,
+                insufficient_evidence=insufficient_evidence,
+            )
+
+            memory_ids = list(
+                dict.fromkeys(item.source_id for item in evidence if item.source_type == "memory")
+            )
+            document_ids = list(
+                dict.fromkeys(item.source_id for item in evidence if item.source_type == "document")
+            )
+            return AnswerResponse(
+                answer=generated.answer,
+                mode=request.answer_mode,
+                route=generated.route,
+                citations=citation_result.citations,
+                confidence=citation_result.confidence,
+                uncertainty=citation_result.uncertainty,
+                insufficient_evidence=insufficient_evidence,
+                memory_ids=memory_ids,
+                document_ids=document_ids,
+                run_id=run_id,
+            )
+        except asyncio.CancelledError:
+            await self._record_failure(
+                run_id=run_id,
+                phase=phase,
+                started=phase_started,
                 error_code="AGENT_RUN_CANCELLED",
             )
             raise
-        except Exception as exc:
-            code = exc.error_code if isinstance(exc, RuntimeDependencyError) else "AGENT_MODEL_FAILED"
-            await self._fail(run_id=run_id, phase="generate", started=generation_started, error_code=code)
-            raise AnswerRunExecutionError(run_id=run_id, error_code=code) from None
-
-        await self._runs.record_generation(
-            run_id,
-            duration_ms=_elapsed_ms(generation_started),
-            answer=generated,
-        )
-
-        await self._runs.begin_phase(run_id, previous="generate", phase="citations")
-        citations_started = perf_counter()
-        try:
-            async with asyncio.timeout(self._timeouts.citations):
-                citation_result = await asyncio.to_thread(
-                    self._citation_validator.validate,
-                    generated,
-                    evidence,
-                )
-        except TimeoutError:
-            code = "AGENT_CITATION_TIMEOUT"
-            await self._fail(run_id=run_id, phase="citations", started=citations_started, error_code=code)
-            raise AnswerRunExecutionError(run_id=run_id, error_code=code) from None
-        except asyncio.CancelledError:
-            await self._fail(
-                run_id=run_id,
-                phase="citations",
-                started=citations_started,
-                error_code="AGENT_RUN_CANCELLED",
-            )
-            raise
-        except Exception as exc:
-            code = exc.error_code if isinstance(exc, RuntimeDependencyError) else "AGENT_CITATION_FAILED"
-            await self._fail(run_id=run_id, phase="citations", started=citations_started, error_code=code)
-            raise AnswerRunExecutionError(run_id=run_id, error_code=code) from None
-
-        insufficient_evidence = (
-            citation_result.insufficient_evidence
-            or generated.insufficient_evidence
-            or (plan.uses_private_sources and not evidence)
-        )
-        await self._runs.complete(
-            run_id,
-            citation_duration_ms=_elapsed_ms(citations_started),
-            confidence=citation_result.confidence,
-            uncertainty=citation_result.uncertainty,
-            insufficient_evidence=insufficient_evidence,
-        )
-
-        memory_ids = list(
-            dict.fromkeys(item.source_id for item in evidence if item.source_type == "memory")
-        )
-        document_ids = list(
-            dict.fromkeys(item.source_id for item in evidence if item.source_type == "document")
-        )
-        return AnswerResponse(
-            answer=generated.answer,
-            mode=request.answer_mode,
-            route=generated.route,
-            citations=citation_result.citations,
-            confidence=citation_result.confidence,
-            uncertainty=citation_result.uncertainty,
-            insufficient_evidence=insufficient_evidence,
-            memory_ids=memory_ids,
-            document_ids=document_ids,
-            run_id=run_id,
-        )
