@@ -80,6 +80,31 @@ cp deploy/env/backend.production.example .env
 
 ## 5. 首次启动（从 GHCR 拉取镜像）
 
+### Memory Agent 独立服务边界
+
+Compose 会同时部署 Mneme 和 Memory Agent，但本阶段不切换用户流量：`MEMORY_AGENT_ENABLED=false` 必须保持不变，Nginx 仍然只代理 `127.0.0.1:8000` 的 Mneme 应用。Memory Agent API 仅在 Compose 网络内监听 `memory-agent-api:8010`，不映射宿主机端口。
+
+两套服务的运行资源必须保持隔离：
+
+- Mneme 使用 `${POSTGRES_DB:-agentic}`，Memory Agent 使用 `${MEMORY_AGENT_POSTGRES_DB:-memory_agent}`；`memory-agent-db-init` 会幂等创建后者。
+- Mneme 的 Celery broker/result backend 使用 Redis DB 0/1 和现有队列，Memory Agent 使用 Redis DB 2/3 和独立的 `${MEMORY_AGENT_CELERY_QUEUE:-memory_agent}` 队列。
+- 两个服务通过 HTTP 事件契约通信。禁止任一服务直接读取或连接另一服务拥有的数据库，也禁止跨数据库 join。
+- `JWT_SECRET` 用于 Mneme 用户令牌；`MEMORY_AGENT_SERVICE_JWT_SECRET` 是 Mneme 与 Memory Agent 之间的服务令牌密钥。两者必须使用不同的长随机值，并且只保存在服务器 `.env` 中。
+
+启动顺序为：PostgreSQL 健康后创建 Agent 数据库，`memory-agent-migrate` 执行独立 Alembic 历史，随后启动 `memory-agent-api` 和 `memory-agent-worker`。Mneme 的 `app` 服务不依赖 Memory Agent readiness，因此 Agent 故障不会阻止当前用户入口启动。
+
+健康检查地址：
+
+- Mneme：`http://127.0.0.1:8000/health`
+- Memory Agent liveness（Compose 网络内）：`http://memory-agent-api:8010/health`
+- Memory Agent readiness（包含其数据库检查）：`http://memory-agent-api:8010/health/readiness`
+
+可从 Mneme 容器检查内部 Agent readiness：
+
+```bash
+docker compose exec app python -c "from urllib.request import urlopen; print(urlopen('http://memory-agent-api:8010/health/readiness').read().decode())"
+```
+
 ```bash
 docker login ghcr.io
 cd /opt/reminder

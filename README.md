@@ -125,6 +125,15 @@ bash start.sh --backend-port 8001
 
 ## Docker
 
+Compose 同时运行现有 Mneme 服务和独立 Memory Agent 服务。当前阶段 `MEMORY_AGENT_ENABLED=false`，因此用户请求仍只进入 Mneme；Memory Agent API 仅在 Compose 网络内通过 `memory-agent-api:8010` 提供 `/health` 和 `/health/readiness`。
+
+服务所有权边界如下：
+
+- Mneme 拥有 `${POSTGRES_DB:-agentic}`、Redis DB 0/1 和现有 Celery 队列。
+- Memory Agent 拥有 `${MEMORY_AGENT_POSTGRES_DB:-memory_agent}`、Redis DB 2/3 和 `${MEMORY_AGENT_CELERY_QUEUE:-memory_agent}` 队列。
+- `JWT_SECRET` 与 `MEMORY_AGENT_SERVICE_JWT_SECRET` 必须是不同的生产密钥。
+- 服务之间只通过版本化 HTTP 契约通信；禁止直接读取对方数据库或执行跨数据库 join。
+
 基础服务：
 
 ```bash
@@ -143,6 +152,8 @@ COMPOSE_PROFILES=vector docker compose up -d --build
 docker compose ps
 docker compose logs -f app
 docker compose logs -f worker
+docker compose logs -f memory-agent-api
+docker compose logs -f memory-agent-worker
 docker compose down
 ```
 
