@@ -10,10 +10,28 @@ _SECRET_PATTERNS = (
     re.compile(r"\bBearer\s+[A-Za-z0-9._~+/=-]{16,}", re.IGNORECASE),
     re.compile(r"\beyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b"),
     re.compile(
-        r"\b(?:password|passwd|pwd|api[_-]?key|access[_-]?token|secret)\s*[:=]\s*[^\s,;]{6,}",
+        r"(?:\b(?:password|passwd|pwd|api[\s_-]?key|access[\s_-]?token|token|secret|"
+        r"refresh[\s_-]?token|auth[\s_-]?token|client[\s_-]?secret|private[\s_-]?key)\b|"
+        r"(?:密码|密钥|令牌|口令))\s*(?:is|是|为|:|=)\s*"
+        r"[\"']?[^\s,;\"']{4,}",
         re.IGNORECASE,
     ),
     re.compile(r"\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?)://[^\s:/]+:[^\s@]+@", re.IGNORECASE),
+)
+
+_SECRET_SIGNALS = frozenset(
+    {
+        "credential",
+        "secret",
+        "password",
+        "api_key",
+        "token",
+        "access_token",
+        "refresh_token",
+        "auth_token",
+        "client_secret",
+        "private_key",
+    }
 )
 
 _SENSITIVE_PATTERNS = (
@@ -32,9 +50,10 @@ def classify_sensitivity(
     *texts: str,
     model_signals: list[SensitivitySignal] | None = None,
 ) -> Sensitivity:
-    if any(contains_secret(text) for text in texts):
+    signals = set(model_signals or [])
+    if any(contains_secret(text) for text in texts) or signals & _SECRET_SIGNALS:
         return "secret"
-    if model_signals or any(
+    if signals or any(
         pattern.search(text) is not None
         for text in texts
         for pattern in _SENSITIVE_PATTERNS

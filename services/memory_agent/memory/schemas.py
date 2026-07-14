@@ -1,7 +1,15 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    StrictFloat,
+    StrictInt,
+    model_validator,
+)
 
 from services.memory_agent.models.memory_candidate import MemoryType
 
@@ -14,12 +22,21 @@ SensitivitySignal = Literal[
     "finance",
     "authentication",
     "credential",
+    "secret",
+    "password",
+    "api_key",
+    "token",
+    "access_token",
+    "refresh_token",
+    "auth_token",
+    "client_secret",
+    "private_key",
     "other_sensitive",
 ]
 
 
 class EvidenceInput(BaseModel):
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, strict=True, extra="forbid")
 
     source_type: Literal["document", "conversation", "explicit_request"]
     source_id: str = Field(min_length=1, max_length=128)
@@ -29,24 +46,26 @@ class EvidenceInput(BaseModel):
 
 
 class TemporalHints(BaseModel):
-    is_current: bool | None = None
-    valid_from: str | None = Field(default=None, max_length=128)
-    valid_to: str | None = Field(default=None, max_length=128)
+    model_config = ConfigDict(strict=True, extra="forbid")
+
+    is_current: StrictBool | None
+    valid_from: str | None = Field(max_length=128)
+    valid_to: str | None = Field(max_length=128)
 
 
 class ExtractedCandidate(BaseModel):
-    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+    model_config = ConfigDict(strict=True, extra="forbid", populate_by_name=True)
 
     memory_type: MemoryType = Field(alias="type")
     subject: str = Field(min_length=1, max_length=1000)
     predicate: str = Field(min_length=1, max_length=1000)
     value: str = Field(min_length=1, max_length=4000)
-    confidence: float = Field(ge=0, le=1)
-    sensitivity_signals: list[SensitivitySignal] = Field(default_factory=list, max_length=8)
+    confidence: StrictFloat = Field(ge=0, le=1)
+    sensitivity_signals: list[SensitivitySignal] = Field(max_length=8)
     evidence_quote: str = Field(min_length=1, max_length=4000)
-    evidence_start: int = Field(ge=0)
-    evidence_end: int = Field(gt=0)
-    temporal_hints: TemporalHints = Field(default_factory=TemporalHints)
+    evidence_start: StrictInt = Field(ge=0)
+    evidence_end: StrictInt = Field(gt=0)
+    temporal_hints: TemporalHints
 
     def validate_evidence(self, excerpt: str) -> None:
         if self.evidence_end > len(excerpt):
@@ -58,12 +77,9 @@ class ExtractedCandidate(BaseModel):
 
 
 class ExtractionResponse(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(strict=True, extra="forbid")
 
-    candidates: list[ExtractedCandidate] = Field(
-        default_factory=list,
-        max_length=MAX_EXTRACTED_CANDIDATES,
-    )
+    candidates: list[ExtractedCandidate] = Field(max_length=MAX_EXTRACTED_CANDIDATES)
 
 
 class ConversationMessage(BaseModel):

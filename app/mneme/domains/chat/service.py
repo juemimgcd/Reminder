@@ -253,6 +253,12 @@ async def remember_chat_message(
     session_id: str,
     message_id: str,
 ) -> tuple[ChatMessage, bool]:
+    if not settings.MEMORY_AGENT_ENABLED:
+        raise BusinessException(
+            message="memory agent is disabled",
+            code=5034,
+            status_code=503,
+        )
     session = await require_owned_chat_session(
         db,
         current_user=current_user,

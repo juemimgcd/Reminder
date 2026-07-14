@@ -11,8 +11,33 @@ from services.memory_agent.memory.schemas import (
 from services.memory_agent.memory.sensitivity import contains_secret
 
 
-class ExtractionUnavailable(RuntimeError):
+class TerminalExtractionError(RuntimeError):
     pass
+
+
+class RetryableExtractionError(RuntimeError):
+    pass
+
+
+_RETRYABLE_PROVIDER_ERRORS = frozenset(
+    {
+        "APIConnectionError",
+        "APITimeoutError",
+        "RateLimitError",
+        "InternalServerError",
+    }
+)
+
+
+def _raise_provider_error(exc: Exception) -> None:
+    status_code = getattr(exc, "status_code", None)
+    if (
+        type(exc).__name__ in _RETRYABLE_PROVIDER_ERRORS
+        or isinstance(status_code, int)
+        and (status_code in {408, 429} or status_code >= 500)
+    ):
+        raise RetryableExtractionError("memory extraction provider is temporarily unavailable") from None
+    raise TerminalExtractionError("memory extraction provider rejected the request") from None
 
 
 async def extract_candidates(evidence: EvidenceInput) -> list[ExtractedCandidate]:
@@ -21,16 +46,19 @@ async def extract_candidates(evidence: EvidenceInput) -> list[ExtractedCandidate
         return []
     api_key = settings.EXTRACTION_LLM_API_KEY.get_secret_value()
     if not api_key or not settings.EXTRACTION_LLM_MODEL:
-        raise ExtractionUnavailable("memory extraction model is not configured")
+        raise TerminalExtractionError("memory extraction model is not configured")
 
     try:
         from openai import AsyncOpenAI
-    except ImportError as exc:
-        raise ExtractionUnavailable("memory extraction client is unavailable") from exc
-    client = AsyncOpenAI(
-        api_key=api_key,
-        base_url=settings.EXTRACTION_LLM_BASE_URL or None,
-    )
+    except ImportError:
+        raise TerminalExtractionError("memory extraction client is unavailable") from None
+    try:
+        client = AsyncOpenAI(
+            api_key=api_key,
+            base_url=settings.EXTRACTION_LLM_BASE_URL or None,
+        )
+    except Exception:
+        raise TerminalExtractionError("memory extraction client configuration is invalid") from None
     schema = ExtractionResponse.model_json_schema(by_alias=True)
     try:
         response = await client.chat.completions.create(
@@ -51,7 +79,7 @@ async def extract_candidates(evidence: EvidenceInput) -> list[ExtractedCandidate
                 "type": "json_schema",
                 "json_schema": {
                     "name": "memory_extraction",
-                    "strict": False,
+                    "strict": True,
                     "schema": schema,
                 },
             },
@@ -64,10 +92,13 @@ async def extract_candidates(evidence: EvidenceInput) -> list[ExtractedCandidate
             candidate.validate_evidence(evidence.excerpt)
         return extracted.candidates
     except (ValidationError, ValueError, KeyError, IndexError):
-        raise ExtractionUnavailable("memory extraction returned invalid structured output") from None
-    except ExtractionUnavailable:
+        raise TerminalExtractionError("memory extraction returned invalid structured output") from None
+    except (TerminalExtractionError, RetryableExtractionError):
         raise
-    except Exception:
-        raise ExtractionUnavailable("memory extraction model request failed") from None
+    except Exception as exc:
+        _raise_provider_error(exc)
     finally:
-        await client.close()
+        try:
+            await client.close()
+        except Exception:
+            pass

@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.memory_agent.contracts.events import AgentEventEnvelope, DocumentProjectionPayload
 from services.memory_agent.database import engine
+from services.memory_agent.memory.extraction import TerminalExtractionError
 from services.memory_agent.models.inbox_event import InboxEvent
 from services.memory_agent.services.memory_events import (
     MalformedMemoryEvent,
@@ -120,7 +121,11 @@ async def dispatch_inbox_event(event_id: str) -> EventProcessResult:
                 try:
                     handler = EVENT_HANDLERS[event.event_type]
                     await handler(event)
-                except (ProjectionIntegrityError, MalformedMemoryEvent) as exc:
+                except (
+                    ProjectionIntegrityError,
+                    MalformedMemoryEvent,
+                    TerminalExtractionError,
+                ) as exc:
                     async with session.begin():
                         row = await session.scalar(
                             select(InboxEvent)
