@@ -31,11 +31,13 @@ class ModelInvocationConfig(BaseModel):
 
 
 class MemoryAgentEvent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     event_id: str = Field(min_length=1, max_length=128)
     event_type: MemoryAgentEventType
     schema_version: Literal["1"] = "1"
     occurred_at: datetime
-    owner_id: int
+    owner_id: int = Field(gt=0)
     knowledge_base_id: str | None = None
     payload: dict[str, Any]
 

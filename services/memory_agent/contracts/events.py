@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 EventType = Literal[
     "document.projection.upserted",
@@ -16,11 +16,13 @@ EventType = Literal[
 
 
 class AgentEventEnvelope(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     event_id: str = Field(min_length=1, max_length=128)
     event_type: EventType
     schema_version: Literal["1"] = "1"
     occurred_at: datetime
-    owner_id: int
+    owner_id: int = Field(gt=0)
     knowledge_base_id: str | None = None
     payload: dict[str, Any]
 
