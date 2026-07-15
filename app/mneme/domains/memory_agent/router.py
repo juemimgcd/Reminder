@@ -66,6 +66,21 @@ async def get_candidates(
     return success_response(data=data)
 
 
+@router.get("/memories/{memory_id}")
+async def get_memory_detail(
+    memory_id: str,
+    knowledge_base_id: str | None = Query(default=None, max_length=64),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_database),
+):
+    await _scope(db, current_user, knowledge_base_id)
+    async with MemoryAgentClient() as client:
+        data = await client.get_memory_detail(
+            memory_id=memory_id, owner_id=current_user.id, knowledge_base_id=knowledge_base_id
+        )
+    return success_response(data=data)
+
+
 @router.post("/confirmations")
 async def create_confirmation(
     payload: MemoryConfirmationRequest,

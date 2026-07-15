@@ -6,6 +6,7 @@ import type {
   ApiResponse,
   AuthTokenData,
   ChatSessionDetailData,
+  ChatSessionData,
   ChatSessionListData,
   ChatQueryData,
   CompanionAnswerResult,
@@ -30,6 +31,7 @@ import type {
   MemoryGovernanceData,
   MemoryLibraryData,
   MemoryRebuildData,
+  CanonicalMemory, MemoryCandidate, MemoryDetail, MemoryPage, MemorySettings, MemoryConfirmation, MemoryPurgeResult,
   Neo4jHealthData,
   PersonalProfileResult,
   PlannedSupportData,
@@ -43,12 +45,14 @@ import type {
 export class ApiError extends Error {
   status: number;
   code?: number;
+  data?: unknown;
 
-  constructor(message: string, status: number, code?: number) {
+  constructor(message: string, status: number, code?: number, data?: unknown) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
+    this.data = data;
   }
 }
 
@@ -185,7 +189,9 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       (payload && typeof payload === "object" && "message" in payload ? payload.message : undefined) ??
       text
     ) || "Request failed";
-    throw new ApiError(normalizeErrorDetail(detail), response.status);
+    const code = payload && "code" in payload && typeof payload.code === "number" ? payload.code : undefined;
+    const data = payload && "data" in payload ? payload.data : undefined;
+    throw new ApiError(normalizeErrorDetail(detail), response.status, code, data);
   }
 
   if (!payload || typeof payload !== "object" || !("code" in payload)) {
@@ -395,21 +401,25 @@ const realApi = {
       },
     });
   },
-  listChatSessions(token: string, knowledgeBaseId: string) {
+  listChatSessions(token: string, knowledgeBaseId: string | null) {
     return request<ChatSessionListData>(`/kb/chat/sessions${buildQuery({ knowledge_base_id: knowledgeBaseId })}`, { token });
   },
-  createChatSession(token: string, payload: { knowledge_base_id: string; title?: string | null }) {
+  createChatSession(token: string, payload: { knowledge_base_id: string | null; title?: string | null; answer_mode: AnswerMode }) {
     return request<ChatSessionDetailData["session"]>("/kb/chat/sessions", {
       method: "POST",
       token,
       body: {
         knowledge_base_id: payload.knowledge_base_id,
         title: payload.title ?? null,
+        answer_mode: payload.answer_mode,
       },
     });
   },
   getChatSession(token: string, sessionId: string) {
     return request<ChatSessionDetailData>(`/kb/chat/sessions/${sessionId}`, { token });
+  },
+  updateChatSession(token: string, sessionId: string, answerMode: AnswerMode) {
+    return request<ChatSessionData>(`/kb/chat/sessions/${sessionId}`, { method: "PATCH", token, body: { answer_mode: answerMode } });
   },
   deleteChatSession(token: string, sessionId: string) {
     return request<{ session_id: string; deleted_count: number }>(`/kb/chat/sessions/${sessionId}`, {
@@ -417,7 +427,7 @@ const realApi = {
       token,
     });
   },
-  sendChatSessionMessage(token: string, sessionId: string, payload: { question: string; answer_mode: AnswerMode; top_k?: number }) {
+  sendChatSessionMessage(token: string, sessionId: string, payload: { question: string; answer_mode: AnswerMode; top_k?: number; retry_message_id?: string; regenerate_message_id?: string }) {
     return request<ChatSessionDetailData>(`/kb/chat/sessions/${sessionId}/messages`, {
       method: "POST",
       token,
@@ -425,9 +435,38 @@ const realApi = {
         question: payload.question,
         answer_mode: payload.answer_mode,
         top_k: payload.top_k ?? 4,
+        retry_message_id: payload.retry_message_id ?? null,
+        regenerate_message_id: payload.regenerate_message_id ?? null,
       },
     });
   },
+  listMemories(token: string, knowledgeBaseId: string | null, cursor?: string | null) {
+    return request<MemoryPage<CanonicalMemory>>(`/api/v1/memory-agent/memories${buildQuery({ knowledge_base_id: knowledgeBaseId, cursor })}`, { token });
+  },
+  listMemoryCandidates(token: string, knowledgeBaseId: string | null) {
+    return request<MemoryPage<MemoryCandidate>>(`/api/v1/memory-agent/candidates${buildQuery({ knowledge_base_id: knowledgeBaseId })}`, { token });
+  },
+  getMemoryDetail(token: string, memoryId: string, knowledgeBaseId: string | null) {
+    return request<MemoryDetail>(`/api/v1/memory-agent/memories/${memoryId}${buildQuery({ knowledge_base_id: knowledgeBaseId })}`, { token });
+  },
+  getMemorySettings(token: string) { return request<MemorySettings>("/api/v1/memory-agent/settings", { token }); },
+  updateMemorySettings(token: string, enabled: boolean) { return request<MemorySettings>("/api/v1/memory-agent/settings", { method: "PATCH", token, body: { automatic_conversation_memory: enabled } }); },
+  issueMemoryConfirmation(token: string, payload: { action: string; target_id?: string | null; knowledge_base_id?: string | null }) {
+    return request<MemoryConfirmation>("/api/v1/memory-agent/confirmations", { method: "POST", token, body: payload });
+  },
+  candidateCommand(token: string, id: string, action: "confirm" | "reject", knowledgeBaseId: string | null, confirmation_token: string) {
+    return request<CanonicalMemory | MemoryCandidate>(`/api/v1/memory-agent/candidates/${id}/${action}${buildQuery({ knowledge_base_id: knowledgeBaseId })}`, { method: "POST", token, body: { reason: `user_${action}`, confirmation_token } });
+  },
+  reviseMemory(token: string, memory: CanonicalMemory, value: string, confirmation_token: string) {
+    return request<CanonicalMemory>(`/api/v1/memory-agent/memories/${memory.memory_id}/revise${buildQuery({ knowledge_base_id: memory.knowledge_base_id })}`, { method: "POST", token, body: { reason: "user_revision", confirmation_token, subject: memory.subject, predicate: memory.predicate, value } });
+  },
+  memoryCommand(token: string, memory: CanonicalMemory, action: "invalidate", confirmation_token: string) {
+    return request<CanonicalMemory>(`/api/v1/memory-agent/memories/${memory.memory_id}/${action}${buildQuery({ knowledge_base_id: memory.knowledge_base_id })}`, { method: "POST", token, body: { reason: `user_${action}`, confirmation_token } });
+  },
+  deleteMemory(token: string, memory: CanonicalMemory, confirmation_token: string) {
+    return request<{ deleted: boolean }>(`/api/v1/memory-agent/memories/${memory.memory_id}${buildQuery({ knowledge_base_id: memory.knowledge_base_id })}`, { method: "DELETE", token, body: { reason: "user_hard_delete", confirmation_token } });
+  },
+  purgeMemory(token: string, payload: Record<string, unknown>) { return request<MemoryPurgeResult>("/api/v1/memory-agent/purge", { method: "POST", token, body: payload }); },
   listAiModelConfigs(token: string) {
     return request<AiModelConfigListData>("/settings/ai-models", { token });
   },

@@ -39,3 +39,4 @@ class ChatMessage(Base):
     route_json: Mapped[dict | None] = mapped_column(JSON, nullable=True, comment="query route")
     model_config_id: Mapped[str | None] = mapped_column(String(64), nullable=True, comment="AI model config id")
     agent_run_id: Mapped[str | None] = mapped_column(String(64), nullable=True, comment="memory agent answer run id")
+    answer_metadata_json: Mapped[dict | None] = mapped_column(JSON, nullable=True, comment="persisted answer metadata")

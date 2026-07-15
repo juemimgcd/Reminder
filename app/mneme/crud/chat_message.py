@@ -19,6 +19,7 @@ async def create_chat_message(
     route_json: dict | None = None,
     model_config_id: str | None = None,
     agent_run_id: str | None = None,
+    answer_metadata_json: dict | None = None,
 ) -> ChatMessage:
     message = ChatMessage(
         id=message_id,
@@ -33,6 +34,7 @@ async def create_chat_message(
         route_json=route_json,
         model_config_id=model_config_id,
         agent_run_id=agent_run_id,
+        answer_metadata_json=answer_metadata_json,
     )
     db.add(message)
     await db.flush()

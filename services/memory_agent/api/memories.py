@@ -4,7 +4,7 @@ from typing import Annotated, Any, Literal
 import jwt
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 
 from services.memory_agent.api.dependencies import require_claimed_scope, require_service_scope
 from services.memory_agent.api.errors import AgentAPIError
@@ -60,12 +60,40 @@ class MemoryList(BaseModel):
     items: list[CanonicalMemoryDTO]
     offset: int
     limit: int
+    total: int
 
 
 class CandidateList(BaseModel):
     items: list[CandidateDTO]
     offset: int
     limit: int
+    total: int
+
+
+class RevisionDTO(BaseModel):
+    revision_id: str
+    subject: str
+    predicate: str
+    value: str
+    valid_from: datetime
+    valid_to: datetime | None
+    reason: str
+
+
+class EvidenceDTO(BaseModel):
+    evidence_id: str
+    revision_id: str
+    source_type: str
+    source_id: str
+    source_document_id: str | None
+    excerpt: str
+    source_time: datetime
+
+
+class MemoryDetailDTO(BaseModel):
+    memory: CanonicalMemoryDTO
+    revisions: list[RevisionDTO]
+    evidence: list[EvidenceDTO]
 
 
 class CandidateCommand(BaseModel):
@@ -160,9 +188,69 @@ async def list_memories(
             .exists()
         )
     query = query.order_by(CanonicalMemory.updated_at.desc(), CanonicalMemory.memory_id).offset(offset).limit(limit)
+    count_query = select(func.count()).select_from(query.order_by(None).limit(None).offset(None).subquery())
     async with open_read_session() as db:
+        total = int(await db.scalar(count_query) or 0)
         rows = list(await db.scalars(query))
-    return MemoryList(items=[_canonical(row) for row in rows], offset=offset, limit=limit)
+    return MemoryList(items=[_canonical(row) for row in rows], offset=offset, limit=limit, total=total)
+
+
+@router.get("/memories/{memory_id}", response_model=MemoryDetailDTO)
+async def get_memory_detail(
+    memory_id: str,
+    claims: Annotated[dict[str, Any], Depends(require_service_scope(MEMORIES_READ_SCOPE))],
+    owner_id: int = Query(gt=0),
+    knowledge_base_id: str | None = Query(default=None, max_length=128),
+) -> MemoryDetailDTO:
+    require_claimed_scope(claims, owner_id=owner_id, knowledge_base_id=knowledge_base_id)
+    async with open_read_session() as db:
+        memory = await db.scalar(
+            select(CanonicalMemory).where(
+                CanonicalMemory.memory_id == memory_id,
+                CanonicalMemory.owner_id == owner_id,
+                _scope(CanonicalMemory.knowledge_base_id, knowledge_base_id),
+            )
+        )
+        if memory is None:
+            raise AgentAPIError(status_code=404, code="MEMORY_NOT_FOUND")
+        revisions = list(
+            await db.scalars(
+                select(MemoryRevision)
+                .where(MemoryRevision.memory_id == memory_id)
+                .order_by(MemoryRevision.valid_from.desc(), MemoryRevision.revision_id)
+            )
+        )
+        evidence_rows = list(
+            (
+                await db.execute(
+                    select(MemoryRevision.revision_id, Evidence)
+                    .join(revision_evidence, revision_evidence.c.revision_id == MemoryRevision.revision_id)
+                    .join(Evidence, Evidence.evidence_id == revision_evidence.c.evidence_id)
+                    .where(
+                        MemoryRevision.memory_id == memory_id,
+                        Evidence.owner_id == owner_id,
+                        _scope(Evidence.knowledge_base_id, knowledge_base_id),
+                    )
+                    .order_by(Evidence.occurred_at.desc(), Evidence.evidence_id)
+                )
+            ).all()
+        )
+    return MemoryDetailDTO(
+        memory=_canonical(memory),
+        revisions=[RevisionDTO.model_validate(row, from_attributes=True) for row in revisions],
+        evidence=[
+            EvidenceDTO(
+                evidence_id=evidence.evidence_id,
+                revision_id=revision_id,
+                source_type=evidence.source_type,
+                source_id=evidence.source_id,
+                source_document_id=evidence.source_document_id,
+                excerpt=evidence.minimum_text,
+                source_time=evidence.occurred_at,
+            )
+            for revision_id, evidence in evidence_rows
+        ],
+    )
 
 
 @router.get("/memory-candidates", response_model=CandidateList)
@@ -196,9 +284,11 @@ async def list_candidates(
             .exists()
         )
     query = query.order_by(MemoryCandidate.created_at.desc(), MemoryCandidate.candidate_id).offset(offset).limit(limit)
+    count_query = select(func.count()).select_from(query.order_by(None).limit(None).offset(None).subquery())
     async with open_read_session() as db:
+        total = int(await db.scalar(count_query) or 0)
         rows = list(await db.scalars(query))
-    return CandidateList(items=[_candidate(row) for row in rows], offset=offset, limit=limit)
+    return CandidateList(items=[_candidate(row) for row in rows], offset=offset, limit=limit, total=total)
 
 
 @router.get("/memory-settings")

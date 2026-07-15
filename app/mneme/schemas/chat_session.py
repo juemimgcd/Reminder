@@ -20,6 +20,9 @@ class ChatMessageData(BaseModel):
     route: QueryRouteDecision | None = None
     model_config_id: str | None = None
     agent_run_id: str | None = None
+    confidence: float | None = None
+    uncertainty: str | None = None
+    insufficient_evidence: bool = False
     created_at: datetime
 
 
@@ -72,6 +75,13 @@ class ChatSessionMessageRequest(BaseModel):
     answer_mode: AnswerMode | None = None
     model_config_id: str | None = None
     retry_message_id: str | None = None
+    regenerate_message_id: str | None = None
+
+    @model_validator(mode="after")
+    def mutually_exclusive_replay(self):
+        if self.retry_message_id is not None and self.regenerate_message_id is not None:
+            raise ValueError("retry_message_id and regenerate_message_id are mutually exclusive")
+        return self
 
 
 class ChatMessageRememberData(BaseModel):

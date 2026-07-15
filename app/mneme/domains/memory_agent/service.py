@@ -253,7 +253,7 @@ async def list_memories(
         if len(items) == limit
         else None
     )
-    return GovernedMemoryPage(items=items, next_cursor=next_cursor)
+    return GovernedMemoryPage(items=items, next_cursor=next_cursor, total=int(payload.get("total", len(items))))
 
 
 async def list_candidates(
@@ -284,7 +284,8 @@ async def list_candidates(
         if len(items) == limit
         else None
     )
-    return MemoryCandidatePage(items=items, next_cursor=next_cursor)
+    total = int(payload.get("total", len(items)))
+    return MemoryCandidatePage(items=items, next_cursor=next_cursor, total=total, pending_count=total)
 
 
 async def update_settings(db: AsyncSession, *, owner_id: int, enabled: bool) -> ConversationMemorySettingsData:

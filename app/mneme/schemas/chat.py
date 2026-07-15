@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -32,18 +33,19 @@ class ChatQueryRequest(BaseModel):
 
 
 class ChatSourceItem(BaseModel):
-    source_id: str
+    source_id: str | None = None
     knowledge_base_id: str | None = None
     document_id: str | None = None
     chunk_id: str | None = None
     source_type: str | None = None
     evidence_id: str | None = None
+    source_time: datetime | None = None
     page_no: int | None = None
     text: str
 
 
 class ChatCitationItem(BaseModel):
-    source_id: str = Field(..., description="Stable source ID, for example S1")
+    source_id: str | None = Field(default=None, description="Stable source ID")
     document_id: str | None = Field(default=None, description="Source document ID")
     chunk_id: str | None = Field(default=None, description="Source chunk ID")
     page_no: int | None = Field(default=None, description="Source page number")
@@ -51,6 +53,7 @@ class ChatCitationItem(BaseModel):
     reason: str = Field(default="", description="Why this evidence supports the answer")
     source_type: str | None = None
     evidence_id: str | None = None
+    source_time: datetime | None = None
     validation_status: str | None = Field(default=None, description="valid / invalid")
     quote_found: bool | None = Field(default=None, description="Whether quote exists in source text")
     validation_reason: str | None = Field(default=None, description="Citation validation detail")

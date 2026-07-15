@@ -196,6 +196,7 @@ def message_to_data(message: ChatMessage) -> ChatMessageData:
     route = QueryRouteDecision(**message.route_json) if message.route_json else None
     sources = [ChatSourceItem(**item) for item in (message.sources_json or [])]
     citations = [ChatCitationItem(**item) for item in (message.citations_json or [])]
+    metadata = message.answer_metadata_json or {}
     return ChatMessageData(
         id=message.id,
         session_id=message.session_id,
@@ -208,6 +209,9 @@ def message_to_data(message: ChatMessage) -> ChatMessageData:
         route=route,
         model_config_id=message.model_config_id,
         agent_run_id=message.agent_run_id,
+        confidence=metadata.get("confidence"),
+        uncertainty=metadata.get("uncertainty"),
+        insufficient_evidence=bool(metadata.get("insufficient_evidence", False)),
         created_at=message.created_at,
     )
 
@@ -273,11 +277,12 @@ def memory_agent_answer_to_chat_result(response: MemoryAgentAnswerResponse) -> d
             continue
         metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
         source_type = item.get("source_type") if isinstance(item.get("source_type"), str) else None
-        source_id = item.get("source_id") if isinstance(item.get("source_id"), str) else ""
+        source_id = item.get("source_id") if isinstance(item.get("source_id"), str) else None
         evidence_id = item.get("evidence_id") if isinstance(item.get("evidence_id"), str) else None
         quote = item.get("quote") if isinstance(item.get("quote"), str) else ""
         document_id = metadata.get("document_id") if isinstance(metadata.get("document_id"), str) else None
         chunk_id = source_id if source_type == "document" else None
+        source_time = metadata.get("source_time") or metadata.get("valid_from") or metadata.get("created_at")
         citations.append(
             {
                 "source_id": source_id,
@@ -288,6 +293,7 @@ def memory_agent_answer_to_chat_result(response: MemoryAgentAnswerResponse) -> d
                 "reason": "memory agent evidence",
                 "source_type": source_type,
                 "evidence_id": evidence_id,
+                "source_time": source_time,
                 "validation_status": "valid",
             }
         )
@@ -301,6 +307,7 @@ def memory_agent_answer_to_chat_result(response: MemoryAgentAnswerResponse) -> d
                 "text": quote,
                 "source_type": source_type,
                 "evidence_id": evidence_id,
+                "source_time": source_time,
             }
         )
     return {
@@ -309,6 +316,8 @@ def memory_agent_answer_to_chat_result(response: MemoryAgentAnswerResponse) -> d
         "citations": citations,
         "confidence": confidence,
         "uncertainty": response.uncertainty,
+        "insufficient_evidence": response.insufficient_evidence,
+        "confidence_numeric": response.confidence,
         "route": route,
         "debug": None,
     }
@@ -325,6 +334,7 @@ async def ask_in_chat_session(
     expected_knowledge_base_id: str | None | object = _EXPECTED_SCOPE_UNSET,
     model_config_id: str | None = None,
     retry_message_id: str | None = None,
+    regenerate_message_id: str | None = None,
 ) -> tuple[ChatSession, list[ChatMessage]]:
     session = await require_owned_chat_session(db, current_user=current_user, session_id=session_id)
     if (
@@ -394,6 +404,40 @@ async def ask_in_chat_session(
         )
         if existing_answer is not None:
             raise BusinessException(message="message already has an agent answer", code=4056, status_code=409)
+    elif regenerate_message_id is not None:
+        original = await db.scalar(
+            select(ChatMessage).where(
+                ChatMessage.id == regenerate_message_id,
+                ChatMessage.session_id == session.id,
+                ChatMessage.user_id == current_user.id,
+                ChatMessage.role == "user",
+            )
+        )
+        if original is None or original.knowledge_base_id != session.knowledge_base_id:
+            raise BusinessException(message="regenerate message not found", code=4057, status_code=404)
+        original_answer = await db.scalar(
+            select(ChatMessage.id).where(
+                ChatMessage.id == build_chat_answer_message_id(original.id),
+                ChatMessage.session_id == session.id,
+                ChatMessage.user_id == current_user.id,
+                ChatMessage.role == "assistant",
+            )
+        )
+        if original_answer is None:
+            raise BusinessException(message="message has no answer to regenerate", code=4058, status_code=409)
+        question = original.content
+        user_message = await create_chat_message(
+            db,
+            message_id=build_chat_message_id(),
+            session_id=session.id,
+            user_id=current_user.id,
+            knowledge_base_id=session.knowledge_base_id,
+            knowledge_base_pk=session.knowledge_base_pk,
+            role="user",
+            content=question,
+        )
+        session.message_count = (session.message_count or 0) + 1
+        session.last_message_at = datetime.now(timezone.utc)
     else:
         user_message = await create_chat_message(
             db,
@@ -454,6 +498,11 @@ async def ask_in_chat_session(
         route_json=result["route"],
         model_config_id=model_config.id if model_config else None,
         agent_run_id=agent_response.run_id,
+        answer_metadata_json={
+            "confidence": result["confidence_numeric"],
+            "uncertainty": result["uncertainty"],
+            "insufficient_evidence": result["insufficient_evidence"],
+        },
     )
     session.message_count = (session.message_count or 0) + 1
     session.last_message_at = datetime.now(timezone.utc)

@@ -14,6 +14,7 @@ from app.mneme.schemas.memory_agent import (
     MemoryAgentAnswerResponse,
     MemoryAgentEvent,
     MemoryCandidateData,
+    MemoryDetailData,
 )
 from app.mneme.utils.exceptions import BusinessException
 
@@ -113,6 +114,20 @@ class MemoryAgentClient:
             knowledge_base_id=knowledge_base_id,
             retry_transient=True,
         )
+
+    async def get_memory_detail(
+        self, *, memory_id: str, owner_id: int, knowledge_base_id: str | None
+    ) -> MemoryDetailData:
+        payload = await self._json_request(
+            method="GET",
+            path=f"/v1/memories/{memory_id}",
+            params={"owner_id": owner_id, "knowledge_base_id": knowledge_base_id},
+            scope="memories:read",
+            owner_id=owner_id,
+            knowledge_base_id=knowledge_base_id,
+            retry_transient=True,
+        )
+        return MemoryDetailData.model_validate(payload)
 
     async def get_memory_settings(self, *, owner_id: int) -> ConversationMemorySettingsData:
         payload = await self._json_request(

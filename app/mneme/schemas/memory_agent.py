@@ -141,11 +141,40 @@ class MemoryCandidateData(BaseModel):
 class GovernedMemoryPage(BaseModel):
     items: list[CanonicalMemoryData]
     next_cursor: str | None = None
+    total: int = 0
 
 
 class MemoryCandidatePage(BaseModel):
     items: list[MemoryCandidateData]
     next_cursor: str | None = None
+    total: int = 0
+    pending_count: int = 0
+
+
+class MemoryRevisionData(BaseModel):
+    revision_id: str
+    subject: str
+    predicate: str
+    value: str
+    valid_from: datetime
+    valid_to: datetime | None
+    reason: str
+
+
+class MemoryEvidenceData(BaseModel):
+    evidence_id: str
+    revision_id: str
+    source_type: str
+    source_id: str
+    source_document_id: str | None
+    excerpt: str
+    source_time: datetime
+
+
+class MemoryDetailData(BaseModel):
+    memory: CanonicalMemoryData
+    revisions: list[MemoryRevisionData]
+    evidence: list[MemoryEvidenceData]
 
 
 class CandidateActionRequest(BaseModel):
