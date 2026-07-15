@@ -6,6 +6,10 @@ from pydantic import SecretStr
 
 SERVICE_TOKEN_ISSUER = "mneme-backend"
 EVENTS_WRITE_SCOPE = "events:write"
+ANSWERS_WRITE_SCOPE = "answers:write"
+RUNS_READ_SCOPE = "runs:read"
+MEMORIES_READ_SCOPE = "memories:read"
+MEMORIES_WRITE_SCOPE = "memories:write"
 SERVICE_TOKEN_ALGORITHM = "HS256"
 
 

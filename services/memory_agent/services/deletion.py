@@ -132,11 +132,10 @@ async def delete_source_evidence(
     source_document_id: str | None = None,
     delete_entire_scope: bool = False,
     projection_ids: set[str] | None = None,
+    evidence_ids_to_delete: set[str] | None = None,
 ) -> DeletionResult:
-    if delete_entire_scope and knowledge_base_id is None:
-        raise SourceDeletionError("entire-scope deletion requires a knowledge base")
     if not delete_entire_scope and (
-        not source_type or (not source_ids and source_document_id is None)
+        not source_ids and source_document_id is None and not evidence_ids_to_delete
     ):
         deleted_projection_ids = tuple(sorted(projection_ids or set()))
         return DeletionResult(
@@ -161,13 +160,13 @@ async def delete_source_evidence(
     ]
     if not delete_entire_scope:
         source_filters = []
+        if evidence_ids_to_delete:
+            source_filters.append(Evidence.evidence_id.in_(evidence_ids_to_delete))
         if source_ids:
-            source_filters.append(
-                and_(
-                    Evidence.source_type == source_type,
-                    Evidence.source_id.in_(source_ids),
-                )
-            )
+            source_filter = Evidence.source_id.in_(source_ids)
+            if source_type is not None:
+                source_filter = and_(Evidence.source_type == source_type, source_filter)
+            source_filters.append(source_filter)
         if source_document_id is not None:
             source_filters.append(
                 and_(

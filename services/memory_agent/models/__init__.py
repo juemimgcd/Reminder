@@ -5,6 +5,7 @@ from services.memory_agent.models.document_chunk import DocumentChunk
 from services.memory_agent.models.document_projection import DocumentProjection
 from services.memory_agent.models.evidence import Evidence
 from services.memory_agent.models.inbox_event import InboxEvent
+from services.memory_agent.models.memory_audit import MemoryActionAudit
 from services.memory_agent.models.memory_candidate import MemoryCandidate
 from services.memory_agent.models.memory_relation import MemoryRelation
 from services.memory_agent.models.memory_revision import MemoryRevision
@@ -22,6 +23,7 @@ __all__ = [
     "Evidence",
     "InboxEvent",
     "MemoryCandidate",
+    "MemoryActionAudit",
     "MemoryRelation",
     "MemoryRevision",
     "MemorySettings",
