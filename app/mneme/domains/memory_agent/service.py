@@ -165,7 +165,15 @@ def verify_confirmation(
         raise BusinessException(message="confirmation scope mismatch", code=4036, status_code=403)
 
 
-def decode_cursor(cursor: str | None, *, owner_id: int, knowledge_base_id: str | None, filters: dict[str, Any]) -> int:
+def decode_cursor(
+    cursor: str | None,
+    *,
+    resource: str,
+    limit: int,
+    owner_id: int,
+    knowledge_base_id: str | None,
+    filters: dict[str, Any],
+) -> int:
     if cursor is None:
         return 0
     try:
@@ -178,6 +186,8 @@ def decode_cursor(cursor: str | None, *, owner_id: int, knowledge_base_id: str |
     if (
         claims.get("owner_id") != owner_id
         or claims.get("knowledge_base_id") != knowledge_base_id
+        or claims.get("resource") != resource
+        or claims.get("limit") != limit
         or claims.get("filters") != filters
         or not isinstance(offset, int)
         or isinstance(offset, bool)
@@ -187,7 +197,15 @@ def decode_cursor(cursor: str | None, *, owner_id: int, knowledge_base_id: str |
     return offset
 
 
-def encode_cursor(*, offset: int, owner_id: int, knowledge_base_id: str | None, filters: dict[str, Any]) -> str:
+def encode_cursor(
+    *,
+    resource: str,
+    limit: int,
+    offset: int,
+    owner_id: int,
+    knowledge_base_id: str | None,
+    filters: dict[str, Any],
+) -> str:
     now = datetime.now(UTC)
     return jwt.encode(
         {
@@ -197,6 +215,8 @@ def encode_cursor(*, offset: int, owner_id: int, knowledge_base_id: str | None, 
             "exp": now + CURSOR_TTL,
             "owner_id": owner_id,
             "knowledge_base_id": knowledge_base_id,
+            "resource": resource,
+            "limit": limit,
             "filters": filters,
             "offset": offset,
         },
@@ -208,7 +228,14 @@ def encode_cursor(*, offset: int, owner_id: int, knowledge_base_id: str | None, 
 async def list_memories(
     *, owner_id: int, knowledge_base_id: str | None, filters: dict[str, Any], cursor: str | None, limit: int
 ) -> GovernedMemoryPage:
-    offset = decode_cursor(cursor, owner_id=owner_id, knowledge_base_id=knowledge_base_id, filters=filters)
+    offset = decode_cursor(
+        cursor,
+        resource="memories",
+        limit=limit,
+        owner_id=owner_id,
+        knowledge_base_id=knowledge_base_id,
+        filters=filters,
+    )
     async with MemoryAgentClient() as client:
         payload = await client.list_memories(
             owner_id=owner_id, knowledge_base_id=knowledge_base_id, params={**filters, "offset": offset, "limit": limit}
@@ -216,7 +243,12 @@ async def list_memories(
     items = [CanonicalMemoryData.model_validate(item) for item in payload.get("items", [])]
     next_cursor = (
         encode_cursor(
-            offset=offset + len(items), owner_id=owner_id, knowledge_base_id=knowledge_base_id, filters=filters
+            resource="memories",
+            limit=limit,
+            offset=offset + len(items),
+            owner_id=owner_id,
+            knowledge_base_id=knowledge_base_id,
+            filters=filters,
         )
         if len(items) == limit
         else None
@@ -227,7 +259,14 @@ async def list_memories(
 async def list_candidates(
     *, owner_id: int, knowledge_base_id: str | None, filters: dict[str, Any], cursor: str | None, limit: int
 ) -> MemoryCandidatePage:
-    offset = decode_cursor(cursor, owner_id=owner_id, knowledge_base_id=knowledge_base_id, filters=filters)
+    offset = decode_cursor(
+        cursor,
+        resource="candidates",
+        limit=limit,
+        owner_id=owner_id,
+        knowledge_base_id=knowledge_base_id,
+        filters=filters,
+    )
     async with MemoryAgentClient() as client:
         payload = await client.list_candidates(
             owner_id=owner_id, knowledge_base_id=knowledge_base_id, params={**filters, "offset": offset, "limit": limit}
@@ -235,7 +274,12 @@ async def list_candidates(
     items = [MemoryCandidateData.model_validate(item) for item in payload.get("items", [])]
     next_cursor = (
         encode_cursor(
-            offset=offset + len(items), owner_id=owner_id, knowledge_base_id=knowledge_base_id, filters=filters
+            resource="candidates",
+            limit=limit,
+            offset=offset + len(items),
+            owner_id=owner_id,
+            knowledge_base_id=knowledge_base_id,
+            filters=filters,
         )
         if len(items) == limit
         else None
