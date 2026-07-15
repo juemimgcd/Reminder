@@ -17,7 +17,7 @@ const modeLabel = (value?: string) =>
   modes.find((m) => m.value === value)?.label ?? "Assistant";
 </script>
 <template>
-  <div class="ai-layout">
+  <div data-testid="stitch-ai-laboratory-layout" class="ai-layout">
     <aside>
       <header>
         <h2>Chats</h2>
