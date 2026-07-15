@@ -74,11 +74,11 @@ def _contains_secret(text: str) -> bool:
 
 
 def build_outbox_idempotency_key(
-        *,
-        event_type: str,
-        aggregate_type: str,
-        aggregate_id: str,
-        operation_id: str,
+    *,
+    event_type: str,
+    aggregate_type: str,
+    aggregate_id: str,
+    operation_id: str,
 ) -> str:
     return f"{event_type}:{aggregate_type}:{aggregate_id}:{operation_id}"
 
@@ -120,14 +120,14 @@ def build_chunk_document(document: Document, chunk: Chunk) -> LCDocument:
 
 
 async def enqueue_outbox_event(
-        *,
-        event_type: str,
-        aggregate_type: str,
-        aggregate_id: str,
-        target_backend: str,
-        payload: dict[str, Any],
-        operation_id: str,
-        db: AsyncSession | None = None,
+    *,
+    event_type: str,
+    aggregate_type: str,
+    aggregate_id: str,
+    target_backend: str,
+    payload: dict[str, Any],
+    operation_id: str,
+    db: AsyncSession | None = None,
 ) -> OutboxEvent:
     """Create an Outbox row without taking ownership of a supplied session."""
     idempotency_key = build_outbox_idempotency_key(
@@ -160,14 +160,14 @@ async def enqueue_outbox_event(
 
 
 async def _create_outbox_event_if_missing(
-        db: AsyncSession,
-        *,
-        idempotency_key: str,
-        event_type: str,
-        aggregate_type: str,
-        aggregate_id: str,
-        target_backend: str,
-        payload: dict[str, Any],
+    db: AsyncSession,
+    *,
+    idempotency_key: str,
+    event_type: str,
+    aggregate_type: str,
+    aggregate_id: str,
+    target_backend: str,
+    payload: dict[str, Any],
 ) -> OutboxEvent:
     result = await db.execute(
         insert(OutboxEvent)
@@ -188,19 +188,17 @@ async def _create_outbox_event_if_missing(
     if inserted is not None:
         return inserted
 
-    existing = await db.scalar(
-        select(OutboxEvent).where(OutboxEvent.idempotency_key == idempotency_key)
-    )
+    existing = await db.scalar(select(OutboxEvent).where(OutboxEvent.idempotency_key == idempotency_key))
     if existing is None:
         raise RuntimeError("outbox idempotency conflict row could not be loaded")
     return existing
 
 
 async def enqueue_document_vector_reindex_event(
-        *,
-        document_id: str,
-        operation_id: str,
-        delete_existing: bool = True,
+    *,
+    document_id: str,
+    operation_id: str,
+    delete_existing: bool = True,
 ) -> OutboxEvent:
     return await enqueue_outbox_event(
         event_type=EVENT_DOCUMENT_VECTOR_REINDEX,
@@ -216,9 +214,9 @@ async def enqueue_document_vector_reindex_event(
 
 
 async def enqueue_document_graph_sync_event(
-        *,
-        document_id: str,
-        operation_id: str,
+    *,
+    document_id: str,
+    operation_id: str,
 ) -> OutboxEvent:
     return await enqueue_outbox_event(
         event_type=EVENT_DOCUMENT_GRAPH_SYNC,
@@ -263,9 +261,7 @@ async def mark_outbox_failed(*, event: OutboxEvent, exc: Exception) -> None:
     )
     if event.target_backend == settings.MEMORY_AGENT_OUTBOX_TARGET:
         status = (
-            OUTBOX_FAILED
-            if isinstance(exc, MemoryAgentRetryable) and not attempts_exhausted
-            else OUTBOX_DEAD_LETTER
+            OUTBOX_FAILED if isinstance(exc, MemoryAgentRetryable) and not attempts_exhausted else OUTBOX_DEAD_LETTER
         )
     else:
         status = OUTBOX_DEAD_LETTER if attempts_exhausted else OUTBOX_FAILED
@@ -275,7 +271,9 @@ async def mark_outbox_failed(*, event: OutboxEvent, exc: Exception) -> None:
             event_id=event.id,
             status=status,
             attempt_count=next_attempt_count,
-            next_attempt_at=None if status == OUTBOX_DEAD_LETTER else calculate_next_attempt_at(
+            next_attempt_at=None
+            if status == OUTBOX_DEAD_LETTER
+            else calculate_next_attempt_at(
                 attempt_count=next_attempt_count,
             ),
             last_error=_bounded_error_detail(event=event, exc=exc),
@@ -283,11 +281,11 @@ async def mark_outbox_failed(*, event: OutboxEvent, exc: Exception) -> None:
 
 
 async def _enqueue_memory_agent_event(
-        db: AsyncSession,
-        *,
-        event: MemoryAgentEvent,
-        aggregate_type: str,
-        aggregate_id: str,
+    db: AsyncSession,
+    *,
+    event: MemoryAgentEvent,
+    aggregate_type: str,
+    aggregate_id: str,
 ) -> OutboxEvent:
     return await enqueue_outbox_event(
         db=db,
@@ -301,9 +299,9 @@ async def _enqueue_memory_agent_event(
 
 
 async def enqueue_document_agent_projection(
-        db: AsyncSession,
-        *,
-        event: MemoryAgentEvent,
+    db: AsyncSession,
+    *,
+    event: MemoryAgentEvent,
 ) -> OutboxEvent:
     if event.event_type != "document.projection.upserted":
         raise ValueError("document projection enqueue requires a projection event")
@@ -317,9 +315,9 @@ async def enqueue_document_agent_projection(
 
 
 async def enqueue_document_memory_observed(
-        db: AsyncSession,
-        *,
-        event: MemoryAgentEvent,
+    db: AsyncSession,
+    *,
+    event: MemoryAgentEvent,
 ) -> OutboxEvent | None:
     if event.event_type != "document.memory.observed":
         raise ValueError("document memory enqueue requires an observation event")
@@ -427,13 +425,41 @@ async def enqueue_user_memory_requested(
     )
 
 
+async def enqueue_user_memory_settings_changed(
+    db: AsyncSession,
+    *,
+    owner_id: int,
+    automatic_conversation_memory: bool,
+    occurred_at: datetime,
+) -> OutboxEvent:
+    event = MemoryAgentEvent(
+        event_id=_memory_event_id(
+            "memory-settings-changed",
+            str(owner_id),
+            occurred_at.isoformat(),
+            str(automatic_conversation_memory),
+        ),
+        event_type="user.memory_settings.changed",
+        occurred_at=occurred_at,
+        owner_id=owner_id,
+        knowledge_base_id=None,
+        payload={"automatic_conversation_memory": automatic_conversation_memory},
+    )
+    return await _enqueue_memory_agent_event(
+        db,
+        event=event,
+        aggregate_type="user",
+        aggregate_id=str(owner_id),
+    )
+
+
 async def enqueue_document_deleted(
-        db: AsyncSession,
-        *,
-        owner_id: int,
-        knowledge_base_id: str,
-        document_id: str,
-        source_version: datetime,
+    db: AsyncSession,
+    *,
+    owner_id: int,
+    knowledge_base_id: str,
+    document_id: str,
+    source_version: datetime,
 ) -> OutboxEvent:
     source_version_text = source_version.isoformat()
     event = MemoryAgentEvent(
@@ -464,11 +490,11 @@ async def enqueue_document_deleted(
 
 
 async def enqueue_knowledge_base_deleted(
-        db: AsyncSession,
-        *,
-        owner_id: int,
-        knowledge_base_id: str,
-        source_version: datetime,
+    db: AsyncSession,
+    *,
+    owner_id: int,
+    knowledge_base_id: str,
+    source_version: datetime,
 ) -> OutboxEvent:
     source_version_text = source_version.isoformat()
     event = MemoryAgentEvent(
@@ -497,13 +523,13 @@ async def enqueue_knowledge_base_deleted(
 
 
 async def enqueue_conversation_deleted(
-        db: AsyncSession,
-        *,
-        owner_id: int,
-        knowledge_base_id: str,
-        session_id: str,
-        message_ids: list[str],
-        source_version: datetime,
+    db: AsyncSession,
+    *,
+    owner_id: int,
+    knowledge_base_id: str,
+    session_id: str,
+    message_ids: list[str],
+    source_version: datetime,
 ) -> OutboxEvent:
     source_version_text = source_version.isoformat()
     stable_message_ids = sorted(set(message_ids))
@@ -664,9 +690,9 @@ async def process_outbox_event_by_id(*, event_id: str) -> dict[str, Any]:
 
 
 async def dispatch_pending_outbox_events(
-        *,
-        limit: int = 20,
-        target_backend: str | None = None,
+    *,
+    limit: int = 20,
+    target_backend: str | None = None,
 ) -> dict[str, int]:
     async with open_read_session() as db:
         events = await list_dispatchable_outbox_events(

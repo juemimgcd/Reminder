@@ -4,7 +4,7 @@ from typing import Annotated, Any, Literal
 import jwt
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from services.memory_agent.api.dependencies import require_claimed_scope, require_service_scope
 from services.memory_agent.api.errors import AgentAPIError
@@ -15,6 +15,7 @@ from services.memory_agent.models.canonical_memory import CanonicalMemory
 from services.memory_agent.models.evidence import Evidence, candidate_evidence, revision_evidence
 from services.memory_agent.models.memory_candidate import MemoryCandidate
 from services.memory_agent.models.memory_revision import MemoryRevision
+from services.memory_agent.models.memory_settings import MemorySettings
 from services.memory_agent.security.service_tokens import (
     MEMORIES_READ_SCOPE,
     MEMORIES_WRITE_SCOPE,
@@ -152,7 +153,10 @@ async def list_memories(
             select(revision_evidence.c.revision_id)
             .join(Evidence, Evidence.evidence_id == revision_evidence.c.evidence_id)
             .join(MemoryRevision, MemoryRevision.revision_id == revision_evidence.c.revision_id)
-            .where(MemoryRevision.memory_id == CanonicalMemory.memory_id, Evidence.source_id == source_id)
+            .where(
+                MemoryRevision.memory_id == CanonicalMemory.memory_id,
+                or_(Evidence.source_id == source_id, Evidence.source_document_id == source_id),
+            )
             .exists()
         )
     query = query.order_by(CanonicalMemory.updated_at.desc(), CanonicalMemory.memory_id).offset(offset).limit(limit)
@@ -185,13 +189,30 @@ async def list_candidates(
         query = query.where(
             select(candidate_evidence.c.candidate_id)
             .join(Evidence, Evidence.evidence_id == candidate_evidence.c.evidence_id)
-            .where(candidate_evidence.c.candidate_id == MemoryCandidate.candidate_id, Evidence.source_id == source_id)
+            .where(
+                candidate_evidence.c.candidate_id == MemoryCandidate.candidate_id,
+                or_(Evidence.source_id == source_id, Evidence.source_document_id == source_id),
+            )
             .exists()
         )
     query = query.order_by(MemoryCandidate.created_at.desc(), MemoryCandidate.candidate_id).offset(offset).limit(limit)
     async with open_read_session() as db:
         rows = list(await db.scalars(query))
     return CandidateList(items=[_candidate(row) for row in rows], offset=offset, limit=limit)
+
+
+@router.get("/memory-settings")
+async def get_memory_settings(
+    claims: Annotated[dict[str, Any], Depends(require_service_scope(MEMORIES_READ_SCOPE))],
+    owner_id: int = Query(gt=0),
+) -> dict[str, bool]:
+    require_claimed_scope(claims, owner_id=owner_id, knowledge_base_id=None)
+    async with open_read_session() as db:
+        row = await db.get(MemorySettings, owner_id)
+    return {
+        "automatic_conversation_memory": bool(row and row.automatic_conversation_memory),
+        "applied": row is not None,
+    }
 
 
 @router.patch("/memory-candidates/{candidate_id}")

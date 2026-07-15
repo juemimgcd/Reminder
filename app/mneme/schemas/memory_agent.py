@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 AnswerMode = Literal[
     "kb_qa",
@@ -109,3 +109,116 @@ class MemoryAgentAnswerResponse(BaseModel):
     memory_ids: list[str] = Field(default_factory=list)
     document_ids: list[str] = Field(default_factory=list)
     run_id: str
+
+
+class CanonicalMemoryData(BaseModel):
+    memory_id: str
+    knowledge_base_id: str | None
+    memory_type: str
+    subject: str
+    predicate: str
+    value: str
+    confidence: float
+    status: str
+    active_revision_id: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class MemoryCandidateData(BaseModel):
+    candidate_id: str
+    knowledge_base_id: str | None
+    memory_type: str
+    subject: str
+    predicate: str
+    value: str
+    confidence: float
+    status: str
+    created_at: datetime
+    decided_at: datetime | None
+
+
+class GovernedMemoryPage(BaseModel):
+    items: list[CanonicalMemoryData]
+    next_cursor: str | None = None
+
+
+class MemoryCandidatePage(BaseModel):
+    items: list[MemoryCandidateData]
+    next_cursor: str | None = None
+
+
+class CandidateActionRequest(BaseModel):
+    reason: str = Field(min_length=1, max_length=256)
+    confirmation_token: str = Field(min_length=1, max_length=4096)
+
+
+class MemoryRevisionRequest(CandidateActionRequest):
+    subject: str = Field(min_length=1, max_length=2000)
+    predicate: str = Field(min_length=1, max_length=2000)
+    value: str = Field(min_length=1, max_length=10000)
+    confidence: float | None = Field(default=None, ge=0, le=1)
+
+
+class MemoryActionRequest(CandidateActionRequest):
+    pass
+
+
+MemoryConfirmationAction = Literal[
+    "confirm_candidate",
+    "reject_candidate",
+    "revise_memory",
+    "invalidate_memory",
+    "hard_delete_memory",
+    "purge_source",
+    "purge_knowledge_base",
+    "purge_account",
+]
+
+
+class MemoryConfirmationRequest(BaseModel):
+    action: MemoryConfirmationAction
+    target_id: str | None = Field(default=None, min_length=1, max_length=128)
+    knowledge_base_id: str | None = Field(default=None, max_length=64)
+
+    @model_validator(mode="after")
+    def validate_target(self) -> "MemoryConfirmationRequest":
+        requires_target = self.action != "purge_account"
+        if requires_target != (self.target_id is not None):
+            raise ValueError("target_id must be supplied except for account purge")
+        if self.action == "purge_account" and self.knowledge_base_id is not None:
+            raise ValueError("account purge cannot be knowledge-base scoped")
+        return self
+
+
+class MemoryConfirmationData(BaseModel):
+    action: MemoryConfirmationAction
+    target_id: str
+    expires_at: datetime
+    confirmation_token: str
+
+
+class MemoryPurgeRequest(BaseModel):
+    source_id: str | None = Field(default=None, min_length=1, max_length=128)
+    knowledge_base_id: str | None = Field(default=None, min_length=1, max_length=64)
+    scope_knowledge_base_id: str | None = Field(default=None, max_length=64)
+    purge_account: bool = False
+    reason: str = Field(min_length=1, max_length=256)
+    confirmation_token: str = Field(min_length=1, max_length=4096)
+
+    @model_validator(mode="after")
+    def exactly_one_selector(self) -> "MemoryPurgeRequest":
+        if sum((self.source_id is not None, self.knowledge_base_id is not None, self.purge_account)) != 1:
+            raise ValueError("exactly one purge selector is required")
+        if self.source_id is None and self.scope_knowledge_base_id is not None:
+            raise ValueError("source scope is only valid for source purge")
+        return self
+
+
+class ConversationMemorySettingsUpdate(BaseModel):
+    automatic_conversation_memory: bool
+
+
+class ConversationMemorySettingsData(BaseModel):
+    automatic_conversation_memory: bool
+    applied: bool

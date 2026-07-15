@@ -319,6 +319,7 @@ async def purge_source(
             owner_id=owner_id,
             knowledge_base_id=knowledge_base_id,
             source_ids={source_id},
+            source_document_id=source_id,
         )
     )
 

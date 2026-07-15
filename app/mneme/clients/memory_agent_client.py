@@ -7,10 +7,13 @@ import jwt
 
 from app.mneme.conf.config import settings
 from app.mneme.schemas.memory_agent import (
+    CanonicalMemoryData,
+    ConversationMemorySettingsData,
     EventReceipt,
     MemoryAgentAnswerRequest,
     MemoryAgentAnswerResponse,
     MemoryAgentEvent,
+    MemoryCandidateData,
 )
 from app.mneme.utils.exceptions import BusinessException
 
@@ -89,6 +92,152 @@ class MemoryAgentClient:
         except ValueError as exc:
             raise MemoryAgentPermanentFailure("memory agent returned an invalid answer response") from exc
 
+    async def list_memories(self, *, owner_id: int, knowledge_base_id: str | None, params: dict[str, Any]) -> dict:
+        return await self._json_request(
+            method="GET",
+            path="/v1/memories",
+            params={"owner_id": owner_id, "knowledge_base_id": knowledge_base_id, **params},
+            scope="memories:read",
+            owner_id=owner_id,
+            knowledge_base_id=knowledge_base_id,
+            retry_transient=True,
+        )
+
+    async def list_candidates(self, *, owner_id: int, knowledge_base_id: str | None, params: dict[str, Any]) -> dict:
+        return await self._json_request(
+            method="GET",
+            path="/v1/memory-candidates",
+            params={"owner_id": owner_id, "knowledge_base_id": knowledge_base_id, **params},
+            scope="memories:read",
+            owner_id=owner_id,
+            knowledge_base_id=knowledge_base_id,
+            retry_transient=True,
+        )
+
+    async def get_memory_settings(self, *, owner_id: int) -> ConversationMemorySettingsData:
+        payload = await self._json_request(
+            method="GET",
+            path="/v1/memory-settings",
+            params={"owner_id": owner_id},
+            scope="memories:read",
+            owner_id=owner_id,
+            knowledge_base_id=None,
+            retry_transient=True,
+        )
+        return ConversationMemorySettingsData.model_validate(payload)
+
+    async def command_candidate(
+        self,
+        *,
+        candidate_id: str,
+        owner_id: int,
+        knowledge_base_id: str | None,
+        action: str,
+        actor_id: str,
+        reason: str,
+    ) -> CanonicalMemoryData | MemoryCandidateData:
+        payload = await self._json_request(
+            method="PATCH",
+            path=f"/v1/memory-candidates/{candidate_id}",
+            json={
+                "owner_id": owner_id,
+                "knowledge_base_id": knowledge_base_id,
+                "action": action,
+                "actor_id": actor_id,
+                "reason": reason,
+            },
+            scope="memories:write",
+            owner_id=owner_id,
+            knowledge_base_id=knowledge_base_id,
+            retry_transient=False,
+        )
+        model = CanonicalMemoryData if action == "confirm" else MemoryCandidateData
+        return model.model_validate(payload)
+
+    async def command_memory(
+        self,
+        *,
+        memory_id: str,
+        owner_id: int,
+        knowledge_base_id: str | None,
+        action: str,
+        actor_id: str,
+        reason: str,
+        revision: dict[str, Any] | None = None,
+    ) -> CanonicalMemoryData:
+        payload = await self._json_request(
+            method="PATCH",
+            path=f"/v1/memories/{memory_id}",
+            json={
+                "owner_id": owner_id,
+                "knowledge_base_id": knowledge_base_id,
+                "action": action,
+                "actor_id": actor_id,
+                "reason": reason,
+                **(revision or {}),
+            },
+            scope="memories:write",
+            owner_id=owner_id,
+            knowledge_base_id=knowledge_base_id,
+            retry_transient=False,
+        )
+        return CanonicalMemoryData.model_validate(payload)
+
+    async def delete_memory(
+        self, *, memory_id: str, owner_id: int, knowledge_base_id: str | None, actor_id: str, reason: str
+    ) -> dict:
+        return await self._json_request(
+            method="DELETE",
+            path=f"/v1/memories/{memory_id}",
+            json={"owner_id": owner_id, "knowledge_base_id": knowledge_base_id, "actor_id": actor_id, "reason": reason},
+            scope="memories:write",
+            owner_id=owner_id,
+            knowledge_base_id=knowledge_base_id,
+            retry_transient=False,
+        )
+
+    async def purge_memories(self, *, owner_id: int, knowledge_base_id: str | None, payload: dict[str, Any]) -> dict:
+        return await self._json_request(
+            method="POST",
+            path="/v1/memories/purge",
+            json=payload,
+            scope="memories:write",
+            owner_id=owner_id,
+            knowledge_base_id=knowledge_base_id,
+            retry_transient=False,
+        )
+
+    async def _json_request(
+        self,
+        *,
+        method: str,
+        path: str,
+        scope: str,
+        owner_id: int,
+        knowledge_base_id: str | None,
+        params: dict[str, Any] | None = None,
+        json: dict[str, Any] | None = None,
+        retry_transient: bool,
+    ) -> dict[str, Any]:
+        response = await self._request(
+            method=method,
+            path=path,
+            params=params,
+            json=json,
+            request_id=f"memory-control-{datetime.now(UTC).timestamp()}",
+            scope=scope,
+            owner_id=owner_id,
+            knowledge_base_id=knowledge_base_id,
+            retry_transient=retry_transient,
+        )
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise MemoryAgentPermanentFailure("memory agent returned invalid JSON") from exc
+        if not isinstance(payload, dict):
+            raise MemoryAgentPermanentFailure("memory agent returned an invalid response")
+        return payload
+
     async def _post_json(
         self,
         *,
@@ -99,6 +248,31 @@ class MemoryAgentClient:
         owner_id: int | None = None,
         knowledge_base_id: str | None = None,
         retry_transient: bool,
+    ) -> httpx.Response:
+        return await self._request(
+            method="POST",
+            path=path,
+            json=payload,
+            params=None,
+            request_id=request_id,
+            scope=scope,
+            owner_id=owner_id,
+            knowledge_base_id=knowledge_base_id,
+            retry_transient=retry_transient,
+        )
+
+    async def _request(
+        self,
+        *,
+        method: str,
+        path: str,
+        request_id: str,
+        scope: str,
+        owner_id: int | None,
+        knowledge_base_id: str | None,
+        retry_transient: bool,
+        params: dict[str, Any] | None,
+        json: dict[str, Any] | None,
     ) -> httpx.Response:
         if not settings.MEMORY_AGENT_SERVICE_JWT_SECRET.get_secret_value():
             raise MemoryAgentPermanentFailure("memory agent service credentials are not configured")
@@ -119,7 +293,12 @@ class MemoryAgentClient:
         }
         for attempt in range(1, attempts + 1):
             try:
-                response = await self._client.post(path, json=payload, headers=headers)
+                safe_params = (
+                    None
+                    if params is None
+                    else {key: value for key, value in params.items() if value is not None}
+                )
+                response = await self._client.request(method, path, params=safe_params, json=json, headers=headers)
             except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout) as exc:
                 if not retry_transient or attempt == attempts:
                     raise MemoryAgentRetryable("memory agent connection failed") from exc
@@ -146,9 +325,7 @@ class MemoryAgentClient:
         raise MemoryAgentPermanentFailure("memory agent request failed")
 
 
-def _create_service_token(
-    *, scope: str, owner_id: int | None = None, knowledge_base_id: str | None = None
-) -> str:
+def _create_service_token(*, scope: str, owner_id: int | None = None, knowledge_base_id: str | None = None) -> str:
     now = datetime.now(UTC)
     payload = {
         "iss": SERVICE_TOKEN_ISSUER,
