@@ -11,6 +11,7 @@ ROUTER_MODULE_NAMES = [
     "app.mneme.domains.documents.folders",
     "app.mneme.domains.chat.router",
     "app.mneme.domains.chat.run_router",
+    "app.mneme.domains.automation.router",
     "app.mneme.domains.retrieval.router",
     "app.mneme.domains.memory.router",
     "app.mneme.domains.memory_agent.router",

@@ -348,15 +348,15 @@ def test_route_projects_only_created_uploads(monkeypatch):
     async def get_document(*args, **kwargs):
         return created
 
-    async def project(**kwargs):
-        projected.append(kwargs["document"].id)
+    async def project(_db, **kwargs):
+        projected.append((kwargs["aggregate_type"], kwargs["aggregate_id"]))
 
     monkeypatch.setattr(router, "enforce_fixed_window_rate_limit", lambda **kwargs: None)
     monkeypatch.setattr(router, "get_knowledge_base_by_id", get_kb)
     monkeypatch.setattr(router, "ensure_root_folder", root)
     monkeypatch.setattr(router, "store_uploaded_document", store)
     monkeypatch.setattr(router, "get_document_by_id", get_document)
-    monkeypatch.setattr(router, "sync_document_projection", project)
+    monkeypatch.setattr(router, "enqueue_graph_projection_upsert", project)
     response = asyncio.run(router.upload_document(
         user_id=None,
         knowledge_base_id="kb-1",
@@ -366,7 +366,7 @@ def test_route_projects_only_created_uploads(monkeypatch):
         db=FakeDatabase(),
     ))
     assert response.data.disposition == "created"
-    assert projected == ["doc-created"]
+    assert projected == [("document", "doc-created")]
 
 
 def test_route_duplicate_never_projects_or_resolves_new_document(monkeypatch):
@@ -393,7 +393,7 @@ def test_route_duplicate_never_projects_or_resolves_new_document(monkeypatch):
     monkeypatch.setattr(router, "ensure_root_folder", root)
     monkeypatch.setattr(router, "store_uploaded_document", store)
     monkeypatch.setattr(router, "get_document_by_id", forbidden_call)
-    monkeypatch.setattr(router, "sync_document_projection", forbidden_call)
+    monkeypatch.setattr(router, "enqueue_graph_projection_upsert", forbidden_call)
     response = asyncio.run(router.upload_document(
         user_id=None,
         knowledge_base_id="kb-1",

@@ -22,7 +22,6 @@ import type {
   DocumentVersionListData,
   EvidenceProfileData,
   GraphData,
-  GraphProjectionRebuildData,
   GraphRagDecisionData,
   GrowthAdviceResult,
   GrowthReportResult,
@@ -32,9 +31,10 @@ import type {
   KnowledgeBaseListData,
   MemoryGovernanceData,
   MemoryLibraryData,
-  MemoryRebuildData,
   CanonicalMemory, MemoryCandidate, MemoryDetail, MemoryPage, MemorySettings, MemoryConfirmation, MemoryPurgeResult,
   Neo4jHealthData,
+  NotificationData,
+  NotificationListData,
   PersonalProfileResult,
   PlannedSupportData,
   ProductionReadinessReportData,
@@ -548,6 +548,15 @@ const realApi = {
   abortAgentRun(token: string, runId: string) {
     return request<AgentRunData>(`/kb/chat/runs/${runId}/abort`, { method: "POST", token });
   },
+  listNotifications(token: string, limit = 30) {
+    return request<NotificationListData>(`/agent/notifications${buildQuery({ limit })}`, { token });
+  },
+  markNotificationRead(token: string, notificationId: string) {
+    return request<NotificationData>(`/agent/notifications/${notificationId}/read`, {
+      method: "POST",
+      token,
+    });
+  },
   listMemories(token: string, knowledgeBaseId: string | null, cursor?: string | null) {
     return request<MemoryPage<CanonicalMemory>>(`/api/v1/memory-agent/memories${buildQuery({ knowledge_base_id: knowledgeBaseId, cursor })}`, { token });
   },
@@ -705,13 +714,13 @@ const realApi = {
     );
   },
   rebuildUserGraph(token: string) {
-    return request<GraphProjectionRebuildData>("/graph/rebuild", {
+    return request<TaskRecordData>("/graph/rebuild", {
       method: "POST",
       token,
     });
   },
   rebuildKnowledgeBaseGraph(token: string, knowledgeBaseId: string) {
-    return request<GraphProjectionRebuildData>(`/graph/knowledge-bases/${knowledgeBaseId}/rebuild`, {
+    return request<TaskRecordData>(`/graph/knowledge-bases/${knowledgeBaseId}/rebuild`, {
       method: "POST",
       token,
     });
@@ -737,7 +746,7 @@ const realApi = {
     return request<MemoryGovernanceData>(`/memory/knowledge-bases/${knowledgeBaseId}/governance`, { token });
   },
   rebuildMemory(token: string, knowledgeBaseId: string) {
-    return request<MemoryRebuildData>(`/memory/knowledge-bases/${knowledgeBaseId}/rebuild`, {
+    return request<TaskRecordData>(`/memory/knowledge-bases/${knowledgeBaseId}/rebuild`, {
       method: "POST",
       token,
     });

@@ -50,6 +50,12 @@ async def execute_backend_tool(
             kind=ToolErrorKind.UNAVAILABLE,
             message=decision.reason,
         )
+    if decision.approval_required:
+        return BackendToolResult.error(
+            tool_name=tool_name,
+            kind=ToolErrorKind.APPROVAL_REQUIRED,
+            message=f"Write capability requires an approved proposal before execution: {tool_name}",
+        )
     if context.is_aborted():
         return BackendToolResult.error(
             tool_name=tool_name,

@@ -9,6 +9,7 @@ from app.mneme.models.document import Document
 from app.mneme.domains.documents.pipeline import run_document_index_pipeline
 from app.mneme.domains.tasks.state import CANCELLED, FAILED, SUCCEEDED, transition_task_status
 from app.mneme.utils.exceptions import BusinessException
+from app.mneme.domains.automation.service import emit_domain_event
 
 
 async def load_document_snapshot(*, document_id: str) -> Document | None:
@@ -121,6 +122,33 @@ async def run_index_document_task_async(
             ),
             error_message=None,
         )
+        async with open_write_session() as db:
+            await emit_domain_event(
+                db,
+                event_type="document.indexed",
+                user_id=doc.user_id,
+                aggregate_type="document",
+                aggregate_id=doc.id,
+                operation_id=task_id,
+                payload={
+                    "document_id": doc.id,
+                    "knowledge_base_id": doc.knowledge_base_id,
+                    "task_id": task_id,
+                },
+            )
+            await emit_domain_event(
+                db,
+                event_type="memory.updated",
+                user_id=doc.user_id,
+                aggregate_type="knowledge_base",
+                aggregate_id=doc.knowledge_base_id,
+                operation_id=task_id,
+                payload={
+                    "document_id": doc.id,
+                    "knowledge_base_id": doc.knowledge_base_id,
+                    "entry_count": result.memory_entry_count,
+                },
+            )
     except Exception as exc:
         app_logger.bind(module="index_task").exception(
             f"index task failed task_id={task_id} document_id={document_id} "

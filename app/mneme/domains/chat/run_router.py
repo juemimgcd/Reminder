@@ -1,16 +1,18 @@
 import asyncio
 import json
 import uuid
+from datetime import datetime, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query
+from fastapi import APIRouter, Depends, Header, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mneme.agent.events import AgentEvent
 from app.mneme.agent.run_models import TERMINAL_AGENT_RUN_STATUSES, AgentRunRecord, AgentRunStatus
-from app.mneme.agent.run_service import execute_agent_run
+from app.mneme.agent.run_submission import submit_agent_run
 from app.mneme.conf.config import settings
-from app.mneme.conf.database import get_write_database
+from app.mneme.conf.database import get_database, get_write_database
+from app.mneme.crud.agent_automation import durable_run_to_record, get_durable_run, save_durable_run
 from app.mneme.domains.chat.service import require_owned_chat_session
 from app.mneme.infra.agent_runs import agent_run_store
 from app.mneme.models.user import User
@@ -26,7 +28,6 @@ router = APIRouter(tags=["chat"])
 async def create_agent_run_api(
     session_id: str,
     payload: ChatSessionMessageRequest,
-    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_write_database),
 ):
@@ -40,27 +41,10 @@ async def create_agent_run_api(
         client_request_id=payload.client_request_id or f"request_{uuid.uuid4().hex}",
         question=payload.question,
         top_k=payload.top_k,
-        answer_mode=payload.answer_mode,
+        answer_mode=payload.answer_mode or session.answer_mode,
+        max_attempts=settings.AGENT_RUN_MAX_ATTEMPTS,
     )
-    record, created = await agent_run_store.create_or_get_and_enqueue(record)
-    if created:
-        await agent_run_store.append_event(
-            record.run_id,
-            AgentEvent.lifecycle(
-                "queued",
-                trace_id=record.trace_id,
-                run_id=record.run_id,
-                session_id=record.session_id,
-                user_id=record.user_id,
-                loop_index=0,
-                loop_reason="session_fifo",
-            ),
-        )
-    if created or record.status == AgentRunStatus.QUEUED:
-        # Retrying the same client request also re-submits a queued run. The
-        # session lease prevents duplicate execution and repairs a crash that
-        # happened after enqueueing but before BackgroundTasks started.
-        background_tasks.add_task(execute_agent_run, record.run_id)
+    record, created = await submit_agent_run(db, record)
     return success_response(
         data=record,
         message="agent run queued" if created else "existing agent run returned",
@@ -71,23 +55,34 @@ async def create_agent_run_api(
 async def get_agent_run_api(
     run_id: str,
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_database),
 ):
-    record = await _require_owned_run(run_id, current_user.id)
+    record = await _require_owned_run(run_id, current_user.id, db=db)
     return success_response(data=record)
 
 
 @router.post("/kb/chat/runs/{run_id}/abort")
 async def abort_agent_run_api(
     run_id: str,
-    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_write_database),
 ):
-    record = await _require_owned_run(run_id, current_user.id)
+    record = await _require_owned_run(run_id, current_user.id, db=db)
     if record.status not in TERMINAL_AGENT_RUN_STATUSES:
         was_queued = record.started_at is None
-        record = await agent_run_store.transition_to_aborting(run_id) or record
+        transitioned = await agent_run_store.transition_to_aborting(run_id)
+        record = transitioned or record.model_copy(update={"status": AgentRunStatus.ABORTING})
         if was_queued:
-            background_tasks.add_task(execute_agent_run, run_id)
+            record.status = AgentRunStatus.ABORTED
+            record.completed_at = datetime.now(timezone.utc)
+            await agent_run_store.save(record)
+            await agent_run_store.remove_from_session_queue(session_id=record.session_id, run_id=record.run_id)
+            await agent_run_store.append_event(
+                record.run_id,
+                AgentEvent.lifecycle("aborted", loop_index=0, loop_reason="abort_while_queued"),
+            )
+            record = await agent_run_store.get(record.run_id) or record
+        await save_durable_run(db, record)
     return success_response(data=record, message="agent run abort requested")
 
 
@@ -97,8 +92,9 @@ async def stream_agent_run_api(
     cursor: str | None = Query(default=None),
     last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_database),
 ):
-    await _require_owned_run(run_id, current_user.id)
+    await _require_owned_run(run_id, current_user.id, db=db)
     starting_cursor = last_event_id or cursor
 
     async def event_stream():
@@ -122,10 +118,13 @@ async def stream_agent_run_api(
     )
 
 
-async def _require_owned_run(run_id: str, user_id: int) -> AgentRunRecord:
+async def _require_owned_run(run_id: str, user_id: int, *, db: AsyncSession) -> AgentRunRecord:
     record = await agent_run_store.get(run_id)
     if record is None:
-        raise BusinessException(message="agent run not found", code=4051, status_code=404)
+        durable = await get_durable_run(db, run_id=run_id)
+        if durable is None:
+            raise BusinessException(message="agent run not found", code=4051, status_code=404)
+        record = durable_run_to_record(durable)
     if record.user_id != user_id:
         raise BusinessException(message="agent run does not belong to current user", code=4052, status_code=403)
     return record

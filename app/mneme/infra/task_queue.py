@@ -5,6 +5,31 @@ from app.mneme.tasks.outbox_tasks import dispatch_pending_outbox_events_task, pr
 from app.mneme.conf.config import settings
 
 
+def enqueue_agent_run_task(*, run_id: str) -> str:
+    async_result = celery_app.send_task(
+        "tasks.execute_agent_run_task",
+        kwargs={"run_id": run_id},
+        queue=settings.CELERY_AGENT_QUEUE,
+    )
+    app_logger.bind(module="task_queue").info(
+        f"enqueue agent run submitted run_id={run_id} celery_task_id={async_result.id}"
+    )
+    return async_result.id
+
+
+def enqueue_maintenance_task(*, task_id: str) -> str:
+    async_result = celery_app.send_task(
+        "tasks.execute_maintenance_task",
+        task_id=task_id,
+        kwargs={"task_id": task_id},
+        queue=settings.CELERY_MAINTENANCE_QUEUE,
+    )
+    app_logger.bind(module="task_queue").info(
+        f"enqueue maintenance task submitted task_id={task_id} celery_task_id={async_result.id}"
+    )
+    return async_result.id
+
+
 def enqueue_index_document_task(
         *,
         task_id: str,

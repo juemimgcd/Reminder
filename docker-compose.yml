@@ -265,6 +265,15 @@ services:
     logging: *default-logging
     command: ["sh", "/app/docker/start-worker.sh"]
 
+  beat:
+    <<: *app-base
+    container_name: reminder-beat
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    logging: *default-logging
+    command: ["sh", "/app/docker/start-beat.sh"]
+
   memory-agent-migrate:
     <<: *memory-agent-base
     container_name: reminder-memory-agent-migrate

@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.mneme.agent.capabilities import CapabilityMetadata
 from app.mneme.agent.contracts import AnswerMode
+from app.mneme.agent.actions import ToolApprovalPolicy, ToolRiskLevel
 
 
 class ToolErrorKind(str, Enum):
@@ -11,6 +12,7 @@ class ToolErrorKind(str, Enum):
     BUSINESS = "business"
     UNAVAILABLE = "unavailable"
     ABORTED = "aborted"
+    APPROVAL_REQUIRED = "approval_required"
 
 
 class ToolScope(str, Enum):
@@ -28,6 +30,8 @@ class ToolMetadata(BaseModel):
     requires_knowledge_base: bool = True
     can_answer_directly: bool = False
     read_only: bool = True
+    risk_level: ToolRiskLevel = ToolRiskLevel.READ
+    approval_policy: ToolApprovalPolicy = ToolApprovalPolicy.NEVER
     must_produce_evidence: bool = True
     scope: ToolScope = ToolScope.TRUSTED_REQUEST
     timeout_seconds: float = 60.0

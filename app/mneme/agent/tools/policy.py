@@ -11,6 +11,7 @@ class ToolPolicyDecision:
     required: bool
     reason: str
     metadata: ToolMetadata | None = None
+    approval_required: bool = False
 
 
 def evaluate_tool_call(
@@ -37,4 +38,5 @@ def evaluate_tool_call(
         projection.requires_tool,
         "tool belongs to the projected capability set",
         candidate,
+        not candidate.read_only,
     )

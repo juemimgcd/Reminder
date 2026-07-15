@@ -20,7 +20,6 @@
   DocumentVersionListData,
   EvidenceProfileData,
   GraphData,
-  GraphProjectionRebuildData,
   GraphRagDecisionData,
   GrowthAdviceResult,
   GrowthReportResult,
@@ -28,9 +27,10 @@
   KnowledgeBaseData,
   MemoryGovernanceData,
   MemoryLibraryData,
-  MemoryRebuildData,
   CanonicalMemory, MemoryCandidate, MemoryDetail, MemoryPage, MemorySettings, MemoryConfirmation, MemoryPurgeResult,
   Neo4jHealthData,
+  NotificationData,
+  NotificationListData,
   PersonalProfileResult,
   PlannedSupportData,
   ProductionReadinessReportData,
@@ -57,6 +57,20 @@ const previewUser: UserPublic = {
   display_name: "Preview User",
   avatar_url: "",
 };
+
+let previewNotifications: NotificationData[] = [
+  {
+    id: "notification-preview-heartbeat",
+    kind: "heartbeat",
+    title: "Weekly memory review",
+    body: "Three new notes are ready for review. One recurring theme may be worth promoting to canonical memory.",
+    action_url: "/?view=ai",
+    source_run_id: "run-preview-heartbeat",
+    metadata_json: { heartbeat_job_id: "heartbeat-preview" },
+    read_at: null,
+    created_at: now,
+  },
+];
 
 let knowledgeBases: KnowledgeBaseData[] = [
   {
@@ -781,6 +795,18 @@ const previewApi = {
       run.completed_at = new Date().toISOString();
       return delay(run);
     },
+  listNotifications(): Promise<NotificationListData> {
+    return delay({
+      items: previewNotifications,
+      unread_count: previewNotifications.filter((item) => !item.read_at).length,
+    });
+  },
+  markNotificationRead(_token: string, notificationId: string): Promise<NotificationData> {
+    previewNotifications = previewNotifications.map((item) =>
+      item.id === notificationId ? { ...item, read_at: new Date().toISOString() } : item,
+    );
+    return delay(previewNotifications.find((item) => item.id === notificationId) ?? previewNotifications[0]);
+  },
   listMemories(_token: string, knowledgeBaseId: string | null): Promise<MemoryPage<CanonicalMemory>> { const items = previewMemories.filter((m) => m.knowledge_base_id === knowledgeBaseId && m.status === "active"); return delay({ items, total: items.length, next_cursor: null }); },
   listMemoryCandidates(_token: string, knowledgeBaseId: string | null): Promise<MemoryPage<MemoryCandidate>> { const items=previewCandidates.filter(item=>item.knowledge_base_id===knowledgeBaseId&&item.status==="pending"); return delay({ items, total: items.length, pending_count: items.length, next_cursor: null }); },
   getMemoryDetail(_token: string, memoryId: string): Promise<MemoryDetail> { const memory = previewMemories.find((m) => m.memory_id === memoryId) ?? previewMemories[0]; return delay({ memory, revisions: [{ revision_id: memory.active_revision_id, subject: memory.subject, predicate: memory.predicate, value: memory.value, valid_from: memory.created_at, valid_to: null, reason: "preview" }], evidence: [{ evidence_id: "ev-preview", revision_id: memory.active_revision_id, source_type: "document", source_id: "doc-zettelkasten", source_document_id: "doc-zettelkasten", excerpt: "Atomic notes are easier to reuse.", source_time: memory.created_at }] }); },
@@ -837,11 +863,11 @@ const previewApi = {
   getDocumentGraph(): Promise<GraphData> {
     return delay({ ...previewGraph, scope: "document", relationship_scope: "knowledge_base" });
   },
-  rebuildUserGraph(): Promise<GraphProjectionRebuildData> {
-    return delay({ scope: "user", user_id: previewUser.id, knowledge_base_id: null, knowledge_base_count: knowledgeBases.length, document_count: documents.length, memory_entry_count: 9, status: "completed" });
+  rebuildUserGraph(): Promise<TaskRecordData> {
+    return delay(createTask("task-preview-graph-user", String(previewUser.id)));
   },
-  rebuildKnowledgeBaseGraph(_token: string, knowledgeBaseId: string): Promise<GraphProjectionRebuildData> {
-    return delay({ scope: "knowledge_base", user_id: previewUser.id, knowledge_base_id: knowledgeBaseId, knowledge_base_count: null, document_count: documents.filter((item) => item.knowledge_base_id === knowledgeBaseId).length, memory_entry_count: 9, status: "completed" });
+  rebuildKnowledgeBaseGraph(_token: string, knowledgeBaseId: string): Promise<TaskRecordData> {
+    return delay(createTask("task-preview-graph-kb", knowledgeBaseId));
   },
   graphRag(_token: string, knowledgeBaseId: string, params: { query: string; top_k?: number; max_expansions?: number }): Promise<GraphRagDecisionData> {
     return delay({ knowledge_base_id: knowledgeBaseId, query: params.query, graph_useful: true, summary: "Preview GraphRAG found a compact neighborhood around memory graph design.", seed_count: 2, expansion_count: 2, context_count: 3, seeds: [{ document_id: "doc-memory-graph", title: "Memory Graph Design", reason: "Matches graph-related terms.", score: 0.82 }], expansions: [{ document_id: "doc-zettelkasten", title: "Zettelkasten Principles", reason: "Related through atomic note practice.", score: 0.68 }], contexts: [{ document_id: "doc-memory-graph", title: "Memory Graph Design", reason: "Primary preview context.", score: 0.82 }] });
@@ -852,8 +878,8 @@ const previewApi = {
   memoryGovernance(): Promise<MemoryGovernanceData> {
     return delay(memoryGovernanceData);
   },
-  rebuildMemory(_token: string, knowledgeBaseId: string): Promise<MemoryRebuildData> {
-    return delay({ knowledge_base_id: knowledgeBaseId, document_count: documents.filter((item) => item.knowledge_base_id === knowledgeBaseId).length, processed_document_count: 2, chunk_count: 42, deleted_entry_count: 0, entry_count: 9 });
+  rebuildMemory(_token: string, knowledgeBaseId: string): Promise<TaskRecordData> {
+    return delay(createTask("task-preview-memory-kb", knowledgeBaseId));
   },
   documentMemory(): Promise<MemoryLibraryData> {
     return delay(memoryLibraryData);
