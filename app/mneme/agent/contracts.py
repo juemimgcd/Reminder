@@ -6,8 +6,12 @@ AnswerMode = Literal["kb_qa", "memory_query", "profile_query", "analysis_query",
 
 
 class AgentHistoryMessage(BaseModel):
+    message_id: str | None = None
     role: Literal["user", "assistant"]
     content: str
+    tool_calls: list[dict[str, Any]] = Field(default_factory=list)
+    sources: list[dict[str, Any]] = Field(default_factory=list)
+    citations: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class AgentRequest(BaseModel):
@@ -19,6 +23,9 @@ class AgentRequest(BaseModel):
     answer_mode: AnswerMode = "kb_qa"
     llm_config: dict[str, Any] | None = None
     history: list[AgentHistoryMessage] = Field(default_factory=list)
+    history_summary: str = ""
+    history_compaction: dict[str, Any] | None = None
+    history_prepared: bool = False
 
 
 class AgentResponse(BaseModel):

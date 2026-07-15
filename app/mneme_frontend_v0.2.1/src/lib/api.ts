@@ -499,7 +499,7 @@ const realApi = {
   createAgentRun(
     token: string,
     sessionId: string,
-    payload: { question: string; answer_mode: AnswerMode; top_k?: number },
+    payload: { question: string; answer_mode: AnswerMode; top_k?: number; client_request_id: string },
   ) {
     return request<AgentRunData>(`/kb/chat/sessions/${sessionId}/runs`, {
       method: "POST",
@@ -508,6 +508,7 @@ const realApi = {
         question: payload.question,
         answer_mode: payload.answer_mode,
         top_k: payload.top_k ?? 4,
+        client_request_id: payload.client_request_id,
       },
     });
   },

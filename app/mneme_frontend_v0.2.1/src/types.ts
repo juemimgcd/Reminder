@@ -280,6 +280,8 @@ export interface ChatMessageData {
   knowledge_base_id: string;
   role: "user" | "assistant" | string;
   content: string;
+  agent_run_id?: string | null;
+  sequence_no?: number | null;
   sources: ChatSourceItem[];
   citations: ChatCitationItem[];
   tool_calls?: Record<string, unknown>[];
@@ -325,6 +327,7 @@ export interface AgentRunData {
   run_id: string;
   session_id: string;
   user_id: number;
+  client_request_id: string;
   question: string;
   top_k: number;
   answer_mode: AnswerMode;
@@ -334,6 +337,7 @@ export interface AgentRunData {
   completed_at: string | null;
   error: string | null;
   last_event_id: string | null;
+  queue_wait_ms: number | null;
 }
 
 export interface GraphNodeData {

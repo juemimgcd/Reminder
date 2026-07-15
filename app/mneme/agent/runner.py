@@ -8,8 +8,8 @@ from typing import Any
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.messages.utils import message_chunk_to_message
 
-from app.mneme.agent.context_manager import apply_history_budget
-from app.mneme.agent.contracts import AgentRequest, AgentResponse
+from app.mneme.agent.context_manager import apply_history_budget, merge_history_summaries
+from app.mneme.agent.contracts import AgentHistoryMessage, AgentRequest, AgentResponse
 from app.mneme.agent.events import AgentEvent
 from app.mneme.agent.guards import AgentRunAbortedError, AgentRunLimitError, AgentRunLimits
 from app.mneme.agent.prompt_builder import build_agent_system_prompt
@@ -46,35 +46,57 @@ class MnemeAgentRunner:
         yield AgentEvent.lifecycle("start", loop_index=0, loop_reason="initial_request")
         system_prompt = build_agent_system_prompt(answer_mode=request.answer_mode)
         context_window = int((context.llm_config or {}).get("context_window") or 64_000)
-        history_budget = apply_history_budget(
-            request.history,
-            context_window_tokens=context_window,
-            output_reserve_tokens=settings.AGENT_OUTPUT_RESERVE_TOKENS,
-            system_chars=len(system_prompt),
-            current_question_chars=len(request.question),
-            max_turns=settings.AGENT_HISTORY_MAX_TURNS,
-            summary_max_chars=settings.AGENT_SUMMARY_MAX_CHARS,
-            chars_per_token=settings.AGENT_CHARS_PER_TOKEN,
-        )
-        if history_budget.was_compacted:
+        if not request.history_prepared:
+            history_budget = apply_history_budget(
+                request.history,
+                context_window_tokens=context_window,
+                output_reserve_tokens=settings.AGENT_OUTPUT_RESERVE_TOKENS,
+                system_chars=len(system_prompt) + len(request.history_summary),
+                current_question_chars=len(request.question),
+                max_turns=settings.AGENT_HISTORY_MAX_TURNS,
+                summary_max_chars=settings.AGENT_SUMMARY_MAX_CHARS,
+                chars_per_token=settings.AGENT_CHARS_PER_TOKEN,
+                tool_result_soft_chars=settings.AGENT_TOOL_RESULT_SOFT_CHARS,
+            )
+            history_messages = history_budget.messages
+            history_summary = merge_history_summaries(
+                request.history_summary,
+                history_budget.summary,
+                settings.AGENT_SUMMARY_MAX_CHARS,
+            )
+            compaction = (
+                {
+                    "reason": history_budget.reason,
+                    "original_count": history_budget.original_count,
+                    "kept_count": history_budget.kept_count,
+                    "original_chars": history_budget.original_chars,
+                    "kept_chars": history_budget.kept_chars,
+                    "estimated_tokens_before": history_budget.estimated_tokens_before,
+                    "estimated_tokens_after": history_budget.estimated_tokens_after,
+                    "tool_payloads_trimmed": history_budget.tool_payloads_trimmed,
+                    "summary_through_message_id": history_budget.summary_through_message_id,
+                }
+                if history_budget.was_compacted
+                else None
+            )
+        else:
+            history_messages = request.history
+            history_summary = request.history_summary
+            compaction = request.history_compaction
+
+        if compaction:
             yield AgentEvent.compaction(
                 "start",
                 loop_index=0,
                 loop_reason="context_governance",
-                reason=history_budget.reason,
-                estimated_tokens_before=history_budget.estimated_tokens_before,
+                reason=compaction.get("reason"),
+                estimated_tokens_before=compaction.get("estimated_tokens_before"),
             )
             yield AgentEvent.compaction(
                 "end",
                 loop_index=0,
                 loop_reason="context_governance",
-                reason=history_budget.reason,
-                original_count=history_budget.original_count,
-                kept_count=history_budget.kept_count,
-                original_chars=history_budget.original_chars,
-                kept_chars=history_budget.kept_chars,
-                estimated_tokens_before=history_budget.estimated_tokens_before,
-                estimated_tokens_after=history_budget.estimated_tokens_after,
+                **compaction,
             )
 
         try:
@@ -83,8 +105,8 @@ class MnemeAgentRunner:
                 async for event in self._execute(
                     request,
                     context,
-                    history_budget.messages,
-                    history_budget.summary,
+                    history_messages,
+                    history_summary,
                     system_prompt,
                 ):
                     response_payload = event.metadata.get("response")
@@ -138,8 +160,7 @@ class MnemeAgentRunner:
                 )
             )
         for item in history:
-            message_type = HumanMessage if item.role == "user" else AIMessage
-            messages.append(message_type(content=item.content))
+            messages.extend(_history_model_messages(item))
         messages.append(HumanMessage(content=request.question))
 
         tool_schemas = get_backend_tool_schemas(request.answer_mode)
@@ -265,6 +286,12 @@ class MnemeAgentRunner:
                     tool_call.update(
                         outcome="error" if result.is_error else "success",
                         error_kind=result.error_kind.value if result.error_kind else None,
+                        error_message=result.error_message,
+                        source_ids=[
+                            str(source.get("source_id") or "")
+                            for source in result.sources
+                            if source.get("source_id")
+                        ],
                         source_count=len(result.sources),
                         citation_count=len(result.citations),
                         evidence_count=evidence_count,
@@ -394,6 +421,72 @@ class MnemeAgentRunner:
     def _check_aborted(context: AgentRunContext) -> None:
         if context.is_aborted():
             raise AgentRunAbortedError("agent run aborted")
+
+
+def _history_model_messages(item: AgentHistoryMessage) -> list[Any]:
+    if item.role == "user":
+        return [HumanMessage(content=item.content)]
+
+    messages: list[Any] = []
+    sources_by_id = {
+        str(source.get("source_id") or ""): source
+        for source in item.sources
+        if source.get("source_id")
+    }
+    citation_ids = [
+        str(citation.get("source_id") or "")
+        for citation in item.citations
+        if citation.get("source_id")
+    ]
+    message_key = item.message_id or "legacy"
+    for index, call in enumerate(item.tool_calls, start=1):
+        tool_name = str(call.get("name") or "")
+        if not tool_name:
+            continue
+        original_call_id = str(call.get("id") or "")
+        call_id = f"history_{message_key}_{index}_{original_call_id or 'tool'}"
+        arguments = call.get("arguments") if isinstance(call.get("arguments"), dict) else {}
+        source_ids = [str(source_id) for source_id in (call.get("source_ids") or [])]
+        if not source_ids:
+            source_ids = list(sources_by_id)
+        messages.append(
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "name": tool_name,
+                        "args": arguments,
+                        "id": call_id,
+                        "type": "tool_call",
+                    }
+                ],
+            )
+        )
+        messages.append(
+            ToolMessage(
+                content=json.dumps(
+                    {
+                        "outcome": call.get("outcome"),
+                        "error_kind": call.get("error_kind"),
+                        "error_message": call.get("error_message"),
+                        "source_ids": source_ids,
+                        "sources": [
+                            sources_by_id[source_id]
+                            for source_id in source_ids
+                            if source_id in sources_by_id
+                        ],
+                        "citation_ids": citation_ids,
+                        "original_tool_call_id": original_call_id or None,
+                    },
+                    ensure_ascii=False,
+                ),
+                tool_call_id=call_id,
+                name=tool_name,
+            )
+        )
+    if item.content:
+        messages.append(AIMessage(content=item.content))
+    return messages
 
 
 def _content_text(content: Any) -> str:

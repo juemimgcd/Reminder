@@ -6,6 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.mneme.agent.events import AgentEvent
 from app.mneme.agent.run_models import TERMINAL_AGENT_RUN_STATUSES, AgentRunRecord, AgentRunStatus
 from app.mneme.agent.run_service import execute_agent_run
 from app.mneme.conf.config import settings
@@ -36,13 +37,30 @@ async def create_agent_run_api(
         run_id=f"run_{uuid.uuid4().hex}",
         session_id=session_id,
         user_id=current_user.id,
+        client_request_id=payload.client_request_id or f"request_{uuid.uuid4().hex}",
         question=payload.question,
         top_k=payload.top_k,
         answer_mode=payload.answer_mode,
     )
-    await agent_run_store.create(record)
-    background_tasks.add_task(execute_agent_run, record.run_id)
-    return success_response(data=record, message="agent run queued")
+    record, created = await agent_run_store.create_or_get_and_enqueue(record)
+    if created:
+        await agent_run_store.append_event(
+            record.run_id,
+            AgentEvent.lifecycle(
+                "queued",
+                loop_index=0,
+                loop_reason="session_fifo",
+            ),
+        )
+    if created or record.status == AgentRunStatus.QUEUED:
+        # Retrying the same client request also re-submits a queued run. The
+        # session lease prevents duplicate execution and repairs a crash that
+        # happened after enqueueing but before BackgroundTasks started.
+        background_tasks.add_task(execute_agent_run, record.run_id)
+    return success_response(
+        data=record,
+        message="agent run queued" if created else "existing agent run returned",
+    )
 
 
 @router.get("/kb/chat/runs/{run_id}")
@@ -57,13 +75,15 @@ async def get_agent_run_api(
 @router.post("/kb/chat/runs/{run_id}/abort")
 async def abort_agent_run_api(
     run_id: str,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
 ):
     record = await _require_owned_run(run_id, current_user.id)
     if record.status not in TERMINAL_AGENT_RUN_STATUSES:
-        await agent_run_store.request_abort(run_id)
-        record.status = AgentRunStatus.ABORTING
-        await agent_run_store.save(record)
+        was_queued = record.started_at is None
+        record = await agent_run_store.transition_to_aborting(run_id) or record
+        if was_queued:
+            background_tasks.add_task(execute_agent_run, run_id)
     return success_response(data=record, message="agent run abort requested")
 
 

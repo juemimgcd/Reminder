@@ -78,7 +78,7 @@ let knowledgeBases: KnowledgeBaseData[] = [
 
 const previewAgentRuns = new Map<
   string,
-  AgentRunData & { payload: { question: string; answer_mode: AnswerMode; top_k?: number } }
+  AgentRunData & { payload: { question: string; answer_mode: AnswerMode; top_k?: number; client_request_id: string } }
 >();
 
 let documents: DocumentListItem[] = [
@@ -717,13 +717,18 @@ const previewApi = {
     createAgentRun(
       _token: string,
       sessionId: string,
-      payload: { question: string; answer_mode: AnswerMode; top_k?: number },
+      payload: { question: string; answer_mode: AnswerMode; top_k?: number; client_request_id: string },
     ): Promise<AgentRunData> {
+      const existing = [...previewAgentRuns.values()].find(
+        (item) => item.session_id === sessionId && item.client_request_id === payload.client_request_id,
+      );
+      if (existing) return delay(existing);
       const createdAt = new Date().toISOString();
       const run = {
         run_id: `run-preview-${Date.now()}`,
         session_id: sessionId,
         user_id: previewUser.id,
+        client_request_id: payload.client_request_id,
         question: payload.question,
         top_k: payload.top_k ?? 4,
         answer_mode: payload.answer_mode,
@@ -733,6 +738,7 @@ const previewApi = {
         completed_at: null,
         error: null,
         last_event_id: null,
+        queue_wait_ms: null,
         payload,
       };
       previewAgentRuns.set(run.run_id, run);

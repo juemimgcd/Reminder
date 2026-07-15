@@ -604,6 +604,8 @@ export function useMnemeWorkspace() {
         question,
         answer_mode: chatAnswerMode.value,
         top_k: 4,
+        client_request_id:
+          globalThis.crypto?.randomUUID?.() ?? `request-${Date.now()}-${Math.random().toString(16).slice(2)}`,
       });
       await api.streamAgentRun(token.value, run.run_id, handleEvent);
     } finally {

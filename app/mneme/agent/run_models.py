@@ -27,6 +27,7 @@ class AgentRunRecord(BaseModel):
     run_id: str
     session_id: str
     user_id: int
+    client_request_id: str = ""
     question: str
     top_k: int
     answer_mode: AnswerMode
@@ -36,6 +37,7 @@ class AgentRunRecord(BaseModel):
     completed_at: datetime | None = None
     error: str | None = None
     last_event_id: str | None = None
+    queue_wait_ms: int | None = None
 
     @classmethod
     def create(
@@ -44,6 +46,7 @@ class AgentRunRecord(BaseModel):
         run_id: str,
         session_id: str,
         user_id: int,
+        client_request_id: str,
         question: str,
         top_k: int,
         answer_mode: AnswerMode,
@@ -52,6 +55,7 @@ class AgentRunRecord(BaseModel):
             run_id=run_id,
             session_id=session_id,
             user_id=user_id,
+            client_request_id=client_request_id,
             question=question,
             top_k=top_k,
             answer_mode=answer_mode,

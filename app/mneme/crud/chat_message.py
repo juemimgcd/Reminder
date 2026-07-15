@@ -14,6 +14,8 @@ async def create_chat_message(
     knowledge_base_pk: int,
     role: str,
     content: str,
+    agent_run_id: str | None = None,
+    sequence_no: int | None = None,
     sources_json: list | None = None,
     citations_json: list | None = None,
     tool_calls_json: list | None = None,
@@ -28,6 +30,8 @@ async def create_chat_message(
         knowledge_base_pk=knowledge_base_pk,
         role=role,
         content=content,
+        agent_run_id=agent_run_id,
+        sequence_no=sequence_no,
         sources_json=sources_json,
         citations_json=citations_json,
         tool_calls_json=tool_calls_json,
@@ -49,7 +53,33 @@ async def list_chat_messages(
     sql = (
         select(ChatMessage)
         .where(ChatMessage.session_id == session_id, ChatMessage.user_id == user_id)
-        .order_by(ChatMessage.created_at.asc(), ChatMessage.id.asc())
+        .order_by(
+            ChatMessage.sequence_no.asc().nullslast(),
+            ChatMessage.created_at.asc(),
+            ChatMessage.id.asc(),
+        )
+    )
+    result = await db.execute(sql)
+    return list(result.scalars().all())
+
+
+async def list_chat_messages_by_agent_run_id(
+    db: AsyncSession,
+    *,
+    agent_run_id: str,
+    user_id: int,
+) -> list[ChatMessage]:
+    sql = (
+        select(ChatMessage)
+        .where(
+            ChatMessage.agent_run_id == agent_run_id,
+            ChatMessage.user_id == user_id,
+        )
+        .order_by(
+            ChatMessage.sequence_no.asc().nullslast(),
+            ChatMessage.created_at.asc(),
+            ChatMessage.id.asc(),
+        )
     )
     result = await db.execute(sql)
     return list(result.scalars().all())

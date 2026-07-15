@@ -15,6 +15,8 @@ class ChatMessageData(BaseModel):
     knowledge_base_id: str
     role: str
     content: str
+    agent_run_id: str | None = None
+    sequence_no: int | None = None
     sources: list[ChatSourceItem] = Field(default_factory=list)
     citations: list[ChatCitationItem] = Field(default_factory=list)
     tool_calls: list[dict] = Field(default_factory=list)
@@ -61,3 +63,4 @@ class ChatSessionMessageRequest(BaseModel):
     question: str = Field(..., min_length=1)
     top_k: int = Field(default=4, ge=1, le=10)
     answer_mode: AnswerMode = "kb_qa"
+    client_request_id: str | None = Field(default=None, min_length=1, max_length=128)
