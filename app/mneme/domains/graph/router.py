@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.mneme.conf.database import get_database
+from app.mneme.conf.database import get_database, get_write_database
 from app.mneme.conf.logging import app_logger
 from app.mneme.crud.memory_entry import (
     list_memory_entries_by_document_id,
@@ -11,12 +11,13 @@ from app.mneme.crud.memory_entry import (
 from app.mneme.crud.document import get_document_by_id, list_documents
 from app.mneme.crud.knowledge_base import get_knowledge_base_by_id, list_knowledge_bases_by_user_id
 from app.mneme.models.user import User
-from app.mneme.schemas.graph_admin import GraphProjectionRebuildData
+from app.mneme.schemas.task_record import TaskRecordData
 from app.mneme.schemas.graph import GraphData
 from app.mneme.schemas.graph_rag import GraphRagDecisionData
-from app.mneme.domains.graph.admin import (
-    rebuild_graph_projection_for_knowledge_base,
-    rebuild_graph_projection_for_user,
+from app.mneme.domains.tasks.maintenance import (
+    GRAPH_REBUILD_KNOWLEDGE_BASE,
+    GRAPH_REBUILD_USER,
+    submit_maintenance_task,
 )
 from app.mneme.domains.graph.query import (
     build_document_graph_payload_from_neo4j,
@@ -40,23 +41,22 @@ router = APIRouter(prefix="/graph", tags=["graph"])
 @router.post("/rebuild")
 async def rebuild_user_graph_projection_api(
         current_user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_database),
+        db: AsyncSession = Depends(get_write_database),
 ):
     app_logger.bind(module="graph_router").info(
         f"graph rebuild request scope=user current_user_id={current_user.id}"
     )
-    result = await rebuild_graph_projection_for_user(
+    task = await submit_maintenance_task(
         db,
-        current_user=current_user,
+        task_type=GRAPH_REBUILD_USER,
+        target_id=str(current_user.id),
     )
     app_logger.bind(module="graph_router").info(
-        f"graph rebuild success scope=user current_user_id={current_user.id} "
-        f"knowledge_base_count={result.get('knowledge_base_count')} "
-        f"document_count={result['document_count']} memory_entry_count={result['memory_entry_count']}"
+        f"graph rebuild queued scope=user current_user_id={current_user.id} task_id={task.id}"
     )
     return success_response(
-        data=GraphProjectionRebuildData(**result),
-        message="graph projection rebuilt",
+        data=TaskRecordData.model_validate(task),
+        message="graph projection rebuild queued",
     )
 
 
@@ -356,23 +356,27 @@ async def get_knowledge_base_graph_rag(
 async def rebuild_knowledge_base_graph_projection_api(
         knowledge_base_id: str,
         current_user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_database),
+        db: AsyncSession = Depends(get_write_database),
 ):
     app_logger.bind(module="graph_router").info(
         f"graph rebuild request scope=knowledge_base current_user_id={current_user.id} "
         f"knowledge_base_id={knowledge_base_id}"
     )
-    result = await rebuild_graph_projection_for_knowledge_base(
+    knowledge_base = await get_knowledge_base_by_id(db, knowledge_base_id=knowledge_base_id)
+    if knowledge_base is None:
+        raise BusinessException(message="knowledge base not found", code=4042, status_code=404)
+    if knowledge_base.user_id != current_user.id:
+        raise BusinessException(message="knowledge base does not belong to current user", code=4007, status_code=403)
+    task = await submit_maintenance_task(
         db,
-        current_user=current_user,
-        knowledge_base_id=knowledge_base_id,
+        task_type=GRAPH_REBUILD_KNOWLEDGE_BASE,
+        target_id=knowledge_base_id,
     )
     app_logger.bind(module="graph_router").info(
-        f"graph rebuild success scope=knowledge_base current_user_id={current_user.id} "
-        f"knowledge_base_id={knowledge_base_id} document_count={result['document_count']} "
-        f"memory_entry_count={result['memory_entry_count']}"
+        f"graph rebuild queued scope=knowledge_base current_user_id={current_user.id} "
+        f"knowledge_base_id={knowledge_base_id} task_id={task.id}"
     )
     return success_response(
-        data=GraphProjectionRebuildData(**result),
-        message="graph projection rebuilt",
+        data=TaskRecordData.model_validate(task),
+        message="graph projection rebuild queued",
     )

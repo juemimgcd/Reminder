@@ -11,13 +11,15 @@ from app.mneme.conf.database import open_read_session, open_write_session
 from app.mneme.conf.logging import log_event
 from app.mneme.crud.chunk import list_chunks_by_document_id
 from app.mneme.crud.document import list_documents
-from app.mneme.crud.knowledge_base import get_knowledge_base_by_id
 from app.mneme.crud.memory_entry import (
     list_memory_entries_by_document_id,
     list_memory_entries_by_knowledge_base_id,
 )
-from app.mneme.crud.user import get_user_by_id
-from app.mneme.domains.graph.projection import sync_document_memory_projection
+from app.mneme.domains.tasks.outbox import (
+    BACKEND_NEO4J,
+    EVENT_DOCUMENT_GRAPH_SYNC,
+    enqueue_outbox_event,
+)
 from app.mneme.domains.memory.identity import prepare_memory_entry_payload
 from app.mneme.domains.memory.projection import rebuild_memory_governance_projection
 from app.mneme.models.document import Document
@@ -384,21 +386,14 @@ async def replace_memory_entries_for_document(
             entries=entries,
         )
 
-        knowledge_base = await get_knowledge_base_by_id(
-            db,
-            knowledge_base_id=document.knowledge_base_id,
+        await enqueue_outbox_event(
+            db=db,
+            event_type=EVENT_DOCUMENT_GRAPH_SYNC,
+            aggregate_type="document",
+            aggregate_id=document.id,
+            target_backend=BACKEND_NEO4J,
+            payload={"document_id": document.id},
+            operation_id=f"memory-rebuild:{uuid.uuid4().hex}",
         )
-        user = await get_user_by_id(
-            db,
-            user_id=document.user_id,
-        )
-        if knowledge_base and user:
-            await sync_document_memory_projection(
-                db,
-                user=user,
-                knowledge_base=knowledge_base,
-                document=document,
-                memory_entries=persisted_entries,
-            )
 
         return retired_entry_count, persisted_entries

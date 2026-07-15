@@ -13,6 +13,7 @@ async def create_chat_session(
     knowledge_base_pk: int | None,
     title: str | None,
     answer_mode: str = "kb_qa",
+    system_managed: bool = False,
 ) -> ChatSession:
     session = ChatSession(
         id=session_id,
@@ -21,6 +22,7 @@ async def create_chat_session(
         knowledge_base_pk=knowledge_base_pk,
         title=title,
         answer_mode=answer_mode,
+        system_managed=system_managed,
     )
     db.add(session)
     await db.flush()
@@ -49,6 +51,7 @@ async def list_chat_sessions(
     include_archived: bool = False,
 ) -> list[ChatSession]:
     sql = select(ChatSession).where(ChatSession.user_id == user_id)
+    sql = sql.where(ChatSession.system_managed.is_(False))
     if knowledge_base_id:
         sql = sql.where(ChatSession.knowledge_base_id == knowledge_base_id)
     if not include_archived:

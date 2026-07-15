@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.mneme.models.base import Base
@@ -51,6 +51,9 @@ class ChatSession(Base):
     )
     context_summary_through_message_id: Mapped[str | None] = mapped_column(
         String(64), nullable=True, comment="last message represented by context summary"
+    )
+    system_managed: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false", comment="hidden automation session"
     )
 
     def __repr__(self) -> str:

@@ -10,13 +10,15 @@ from app.mneme.crud.memory_entry import (
     list_memory_entries_by_knowledge_base_id,
 )
 from app.mneme.models.user import User
-from app.mneme.schemas.memory_library import MemoryLibraryData, MemoryRebuildData
+from app.mneme.schemas.memory_library import MemoryLibraryData
 from app.mneme.schemas.memory_governance import MemoryGovernanceData
 from app.mneme.domains.memory.governance import build_memory_governance_view
-from app.mneme.domains.memory.service import build_memory_library, rebuild_memory_entries_for_knowledge_base
+from app.mneme.domains.memory.service import build_memory_library
 from app.mneme.utils.auth import get_current_user
 from app.mneme.utils.exceptions import BusinessException
 from app.mneme.utils.response import success_response
+from app.mneme.domains.tasks.maintenance import MEMORY_REBUILD_KNOWLEDGE_BASE, submit_maintenance_task
+from app.mneme.schemas.task_record import TaskRecordData
 
 
 router = APIRouter(prefix="/memory", tags=["memory"])
@@ -112,17 +114,17 @@ async def rebuild_memory_library(
     if knowledge_base.user_id != current_user.id:
         raise BusinessException(message="knowledge base does not belong to current user", code=4007)
 
-    result = await rebuild_memory_entries_for_knowledge_base(
-        knowledge_base_pk=knowledge_base.pk,
-        knowledge_base_id=knowledge_base.id,
+    task = await submit_maintenance_task(
+        db,
+        task_type=MEMORY_REBUILD_KNOWLEDGE_BASE,
+        target_id=knowledge_base.id,
     )
     app_logger.bind(module="memory_router").info(
-        f"memory rebuild success knowledge_base_id={knowledge_base_id} "
-        f"processed_document_count={result['processed_document_count']} entry_count={result['entry_count']}"
+        f"memory rebuild queued knowledge_base_id={knowledge_base_id} task_id={task.id}"
     )
     return success_response(
-        data=MemoryRebuildData(**result),
-        message="memory rebuild completed",
+        data=TaskRecordData.model_validate(task),
+        message="memory rebuild queued",
     )
 
 

@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mneme.conf.database import get_database, get_write_database
 from app.mneme.crud.document import get_document_by_id
+from app.mneme.crud.knowledge_base import get_knowledge_base_by_id
 from app.mneme.crud.task_record import get_task_record_by_id
 from app.mneme.models.user import User
 from app.mneme.schemas.task_record import TaskActionData, TaskRecordData
@@ -33,6 +34,15 @@ async def get_task_status(
         )
         if not document:
             raise BusinessException(message="you do not have access to this task", code=4007, status_code=403)
+    elif task.task_type == "graph_rebuild_user":
+        if task.target_id != str(current_user.id):
+            raise BusinessException(message="you do not have access to this task", code=4007, status_code=403)
+    elif task.task_type in {"graph_rebuild_knowledge_base", "memory_rebuild_knowledge_base"}:
+        knowledge_base = await get_knowledge_base_by_id(db, task.target_id)
+        if knowledge_base is None or knowledge_base.user_id != current_user.id:
+            raise BusinessException(message="you do not have access to this task", code=4007, status_code=403)
+    else:
+        raise BusinessException(message="unsupported task type", code=4010, status_code=400)
 
     data = TaskRecordData.model_validate(task)
     return success_response(data=data)

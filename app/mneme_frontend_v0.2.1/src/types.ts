@@ -366,6 +366,23 @@ export interface AgentRunData {
   queue_wait_ms: number | null;
 }
 
+export interface NotificationData {
+  id: string;
+  kind: string;
+  title: string;
+  body: string;
+  action_url: string | null;
+  source_run_id: string | null;
+  metadata_json: Record<string, unknown>;
+  read_at: string | null;
+  created_at: string;
+}
+
+export interface NotificationListData {
+  items: NotificationData[];
+  unread_count: number;
+}
+
 export interface GraphNodeData {
   id: string;
   entity_id: string;

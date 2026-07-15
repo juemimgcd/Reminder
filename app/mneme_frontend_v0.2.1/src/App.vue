@@ -3,6 +3,7 @@ import type { Component } from "vue";
 import { computed } from "vue";
 import {
   BookOpen,
+  Bell,
   BrainCircuit,
   Brain,
   FlaskConical,
@@ -134,6 +135,31 @@ function openCreateCommand() {
       </ResourceSidebar>
 
       <section class="mneme-shell__main">
+        <div class="notification-center">
+          <UiIconButton
+            data-testid="notification-center-toggle"
+            :label="workspace.notificationUnreadCount.value ? `${workspace.notificationUnreadCount.value} unread notifications` : 'Notifications'"
+            @click="workspace.toggleNotificationPanel"
+          >
+            <Bell />
+            <span v-if="workspace.notificationUnreadCount.value" class="notification-badge">{{ workspace.notificationUnreadCount.value > 9 ? "9+" : workspace.notificationUnreadCount.value }}</span>
+          </UiIconButton>
+          <section v-if="workspace.notificationPanelOpen.value" data-testid="notification-center-panel" class="notification-panel" aria-label="Notifications">
+            <header><strong>Notifications</strong><button type="button" @click="workspace.refreshNotifications">Refresh</button></header>
+            <p v-if="!workspace.notifications.value.length" class="notification-empty">You are all caught up.</p>
+            <button
+              v-for="notification in workspace.notifications.value"
+              :key="notification.id"
+              type="button"
+              class="notification-item"
+              :class="{ unread: !notification.read_at }"
+              @click="workspace.readNotification(notification.id)"
+            >
+              <span><strong>{{ notification.title }}</strong><small>{{ formatDate(notification.created_at) }}</small></span>
+              <p>{{ notification.body }}</p>
+            </button>
+          </section>
+        </div>
         <header v-if="workspace.view.value !== 'graph' && workspace.view.value !== 'ai'" data-testid="sanctuary-topbar" class="workspace-topbar">
           <div data-testid="sanctuary-active-view"><small>{{ currentViewItem.hint }}</small><h2>{{ currentViewItem.label }}</h2></div>
           <div><span>{{ activeHealthLabel }}</span><UiIconButton label="Refresh panels" @click="workspace.loadKnowledgeBasePanels"><RefreshCw /></UiIconButton><UiIconButton label="Log out" @click="workspace.logout"><LogOut /></UiIconButton></div>
@@ -223,6 +249,21 @@ function openCreateCommand() {
 .workspace-topbar > div:last-child > span { padding: 0.25rem 0.4rem; color: var(--text-tertiary); border: 1px solid var(--border-muted); border-radius: 0.3rem; font: 0.62rem var(--font-mono); }
 .workspace-banner { width: 100%; min-width: 0; flex: 0 0 auto; margin: 0; padding: 0.55rem 1rem; color: var(--text-secondary); background: var(--accent-soft); border-width: 0 0 1px; border-radius: 0; font-size: 0.72rem; }
 .workspace-content { min-width: 0; min-height: 0; flex: 1; overflow: auto; }
+.notification-center { position: absolute; z-index: 40; top: 0.62rem; right: 5.9rem; }
+.notification-center :deep(.ui-icon-button) { position: relative; background: var(--bg-panel); }
+.notification-badge { position: absolute; top: -0.28rem; right: -0.28rem; display: grid; min-width: 1rem; height: 1rem; place-items: center; padding: 0 0.18rem; color: white; background: var(--danger); border: 2px solid var(--bg-canvas); border-radius: 999px; font: 0.56rem var(--font-mono); }
+.notification-panel { position: absolute; top: 2.55rem; right: 0; width: min(22rem, calc(100vw - 1.5rem)); max-height: min(31rem, calc(100vh - 5rem)); overflow: auto; padding: 0.45rem; background: var(--bg-panel); border: 1px solid var(--border-muted); border-radius: 0.55rem; box-shadow: var(--shadow-float); }
+.notification-panel > header { display: flex; align-items: center; justify-content: space-between; padding: 0.45rem 0.55rem 0.6rem; border-bottom: 1px solid var(--border-muted); }
+.notification-panel > header strong { font-size: 0.78rem; }
+.notification-panel > header button { color: var(--text-tertiary); background: transparent; border: 0; font-size: 0.68rem; }
+.notification-item { display: block; width: 100%; margin-top: 0.3rem; padding: 0.65rem; color: var(--text-secondary); text-align: left; background: transparent; border: 0; border-radius: 0.4rem; }
+.notification-item:hover, .notification-item:focus-visible { color: var(--text-primary); background: var(--bg-elevated); outline: none; }
+.notification-item.unread { background: var(--accent-soft); box-shadow: inset 2px 0 var(--accent); }
+.notification-item span { display: flex; align-items: baseline; justify-content: space-between; gap: 0.8rem; }
+.notification-item strong { color: var(--text-primary); font-size: 0.75rem; }
+.notification-item small { color: var(--text-tertiary); font: 0.58rem var(--font-mono); white-space: nowrap; }
+.notification-item p, .notification-empty { margin: 0.35rem 0 0; color: var(--text-secondary); font-size: 0.68rem; line-height: 1.45; }
+.notification-empty { padding: 1rem; text-align: center; }
 .workspace-loading { display: grid; width: min(100%, 900px); gap: 0.9rem; margin: 0 auto; padding: 2rem; }
-@media (max-width: 767px) { .workspace-topbar { padding-inline: 0.75rem; } .workspace-topbar > div:last-child > span { display: none; } }
+@media (max-width: 767px) { .workspace-topbar { padding-inline: 0.75rem; } .workspace-topbar > div:last-child > span { display: none; } .notification-center { right: 3.45rem; } }
 </style>

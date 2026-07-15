@@ -27,7 +27,12 @@ from app.mneme.crud.outbox_event import (
     update_outbox_event_status,
 )
 from app.mneme.crud.user import get_user_by_id
-from app.mneme.domains.graph.projection import sync_document_memory_projection
+from app.mneme.domains.graph.projection import (
+    sync_document_memory_projection,
+    sync_document_projection,
+    sync_knowledge_base_projection,
+    sync_user_projection,
+)
 from app.mneme.domains.tasks.outbox_http import apply_memory_agent_http_event
 from app.mneme.models.chunk import Chunk
 from app.mneme.models.document import Document
@@ -43,6 +48,7 @@ OUTBOX_DEAD_LETTER = "dead_letter"
 
 EVENT_DOCUMENT_VECTOR_REINDEX = "document.vector.reindex"
 EVENT_DOCUMENT_GRAPH_SYNC = "document.graph.sync"
+EVENT_GRAPH_PROJECTION_UPSERT = "graph.projection.upsert"
 
 BACKEND_MILVUS = "milvus"
 BACKEND_NEO4J = "neo4j"
@@ -226,6 +232,26 @@ async def enqueue_document_graph_sync_event(
         payload={
             "document_id": document_id,
         },
+        operation_id=operation_id,
+    )
+
+
+async def enqueue_graph_projection_upsert(
+    db: AsyncSession,
+    *,
+    aggregate_type: str,
+    aggregate_id: str,
+    operation_id: str,
+) -> OutboxEvent:
+    if aggregate_type not in {"user", "knowledge_base", "document"}:
+        raise ValueError(f"unsupported graph projection aggregate: {aggregate_type}")
+    return await enqueue_outbox_event(
+        db=db,
+        event_type=EVENT_GRAPH_PROJECTION_UPSERT,
+        aggregate_type=aggregate_type,
+        aggregate_id=aggregate_id,
+        target_backend=BACKEND_NEO4J,
+        payload={"aggregate_type": aggregate_type, "aggregate_id": aggregate_id},
         operation_id=operation_id,
     )
 
@@ -643,13 +669,64 @@ async def apply_graph_sync_event(event: OutboxEvent) -> dict[str, int | str]:
     }
 
 
+async def apply_graph_projection_upsert(event: OutboxEvent) -> dict[str, str | bool]:
+    aggregate_type = str(event.payload.get("aggregate_type") or "")
+    aggregate_id = str(event.payload.get("aggregate_id") or "")
+    if aggregate_type not in {"user", "knowledge_base", "document"} or not aggregate_id:
+        raise BusinessException(message="invalid graph projection outbox payload", code=5023, status_code=500)
+
+    async with open_read_session() as db:
+        if aggregate_type == "user":
+            user = await get_user_by_id(db, user_id=int(aggregate_id))
+            if user is None:
+                return {"aggregate_type": aggregate_type, "aggregate_id": aggregate_id, "skipped": True}
+            await sync_user_projection(user=user, raise_on_error=True)
+        elif aggregate_type == "knowledge_base":
+            knowledge_base = await get_knowledge_base_by_id(db, knowledge_base_id=aggregate_id)
+            if knowledge_base is None:
+                return {"aggregate_type": aggregate_type, "aggregate_id": aggregate_id, "skipped": True}
+            user = await get_user_by_id(db, user_id=knowledge_base.user_id)
+            if user is None:
+                return {"aggregate_type": aggregate_type, "aggregate_id": aggregate_id, "skipped": True}
+            await sync_knowledge_base_projection(
+                user=user,
+                knowledge_base=knowledge_base,
+                raise_on_error=True,
+            )
+        else:
+            document = await get_document_by_id(db, document_id=aggregate_id)
+            if document is None:
+                return {"aggregate_type": aggregate_type, "aggregate_id": aggregate_id, "skipped": True}
+            knowledge_base = await get_knowledge_base_by_id(db, knowledge_base_id=document.knowledge_base_id)
+            user = await get_user_by_id(db, user_id=document.user_id)
+            if knowledge_base is None or user is None:
+                return {"aggregate_type": aggregate_type, "aggregate_id": aggregate_id, "skipped": True}
+            await sync_document_projection(
+                user=user,
+                knowledge_base=knowledge_base,
+                document=document,
+                raise_on_error=True,
+            )
+    return {"aggregate_type": aggregate_type, "aggregate_id": aggregate_id, "skipped": False}
+
+
 async def apply_outbox_event(event: OutboxEvent) -> dict[str, Any]:
+    if event.target_backend == "in_app":
+        from app.mneme.domains.automation.outbox import apply_in_app_notification_event
+
+        return await apply_in_app_notification_event(event)
+    if event.target_backend == "internal_hook":
+        from app.mneme.domains.automation.outbox import apply_internal_hook_event
+
+        return await apply_internal_hook_event(event)
     if event.target_backend == settings.MEMORY_AGENT_OUTBOX_TARGET:
         return await apply_memory_agent_http_event(event)
     if event.event_type == EVENT_DOCUMENT_VECTOR_REINDEX:
         return await apply_vector_reindex_event(event)
     if event.event_type == EVENT_DOCUMENT_GRAPH_SYNC:
         return await apply_graph_sync_event(event)
+    if event.event_type == EVENT_GRAPH_PROJECTION_UPSERT:
+        return await apply_graph_projection_upsert(event)
     raise BusinessException(message=f"unsupported outbox event type: {event.event_type}", code=5020, status_code=500)
 
 

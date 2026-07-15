@@ -25,6 +25,7 @@ import type {
   MemoryGovernanceData,
   MemoryLibraryData,
   Neo4jHealthData,
+  NotificationData,
   PersonalProfileResult,
   ProductionReadinessReportData,
   ServiceHealthData,
@@ -89,10 +90,15 @@ export function useMnemeWorkspace() {
   const chatSessionFilter = ref("");
   const chatAnswerMode = ref<AnswerMode>("kb_qa");
   const memoryPendingCount = ref(0);
+  const notifications = ref<NotificationData[]>([]);
+  const notificationUnreadCount = ref(0);
+  const notificationPanelOpen = ref(false);
   const chatPending = ref(false);
   const chatError = ref<{ message: string; messageId: string | null; retryable: boolean } | null>(null);
   const indexTaskMonitors = new Map<string, AbortController>();
+  const maintenanceTaskMonitors = new Set<AbortController>();
   let documentPreviewGeneration = 0;
+  let notificationPoll: ReturnType<typeof setInterval> | null = null;
 
   const loginForm = ref({ username: "", password: "" });
   const registerForm = ref({ username: "", displayName: "", password: "", confirmPassword: "" });
@@ -238,6 +244,7 @@ export function useMnemeWorkspace() {
         safeStorageSet(SELECTED_KB_KEY, selectedKnowledgeBaseId.value);
       }
       void refreshMemoryPendingCount();
+      void refreshNotifications();
 
       void ensureViewLoaded(view.value, true);
 
@@ -402,6 +409,28 @@ export function useMnemeWorkspace() {
       }, milliseconds);
       signal.addEventListener("abort", onAbort, { once: true });
     });
+  }
+
+  async function waitForMaintenanceTask(taskId: string) {
+    if (!token.value) throw new Error("Authentication is required to monitor this task.");
+    const controller = new AbortController();
+    maintenanceTaskMonitors.add(controller);
+    const maximumPolls = IS_PREVIEW_MODE ? 2 : 240;
+    const interval = IS_PREVIEW_MODE ? 0 : 1_000;
+    try {
+      for (let attempt = 0; attempt < maximumPolls; attempt += 1) {
+        const task = await api.getTask(taskId, token.value, { signal: controller.signal });
+        const status = normalizedTaskStatus(task.status);
+        if (status === "succeeded") return task;
+        if (status === "failed" || status === "cancelled") {
+          throw new Error(task.error_message || `Maintenance task ${status}.`);
+        }
+        await pollDelay(interval, controller.signal);
+      }
+      throw new Error("Maintenance task is still running. Check the task status later.");
+    } finally {
+      maintenanceTaskMonitors.delete(controller);
+    }
   }
 
   async function monitorIndexTask(taskId: string) {
@@ -739,7 +768,9 @@ export function useMnemeWorkspace() {
     syncBusyTarget.value = "graph";
     try {
       const result = await api.rebuildKnowledgeBaseGraph(token.value, activeKnowledgeBaseId.value);
-      syncStatus.value = `Graph rebuild ${result.status} for ${selectedKnowledgeBase.value?.name ?? activeKnowledgeBaseId.value}`;
+      syncStatus.value = `Graph rebuild queued for ${selectedKnowledgeBase.value?.name ?? activeKnowledgeBaseId.value}`;
+      await waitForMaintenanceTask(result.id);
+      syncStatus.value = `Graph rebuild completed for ${selectedKnowledgeBase.value?.name ?? activeKnowledgeBaseId.value}`;
       graphData.value = await api.getKnowledgeBaseGraph(token.value, activeKnowledgeBaseId.value, {
         include_memory: true,
         include_relationships: true,
@@ -756,7 +787,9 @@ export function useMnemeWorkspace() {
     syncBusyTarget.value = "memory";
     try {
       const result = await api.rebuildMemory(token.value, activeKnowledgeBaseId.value);
-      syncStatus.value = `Memory rebuild processed ${result.processed_document_count} documents and ${result.entry_count} entries`;
+      syncStatus.value = "Memory rebuild queued";
+      await waitForMaintenanceTask(result.id);
+      syncStatus.value = "Memory rebuild completed";
       memoryLibrary.value = await api.memoryLibrary(token.value, activeKnowledgeBaseId.value);
       memoryGovernance.value = await api.memoryGovernance(token.value, activeKnowledgeBaseId.value);
     } finally {
@@ -794,6 +827,29 @@ export function useMnemeWorkspace() {
     banner.value = "";
   }
 
+  async function refreshNotifications() {
+    if (!token.value) return;
+    try {
+      const data = await api.listNotifications(token.value);
+      notifications.value = data.items;
+      notificationUnreadCount.value = data.unread_count;
+    } catch {
+      // Notifications are best-effort and should not block workspace loading.
+    }
+  }
+
+  function toggleNotificationPanel() {
+    notificationPanelOpen.value = !notificationPanelOpen.value;
+    if (notificationPanelOpen.value) void refreshNotifications();
+  }
+
+  async function readNotification(notificationId: string) {
+    if (!token.value) return;
+    const updated = await api.markNotificationRead(token.value, notificationId);
+    notifications.value = notifications.value.map((item) => item.id === updated.id ? updated : item);
+    notificationUnreadCount.value = Math.max(0, notificationUnreadCount.value - 1);
+  }
+
   function logout() {
     cancelIndexTaskMonitors();
     documentActionStatus.value = "";
@@ -801,12 +857,21 @@ export function useMnemeWorkspace() {
     user.value = null;
     authStatus.value = "guest";
     safeStorageRemove(TOKEN_KEY);
+    notificationPanelOpen.value = false;
+    notifications.value = [];
+    notificationUnreadCount.value = 0;
   }
 
   onMounted(() => {
     void authenticateWithToken();
+    notificationPoll = setInterval(() => void refreshNotifications(), 60_000);
   });
-  onBeforeUnmount(cancelIndexTaskMonitors);
+  onBeforeUnmount(() => {
+    cancelIndexTaskMonitors();
+    for (const controller of maintenanceTaskMonitors) controller.abort();
+    maintenanceTaskMonitors.clear();
+    if (notificationPoll) clearInterval(notificationPoll);
+  });
 
   watch([isAuthenticated, view, activeKnowledgeBaseId], ([authenticated]) => {
     if (authenticated) void ensureViewLoaded(view.value);
@@ -838,6 +903,9 @@ export function useMnemeWorkspace() {
     chatQuestion,
     chatAnswerMode,
     memoryPendingCount,
+    notifications,
+    notificationUnreadCount,
+    notificationPanelOpen,
     chatPending,
     chatError,
     chatResult,
@@ -893,6 +961,9 @@ export function useMnemeWorkspace() {
     regenerateChatMessage,
     retryFailedChatMessage,
     refreshMemoryPendingCount,
+    refreshNotifications,
+    toggleNotificationPanel,
+    readNotification,
     selectChatAnswerMode,
     serviceHealth,
     setAuthMode,

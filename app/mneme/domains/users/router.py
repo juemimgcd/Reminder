@@ -13,7 +13,7 @@ from app.mneme.schemas.knowledge_base import (
     KnowledgeBaseDeleteData,
     KnowledgeBaseListData,
 )
-from app.mneme.domains.graph.projection import sync_knowledge_base_projection
+from app.mneme.domains.tasks.outbox import enqueue_graph_projection_upsert
 from app.mneme.domains.documents.resources import delete_knowledge_base_resources
 from app.mneme.utils.auth import get_current_user
 from app.mneme.utils.exceptions import BusinessException
@@ -48,7 +48,12 @@ async def create_knowledge_base_api(
         description=payload.description,
         is_default=False,
     )
-    await sync_knowledge_base_projection(user=current_user, knowledge_base=knowledge_base)
+    await enqueue_graph_projection_upsert(
+        db,
+        aggregate_type="knowledge_base",
+        aggregate_id=knowledge_base.id,
+        operation_id=knowledge_base.created_at.isoformat(),
+    )
     data = KnowledgeBaseData.model_validate(knowledge_base)
     return success_response(data=data, message="knowledge base created")
 

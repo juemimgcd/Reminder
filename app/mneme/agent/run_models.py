@@ -34,6 +34,10 @@ class AgentRunRecord(BaseModel):
     top_k: int
     answer_mode: AnswerMode
     status: AgentRunStatus = AgentRunStatus.QUEUED
+    trigger_type: str = "user"
+    trigger_id: str | None = None
+    attempt_count: int = 0
+    max_attempts: int = 3
     created_at: datetime
     started_at: datetime | None = None
     completed_at: datetime | None = None
@@ -52,6 +56,9 @@ class AgentRunRecord(BaseModel):
         question: str,
         top_k: int,
         answer_mode: AnswerMode,
+        trigger_type: str = "user",
+        trigger_id: str | None = None,
+        max_attempts: int = 3,
     ) -> "AgentRunRecord":
         return cls(
             run_id=run_id,
@@ -62,6 +69,9 @@ class AgentRunRecord(BaseModel):
             question=question,
             top_k=top_k,
             answer_mode=answer_mode,
+            trigger_type=trigger_type,
+            trigger_id=trigger_id,
+            max_attempts=max_attempts,
             created_at=datetime.now(timezone.utc),
         )
 

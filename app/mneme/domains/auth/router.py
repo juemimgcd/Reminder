@@ -8,7 +8,7 @@ from app.mneme.crud.knowledge_base import get_or_create_default_knowledge_base
 from app.mneme.crud.user import get_user_by_username
 from app.mneme.models.user import User
 from app.mneme.schemas.auth import LoginRequest, RegisterRequest, UserAuthResponse
-from app.mneme.domains.graph.projection import sync_knowledge_base_projection, sync_user_projection
+from app.mneme.domains.tasks.outbox import enqueue_graph_projection_upsert
 from app.mneme.schemas.users import UserPublic
 from app.mneme.utils.auth import get_current_user
 from app.mneme.utils.response import success_response
@@ -43,8 +43,12 @@ async def register_user(
         db,
         user_id=account.id,
     )
-    await sync_user_projection(user=account)
-    await sync_knowledge_base_projection(user=account, knowledge_base=knowledge_base)
+    await enqueue_graph_projection_upsert(
+        db,
+        aggregate_type="knowledge_base",
+        aggregate_id=knowledge_base.id,
+        operation_id=knowledge_base.created_at.isoformat(),
+    )
 
     data = UserPublic.model_validate(account)
     return success_response(data=data, message="register success")
@@ -87,7 +91,12 @@ async def login_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
         )
-    await sync_user_projection(user=user)
+    await enqueue_graph_projection_upsert(
+        db,
+        aggregate_type="user",
+        aggregate_id=str(user.id),
+        operation_id=user.last_login_at.isoformat(),
+    )
 
     token = await create_access_token(subject=str(user.id))
 

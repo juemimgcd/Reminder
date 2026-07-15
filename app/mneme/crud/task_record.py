@@ -1,4 +1,6 @@
-from sqlalchemy import delete, select
+from datetime import datetime
+
+from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mneme.models.task_record import TaskRecord
@@ -48,6 +50,53 @@ async def get_task_record_by_id(
         select(TaskRecord).where(TaskRecord.id == task_id)
     )
     return result.scalar_one_or_none()
+
+
+async def claim_maintenance_task(db: AsyncSession, *, task_id: str) -> TaskRecord | None:
+    task = await db.scalar(
+        select(TaskRecord).where(TaskRecord.id == task_id).with_for_update()
+    )
+    if task is None or task.queue_name != "maintenance" or task.status not in {"pending", "retrying"}:
+        return None
+    task.status = "running"
+    task.progress_stage = "executing"
+    task.attempt_count += 1
+    task.error_message = None
+    await db.flush()
+    return task
+
+
+async def list_recoverable_maintenance_tasks(
+    db: AsyncSession,
+    *,
+    pending_before: datetime,
+    running_before: datetime,
+    limit: int,
+) -> list[TaskRecord]:
+    result = await db.execute(
+        select(TaskRecord)
+        .where(
+            TaskRecord.queue_name == "maintenance",
+            or_(
+                (TaskRecord.status == "pending") & (TaskRecord.updated_at < pending_before),
+                (TaskRecord.status == "running") & (TaskRecord.updated_at < running_before),
+            ),
+        )
+        .order_by(TaskRecord.updated_at)
+        .limit(limit)
+        .with_for_update(skip_locked=True)
+    )
+    rows = list(result.scalars().all())
+    for row in rows:
+        if row.attempt_count >= row.max_attempts:
+            row.status = "failed"
+            row.progress_stage = None
+            row.error_message = "maintenance task exceeded its recovery attempt limit"
+        else:
+            row.status = "pending"
+            row.progress_stage = "recovered"
+    await db.flush()
+    return rows
 
 
 

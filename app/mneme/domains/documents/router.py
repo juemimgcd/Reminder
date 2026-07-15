@@ -38,7 +38,7 @@ from app.mneme.domains.documents.content_service import (
 from app.mneme.domains.documents.service import submit_document_index_task
 from app.mneme.domains.documents.resources import delete_document_resources
 from app.mneme.domains.documents.upload_service import store_uploaded_document
-from app.mneme.domains.graph.projection import sync_document_projection
+from app.mneme.domains.tasks.outbox import enqueue_graph_projection_upsert
 from app.mneme.utils.auth import get_current_user
 from app.mneme.utils.exceptions import BusinessException
 from app.mneme.utils.response import success_response
@@ -137,19 +137,20 @@ async def upload_document(
             )
             if document is None:
                 raise RuntimeError("created document could not be resolved")
-            await sync_document_projection(
-                user=current_user,
-                knowledge_base=knowledge_base,
-                document=document,
+            await enqueue_graph_projection_upsert(
+                db,
+                aggregate_type="document",
+                aggregate_id=document.id,
+                operation_id=f"upload:{upload_data.version_group_id}:{upload_data.version_number}",
             )
     except Exception as exc:
-        if document is not None:
+        if document is not None and getattr(document, "file_path", None):
             Path(document.file_path).unlink(missing_ok=True)
         app_logger.bind(module="documents_router").exception(
-            f"upload projection failed user_id={resolved_user_id} knowledge_base_id={knowledge_base.id} "
+            f"upload outbox enqueue failed user_id={resolved_user_id} knowledge_base_id={knowledge_base.id} "
             f"document_id={upload_data.document_id} error={exc}"
         )
-        raise BusinessException(message="upload projection failed", code=5001, status_code=500) from exc
+        raise BusinessException(message="upload async projection enqueue failed", code=5001, status_code=500) from exc
 
     app_logger.bind(module="documents_router").info(
         f"upload success disposition={upload_data.disposition} document_id={upload_data.document_id} "
