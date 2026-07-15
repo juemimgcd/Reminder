@@ -116,7 +116,6 @@ async def create_chat_message_api(
         answer_mode=payload.answer_mode,
         model_config_id=payload.model_config_id,
         retry_message_id=payload.retry_message_id,
-        expected_knowledge_base_id=None,
     )
     return success_response(
         data=ChatSessionDetailData(
