@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from services.memory_agent.api.dependencies import require_event_service_token
 from services.memory_agent.contracts.events import AgentEventEnvelope, EventReceipt
 from services.memory_agent.database import get_db
-from services.memory_agent.observability.context import observation_context
+from services.memory_agent.observability.context import observation_context, safe_log
 from services.memory_agent.repositories.inbox import accept_event
 from services.memory_agent.tasks.events import process_inbox_event_task
 
@@ -22,7 +22,8 @@ async def schedule_accepted_event(event_id: str) -> None:
     try:
         process_inbox_event_task.delay(event_id=event_id)
     except Exception:
-        logger.exception("Failed to enqueue accepted inbox event %s", event_id)
+        with observation_context(event_id=event_id):
+            safe_log(logger, logging.ERROR, "event_enqueue_failed")
 
 
 def get_event_scheduler() -> EventScheduler:

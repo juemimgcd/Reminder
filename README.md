@@ -280,6 +280,11 @@ age/dead-letter diagnostics are available with:
 python -m app.mneme.cli.memory_agent_ops
 ```
 
+Outbox age uses immutable `enqueued_at`, not the retryable `next_attempt_at`. The initial
+`20260715_03` legacy backfill is necessarily approximate when an original enqueue timestamp
+was not recoverable. Agent API, Uvicorn error, and Celery worker logs all share the same strict
+event/field whitelist; Uvicorn access logs are disabled to prevent query-string disclosure.
+
 前端类型检查：
 
 ```bash

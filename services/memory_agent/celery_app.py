@@ -1,6 +1,8 @@
 from celery import Celery
+from celery.signals import after_setup_logger, after_setup_task_logger, worker_process_init
 
 from services.memory_agent.config import settings
+from services.memory_agent.logging import configure_logger, configure_logging
 
 celery_app = Celery(
     "memory_agent",
@@ -25,3 +27,14 @@ celery_app.conf.update(
         }
     },
 )
+
+
+@after_setup_logger.connect
+@after_setup_task_logger.connect
+def configure_celery_logger(logger, **_kwargs) -> None:
+    configure_logger(logger)
+
+
+@worker_process_init.connect
+def configure_worker_process_logging(**_kwargs) -> None:
+    configure_logging()

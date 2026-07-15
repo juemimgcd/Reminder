@@ -5,7 +5,7 @@ from time import perf_counter
 from uuid import uuid4
 
 from services.memory_agent.contracts.answers import AnswerRequest, AnswerResponse
-from services.memory_agent.observability.context import observation_context
+from services.memory_agent.observability.context import observation_context, safe_log
 from services.memory_agent.repositories.runs import AnswerRunRepository
 from services.memory_agent.retrieval.contracts import RetrievedEvidence
 from services.memory_agent.runtime.contracts import (
@@ -153,12 +153,15 @@ class MemoryAgent:
             )
         except (Exception, asyncio.CancelledError):
             return
-        logger.warning(
-            "answer_phase mode=%s phase=%s status=failed error=%s duration_ms=%s",
-            mode,
-            phase,
-            error_code,
-            _elapsed_ms(started),
+        safe_log(
+            logger,
+            logging.WARNING,
+            "answer_phase",
+            mode=mode,
+            phase=phase,
+            status="failed",
+            error_code=error_code,
+            duration_ms=_elapsed_ms(started),
         )
 
     async def _retrieve(
@@ -194,10 +197,14 @@ class MemoryAgent:
             request=request,
             validation_duration_ms=_elapsed_ms(validate_started),
         )
-        logger.info(
-            "answer_phase mode=%s phase=validate status=completed duration_ms=%s",
-            request.answer_mode,
-            _elapsed_ms(validate_started),
+        safe_log(
+            logger,
+            logging.INFO,
+            "answer_phase",
+            mode=request.answer_mode,
+            phase="validate",
+            status="completed",
+            duration_ms=_elapsed_ms(validate_started),
         )
         with observation_context(request_id=request.request_id, run_id=run_id):
             return await self._run_created(request=request, plan=plan, run_id=run_id)
@@ -243,10 +250,14 @@ class MemoryAgent:
                 source_ids=[item.source_id for item in evidence],
                 expansion_count=expansion_count,
             )
-            logger.info(
-                "answer_phase mode=%s phase=retrieve status=completed duration_ms=%s",
-                request.answer_mode,
-                _elapsed_ms(phase_started),
+            safe_log(
+                logger,
+                logging.INFO,
+                "answer_phase",
+                mode=request.answer_mode,
+                phase="retrieve",
+                status="completed",
+                duration_ms=_elapsed_ms(phase_started),
             )
 
             phase = "generate"
@@ -289,10 +300,14 @@ class MemoryAgent:
                 duration_ms=_elapsed_ms(phase_started),
                 answer=generated,
             )
-            logger.info(
-                "answer_phase mode=%s phase=generate status=completed duration_ms=%s",
-                request.answer_mode,
-                _elapsed_ms(phase_started),
+            safe_log(
+                logger,
+                logging.INFO,
+                "answer_phase",
+                mode=request.answer_mode,
+                phase="generate",
+                status="completed",
+                duration_ms=_elapsed_ms(phase_started),
             )
 
             phase = "citations"
@@ -339,11 +354,15 @@ class MemoryAgent:
                 insufficient_evidence=insufficient_evidence,
             )
             citation_duration_ms = _elapsed_ms(phase_started)
-            logger.info(
-                "answer_phase mode=%s phase=citations status=completed duration_ms=%s insufficient_evidence=%s",
-                request.answer_mode,
-                citation_duration_ms,
-                insufficient_evidence,
+            safe_log(
+                logger,
+                logging.INFO,
+                "answer_phase",
+                mode=request.answer_mode,
+                phase="citations",
+                status="completed",
+                duration_ms=citation_duration_ms,
+                count=int(insufficient_evidence),
             )
 
             memory_ids = list(

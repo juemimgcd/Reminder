@@ -11,7 +11,7 @@ from services.memory_agent.api.events import router as event_router
 from services.memory_agent.api.health import router as health_router
 from services.memory_agent.api.memories import router as memories_router
 from services.memory_agent.api.runs import router as runs_router
-from services.memory_agent.observability.context import observation_context
+from services.memory_agent.observability.context import observation_context, safe_identifier, safe_log
 
 logger = logging.getLogger(__name__)
 
@@ -22,20 +22,22 @@ def create_memory_agent_app() -> FastAPI:
     @app.middleware("http")
     async def correlate_request(request, call_next):
         supplied = request.headers.get("x-request-id", "")
-        request_id = supplied if 0 < len(supplied) <= 128 else uuid4().hex
+        request_id = safe_identifier(supplied) or uuid4().hex
         started = perf_counter()
         with observation_context(request_id=request_id):
             try:
                 response = await call_next(request)
             except Exception:
-                logger.exception("request_failed method=%s", request.method)
+                safe_log(logger, logging.ERROR, "request_failed", method=request.method)
                 raise
             response.headers["X-Request-ID"] = request_id
-            logger.info(
-                "request_completed method=%s status=%s duration_ms=%s",
-                request.method,
-                response.status_code,
-                max(0, round((perf_counter() - started) * 1000)),
+            safe_log(
+                logger,
+                logging.INFO,
+                "request_completed",
+                method=request.method,
+                http_status=response.status_code,
+                duration_ms=max(0, round((perf_counter() - started) * 1000)),
             )
             return response
     app.add_exception_handler(AgentAPIError, agent_api_error_handler)

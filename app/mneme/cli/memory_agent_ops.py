@@ -16,7 +16,7 @@ async def _snapshot() -> dict[str, int | float]:
                 select(
                     func.count().filter(OutboxEvent.status.in_(("pending", "running", "failed"))),
                     func.count().filter(OutboxEvent.status == "dead_letter"),
-                    func.min(OutboxEvent.next_attempt_at).filter(
+                    func.min(OutboxEvent.enqueued_at).filter(
                         OutboxEvent.status.in_(("pending", "running", "failed"))
                     ),
                 ).where(OutboxEvent.target_backend == "memory_agent_http")

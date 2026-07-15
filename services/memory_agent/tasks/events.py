@@ -9,7 +9,7 @@ from sqlalchemy import select
 from services.memory_agent.celery_app import celery_app
 from services.memory_agent.database import engine, open_write_session
 from services.memory_agent.models.inbox_event import InboxEvent
-from services.memory_agent.observability.context import observation_context
+from services.memory_agent.observability.context import observation_context, safe_log
 from services.memory_agent.services.event_dispatcher import EventProcessResult, dispatch_inbox_event
 
 logger = logging.getLogger(__name__)
@@ -49,7 +49,8 @@ async def _dispatch_pending_events(batch_limit: int) -> int:
             try:
                 process_inbox_event_task.delay(event_id=event_id)
             except Exception:
-                logger.exception("Failed to enqueue pending inbox event %s", event_id)
+                with observation_context(event_id=event_id):
+                    safe_log(logger, logging.ERROR, "event_enqueue_failed")
             else:
                 enqueued += 1
 

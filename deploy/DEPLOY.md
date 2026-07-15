@@ -431,6 +431,15 @@ Inbox/dead letters/projection lag/failed runs/token and cost totals at Agent `/m
 Correlated logs may contain request/run/event IDs, modes, phases, stable errors and durations,
 but never query, prompt, answer, evidence, memory values, API keys or service JWTs.
 
+Outbox age is measured from immutable `outbox_events.enqueued_at`; retry scheduling never
+resets it. Migration `20260715_03` backfills legacy rows from `next_attempt_at`, then
+`locked_at`, then `processed_at`, or finally the migration timestamp. Therefore the first
+post-migration age for old rows is an approximation; all newly enqueued rows are exact.
+Memory Agent JSON logging emits only fixed event names and explicit safe fields. Uvicorn
+access logging is disabled (so query strings cannot leak), while Uvicorn errors and Celery
+API/worker processes use the same whitelist formatter and discard arbitrary messages,
+arguments, exception text, prompts, payloads, and credentials.
+
 Rollback does not downgrade either database and does not delete Agent data. Set the flag
 false, recreate Mneme API and worker, then pause Agent consumption after in-flight tasks settle:
 
