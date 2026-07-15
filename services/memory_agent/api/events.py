@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from services.memory_agent.api.dependencies import require_event_service_token
 from services.memory_agent.contracts.events import AgentEventEnvelope, EventReceipt
 from services.memory_agent.database import get_db
+from services.memory_agent.observability.context import observation_context
 from services.memory_agent.repositories.inbox import accept_event
 from services.memory_agent.tasks.events import process_inbox_event_task
 
@@ -36,12 +37,13 @@ async def receive_event(
     _claims: Annotated[dict[str, Any], Depends(require_event_service_token)],
     scheduler: Annotated[EventScheduler, Depends(get_event_scheduler)],
 ) -> EventReceipt:
-    row, created = await accept_event(db, envelope)
-    await db.commit()
+    with observation_context(event_id=envelope.event_id):
+        row, created = await accept_event(db, envelope)
+        await db.commit()
 
-    if not created:
-        response.status_code = status.HTTP_200_OK
-        return EventReceipt(event_id=envelope.event_id, accepted=True, duplicate=True)
+        if not created:
+            response.status_code = status.HTTP_200_OK
+            return EventReceipt(event_id=envelope.event_id, accepted=True, duplicate=True)
 
-    await scheduler(row.event_id)
-    return EventReceipt(event_id=envelope.event_id, accepted=True, duplicate=False)
+        await scheduler(row.event_id)
+        return EventReceipt(event_id=envelope.event_id, accepted=True, duplicate=False)

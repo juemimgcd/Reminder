@@ -1,8 +1,9 @@
 import logging
 
+from services.memory_agent.observability.context import SafeJsonFormatter
+
 
 def configure_logging() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s | %(levelname)s | memory_agent | %(message)s",
-    )
+    handler = logging.StreamHandler()
+    handler.setFormatter(SafeJsonFormatter())
+    logging.basicConfig(level=logging.INFO, handlers=[handler], force=True)

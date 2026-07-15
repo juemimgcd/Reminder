@@ -381,4 +381,67 @@ APP_HOST_PORT=8000
 APP_HOST_PORT=127.0.0.1:8000
 ```
 
+## Memory Agent staged cutover and rollback
+
+The cutover switch is explicit and is read by both Mneme API and worker processes.
+There is no same-request fallback: an Agent error remains visible and retryable.
+
+1. Deploy with `MEMORY_AGENT_ENABLED=false`. Create the Agent database, then run the
+   Mneme and Agent expand migrations before starting either new binary:
+
+```bash
+docker compose up -d postgres redis
+docker compose run --rm memory-agent-db-init
+docker compose run --rm migrate
+docker compose run --rm memory-agent-migrate
+docker compose up -d memory-agent-api memory-agent-worker app worker
+```
+
+2. Confirm `/health` (process only), `/health/readiness` (Agent DB and static model
+   configuration), and `/health/worker` (broker plus a worker consuming the configured
+   queue). None of these endpoints invokes a model. `/metrics` contains only low-cardinality
+   mode/status/error/phase/action dimensions and persisted operational aggregates.
+
+```bash
+docker compose exec memory-agent-api python -c "from urllib.request import urlopen; print(urlopen('http://127.0.0.1:8010/health/readiness').read().decode())"
+docker compose exec memory-agent-api python -c "from urllib.request import urlopen; print(urlopen('http://127.0.0.1:8010/health/worker').read().decode())"
+docker compose exec app python -m app.mneme.cli.memory_agent_ops
+```
+
+3. Backfill with the documented projection exporter. Compare projection counts, aggregate
+   hashes, batch counts, and a privacy-approved sample of source IDs with the read-only
+   Agent report before enabling traffic. Never print or export source content for this check.
+
+```bash
+docker compose exec app python -m app.mneme.cli.export_agent_projection --dry-run --batch-size 50
+docker compose exec app python -m app.mneme.cli.export_agent_projection --batch-size 50 --checkpoint /app/storage/memory-agent-backfill.json
+docker compose exec memory-agent-api python -m services.memory_agent.cli.backfill --batch-size 100
+```
+
+4. Set `MEMORY_AGENT_ENABLED=true` and recreate both Mneme consumers of the flag:
+
+```bash
+docker compose up -d --no-deps --force-recreate app worker
+```
+
+For the first rollout window, alert on any dead letter, readiness failure, worker count zero,
+oldest Outbox/Inbox age over 120 seconds, projection lag over 300 seconds, or a five-minute
+failed-answer rate over 2%. Inspect Outbox with `app.mneme.cli.memory_agent_ops`; inspect
+Inbox/dead letters/projection lag/failed runs/token and cost totals at Agent `/metrics`.
+Correlated logs may contain request/run/event IDs, modes, phases, stable errors and durations,
+but never query, prompt, answer, evidence, memory values, API keys or service JWTs.
+
+Rollback does not downgrade either database and does not delete Agent data. Set the flag
+false, recreate Mneme API and worker, then pause Agent consumption after in-flight tasks settle:
+
+```bash
+# edit .env: MEMORY_AGENT_ENABLED=false
+docker compose up -d --no-deps --force-recreate app worker
+docker compose stop memory-agent-worker
+```
+
+Keep Outbox, Inbox, answer-run, deletion-fence, projection and governed-memory rows through
+the rollback investigation. Resume the Agent worker before a later cutover so retained events
+can drain idempotently. Database downgrades and legacy removal are separate, reviewed changes.
+
 然后把 TLS、域名和公网流量入口统一交给 Nginx。

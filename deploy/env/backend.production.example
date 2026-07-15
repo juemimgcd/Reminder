@@ -42,6 +42,13 @@ MEMORY_AGENT_CELERY_RESULT_BACKEND=redis://redis:6379/3
 MEMORY_AGENT_CELERY_QUEUE=memory_agent
 MEMORY_AGENT_UVICORN_WORKERS=2
 MEMORY_AGENT_WORKER_CONCURRENCY=2
+# Optional service default. If model/key are empty, each answer request must supply an
+# ephemeral model configuration; readiness reports this as request_required.
+MEMORY_AGENT_ANSWER_LLM_PROVIDER=openai
+MEMORY_AGENT_ANSWER_LLM_BASE_URL=
+MEMORY_AGENT_ANSWER_LLM_API_KEY=
+MEMORY_AGENT_ANSWER_LLM_MODEL=
+MEMORY_AGENT_ANSWER_LLM_TEMPERATURE=0.0
 
 STORAGE_DIR=./storage
 RAW_FILE_DIR=./storage/raw

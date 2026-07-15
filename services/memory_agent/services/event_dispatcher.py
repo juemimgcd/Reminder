@@ -12,6 +12,7 @@ from services.memory_agent.database import engine
 from services.memory_agent.memory.extraction import TerminalExtractionError
 from services.memory_agent.memory.reconciliation import EvidenceProvenanceError
 from services.memory_agent.models.inbox_event import InboxEvent
+from services.memory_agent.observability.context import observation_context
 from services.memory_agent.services.deletion import (
     SourceDeletionError,
     handle_conversation_deleted,
@@ -96,6 +97,11 @@ EVENT_HANDLERS: dict[str, EventHandler] = {
 
 
 async def dispatch_inbox_event(event_id: str) -> EventProcessResult:
+    with observation_context(event_id=event_id):
+        return await _dispatch_inbox_event(event_id)
+
+
+async def _dispatch_inbox_event(event_id: str) -> EventProcessResult:
     async with engine.connect() as connection:
         acquired = await connection.scalar(
             text("SELECT pg_try_advisory_lock(hashtextextended(:event_id, 1))"),

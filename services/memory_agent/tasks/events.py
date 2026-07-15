@@ -9,6 +9,7 @@ from sqlalchemy import select
 from services.memory_agent.celery_app import celery_app
 from services.memory_agent.database import engine, open_write_session
 from services.memory_agent.models.inbox_event import InboxEvent
+from services.memory_agent.observability.context import observation_context
 from services.memory_agent.services.event_dispatcher import EventProcessResult, dispatch_inbox_event
 
 logger = logging.getLogger(__name__)
@@ -22,10 +23,11 @@ def process_inbox_event_task(event_id: str) -> dict[str, Any]:
 
 
 async def _process_inbox_event(event_id: str) -> EventProcessResult:
-    try:
-        return await dispatch_inbox_event(event_id)
-    finally:
-        await engine.dispose()
+    with observation_context(event_id=event_id):
+        try:
+            return await dispatch_inbox_event(event_id)
+        finally:
+            await engine.dispose()
 
 
 async def _dispatch_pending_events(batch_limit: int) -> int:

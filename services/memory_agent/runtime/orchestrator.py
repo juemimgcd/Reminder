@@ -1,9 +1,11 @@
 import asyncio
+import logging
 from dataclasses import dataclass
 from time import perf_counter
 from uuid import uuid4
 
 from services.memory_agent.contracts.answers import AnswerRequest, AnswerResponse
+from services.memory_agent.observability.context import observation_context
 from services.memory_agent.repositories.runs import AnswerRunRepository
 from services.memory_agent.retrieval.contracts import RetrievedEvidence
 from services.memory_agent.runtime.contracts import (
@@ -17,6 +19,7 @@ from services.memory_agent.runtime.plans import MODE_PLANS
 from services.memory_agent.runtime.ports import AnswerGenerator, CitationValidator, EvidenceRetriever
 
 POSTGRES_INTEGER_MAX = 2_147_483_647
+logger = logging.getLogger(__name__)
 DEPENDENCY_ERROR_CODES = {
     "retrieve": frozenset(
         {
@@ -133,6 +136,7 @@ class MemoryAgent:
         self,
         *,
         run_id: str,
+        mode: str,
         phase: RunPhase,
         started: float,
         error_code: str,
@@ -149,6 +153,13 @@ class MemoryAgent:
             )
         except (Exception, asyncio.CancelledError):
             return
+        logger.warning(
+            "answer_phase mode=%s phase=%s status=failed error=%s duration_ms=%s",
+            mode,
+            phase,
+            error_code,
+            _elapsed_ms(started),
+        )
 
     async def _retrieve(
         self,
@@ -183,7 +194,13 @@ class MemoryAgent:
             request=request,
             validation_duration_ms=_elapsed_ms(validate_started),
         )
-        return await self._run_created(request=request, plan=plan, run_id=run_id)
+        logger.info(
+            "answer_phase mode=%s phase=validate status=completed duration_ms=%s",
+            request.answer_mode,
+            _elapsed_ms(validate_started),
+        )
+        with observation_context(request_id=request.request_id, run_id=run_id):
+            return await self._run_created(request=request, plan=plan, run_id=run_id)
 
     async def _run_created(
         self,
@@ -203,6 +220,7 @@ class MemoryAgent:
                 code = "AGENT_RETRIEVAL_TIMEOUT"
                 await self._record_failure(
                     run_id=run_id,
+                    mode=request.answer_mode,
                     phase=phase,
                     started=phase_started,
                     error_code=code,
@@ -212,6 +230,7 @@ class MemoryAgent:
                 code = _dependency_error_code(exc, phase)
                 await self._record_failure(
                     run_id=run_id,
+                    mode=request.answer_mode,
                     phase=phase,
                     started=phase_started,
                     error_code=code,
@@ -223,6 +242,11 @@ class MemoryAgent:
                 duration_ms=_elapsed_ms(phase_started),
                 source_ids=[item.source_id for item in evidence],
                 expansion_count=expansion_count,
+            )
+            logger.info(
+                "answer_phase mode=%s phase=retrieve status=completed duration_ms=%s",
+                request.answer_mode,
+                _elapsed_ms(phase_started),
             )
 
             phase = "generate"
@@ -243,6 +267,7 @@ class MemoryAgent:
                 code = "AGENT_MODEL_TIMEOUT"
                 await self._record_failure(
                     run_id=run_id,
+                    mode=request.answer_mode,
                     phase=phase,
                     started=phase_started,
                     error_code=code,
@@ -252,6 +277,7 @@ class MemoryAgent:
                 code = _dependency_error_code(exc, phase)
                 await self._record_failure(
                     run_id=run_id,
+                    mode=request.answer_mode,
                     phase=phase,
                     started=phase_started,
                     error_code=code,
@@ -262,6 +288,11 @@ class MemoryAgent:
                 run_id=run_id,
                 duration_ms=_elapsed_ms(phase_started),
                 answer=generated,
+            )
+            logger.info(
+                "answer_phase mode=%s phase=generate status=completed duration_ms=%s",
+                request.answer_mode,
+                _elapsed_ms(phase_started),
             )
 
             phase = "citations"
@@ -278,6 +309,7 @@ class MemoryAgent:
                 code = "AGENT_CITATION_TIMEOUT"
                 await self._record_failure(
                     run_id=run_id,
+                    mode=request.answer_mode,
                     phase=phase,
                     started=phase_started,
                     error_code=code,
@@ -287,6 +319,7 @@ class MemoryAgent:
                 code = _dependency_error_code(exc, phase)
                 await self._record_failure(
                     run_id=run_id,
+                    mode=request.answer_mode,
                     phase=phase,
                     started=phase_started,
                     error_code=code,
@@ -304,6 +337,13 @@ class MemoryAgent:
                 confidence=citation_result.confidence,
                 uncertainty=citation_result.uncertainty,
                 insufficient_evidence=insufficient_evidence,
+            )
+            citation_duration_ms = _elapsed_ms(phase_started)
+            logger.info(
+                "answer_phase mode=%s phase=citations status=completed duration_ms=%s insufficient_evidence=%s",
+                request.answer_mode,
+                citation_duration_ms,
+                insufficient_evidence,
             )
 
             memory_ids = list(
@@ -327,6 +367,7 @@ class MemoryAgent:
         except asyncio.CancelledError:
             await self._record_failure(
                 run_id=run_id,
+                mode=request.answer_mode,
                 phase=phase,
                 started=phase_started,
                 error_code="AGENT_RUN_CANCELLED",

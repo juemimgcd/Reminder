@@ -261,6 +261,25 @@ and scope-mismatch counts. Active chunks are mapped to staged payloads by
 version, owner, and knowledge-base checks. It prints only safe IDs, booleans, and
 counts; it never prints source content or failure text.
 
+## Memory Agent operations
+
+Memory Agent exposes process-only `/health`, dependency-aware `/health/readiness`, a separate
+broker/worker diagnostic at `/health/worker`, and low-cardinality persisted metrics at
+`/metrics`. Structured logs correlate `request_id`, `run_id`, and `event_id`; request content,
+answers, evidence, memory values, prompts and credentials are excluded by policy.
+
+Production cutover starts with `MEMORY_AGENT_ENABLED=false`, runs both database migrations and
+the projection backfill, compares safe counts/hashes, then enables the flag and recreates both
+Mneme `app` and `worker`. Agent failures never trigger legacy fallback in the same request.
+Rollback sets the flag false, recreates `app` and `worker`, and pauses `memory-agent-worker`
+without deleting retained Outbox/Inbox, projections, memories, deletion fences, or answer runs.
+See `deploy/DEPLOY.md` for exact commands, thresholds, and inspection steps. Mneme-local Outbox
+age/dead-letter diagnostics are available with:
+
+```bash
+python -m app.mneme.cli.memory_agent_ops
+```
+
 前端类型检查：
 
 ```bash
