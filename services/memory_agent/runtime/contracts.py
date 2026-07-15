@@ -34,6 +34,7 @@ class RetrievalRequest(BaseModel):
     top_k: int
     plan: RetrievalPlan
     expansion_index: int = Field(default=0, ge=0, le=1)
+    temporal_scope: Literal["current", "history"] = "current"
 
 
 class GenerationRequest(BaseModel):

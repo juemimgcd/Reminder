@@ -11,7 +11,7 @@ class RetrievalScope(BaseModel):
 
 class RetrievedEvidence(BaseModel):
     evidence_id: str
-    source_type: Literal["document", "memory"]
+    source_type: Literal["document", "memory", "profile", "relation"]
     source_id: str
     content: str
     score: float

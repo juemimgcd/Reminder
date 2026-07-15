@@ -1,4 +1,4 @@
-from pydantic import SecretStr
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,6 +23,14 @@ class MemoryAgentSettings(BaseSettings):
     EXTRACTION_LLM_API_KEY: SecretStr = SecretStr("")
     EXTRACTION_LLM_MODEL: str = ""
     EXTRACTION_LLM_TEMPERATURE: float = 0.0
+    ANSWER_LLM_PROVIDER: str = "openai"
+    ANSWER_LLM_BASE_URL: str = ""
+    ANSWER_LLM_API_KEY: SecretStr = SecretStr("")
+    ANSWER_LLM_MODEL: str = ""
+    ANSWER_LLM_TEMPERATURE: float = 0.0
+    ANSWER_MAX_CONTEXT_CHARS: int = Field(default=24000, ge=1000, le=100000)
+    ANSWER_MAX_QUESTION_CHARS: int = Field(default=8000, ge=100, le=20000)
+    ANSWER_MAX_OUTPUT_TOKENS: int = Field(default=1200, ge=100, le=8000)
 
 
 settings = MemoryAgentSettings()
