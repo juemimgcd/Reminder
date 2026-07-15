@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 from types import SimpleNamespace
 
@@ -39,8 +40,7 @@ class _ScalarRows:
         return self.rows
 
 
-@pytest.mark.asyncio
-async def test_prepare_projection_rejects_missing_or_out_of_order_batches():
+def test_prepare_projection_rejects_missing_or_out_of_order_batches():
     chunks = [_chunk("c0", 0, "first"), _chunk("c1", 1, "second")]
     projection = _projection(chunks=chunks, batch_indexes=[0, 1])
     db = _ScalarRows(
@@ -48,11 +48,10 @@ async def test_prepare_projection_rejects_missing_or_out_of_order_batches():
     )
 
     with pytest.raises(IncompleteProjectionError, match="requires batch indexes"):
-        await _prepare_projection(db, projection)
+        asyncio.run(_prepare_projection(db, projection))
 
 
-@pytest.mark.asyncio
-async def test_prepare_projection_accepts_batches_arriving_in_any_storage_order():
+def test_prepare_projection_accepts_batches_arriving_in_any_storage_order():
     chunks = [_chunk("c0", 0, "first"), _chunk("c1", 1, "second")]
     projection = _projection(chunks=chunks, batch_indexes=[0, 1])
     db = _ScalarRows(
@@ -62,14 +61,13 @@ async def test_prepare_projection_accepts_batches_arriving_in_any_storage_order(
         ]
     )
 
-    prepared = await _prepare_projection(db, projection)
+    prepared = asyncio.run(_prepare_projection(db, projection))
 
     assert [chunk.chunk_id for chunk in prepared.chunks] == ["c0", "c1"]
     assert len(prepared.snapshot_hash) == 64
 
 
-@pytest.mark.asyncio
-async def test_prepare_projection_rejects_duplicate_chunk_and_aggregate_hash():
+def test_prepare_projection_rejects_duplicate_chunk_and_aggregate_hash():
     chunks = [_chunk("c0", 0, "first"), _chunk("c0", 1, "second")]
     projection = _projection(chunks=chunks, batch_indexes=[0])
     db = _ScalarRows(
@@ -77,7 +75,7 @@ async def test_prepare_projection_rejects_duplicate_chunk_and_aggregate_hash():
     )
 
     with pytest.raises(ProjectionIntegrityError, match="chunk IDs must be unique"):
-        await _prepare_projection(db, projection)
+        asyncio.run(_prepare_projection(db, projection))
 
     projection.aggregate_hash = "0" * 64
     chunks = [_chunk("c0", 0, "first")]
@@ -85,4 +83,4 @@ async def test_prepare_projection_rejects_duplicate_chunk_and_aggregate_hash():
     projection.aggregate_hash = "0" * 64
     db = _ScalarRows([SimpleNamespace(batch_index=0, chunks=[chunks[0].model_dump(mode="json")])])
     with pytest.raises(ProjectionIntegrityError, match="aggregate hash mismatch"):
-        await _prepare_projection(db, projection)
+        asyncio.run(_prepare_projection(db, projection))
