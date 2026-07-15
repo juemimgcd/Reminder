@@ -56,6 +56,9 @@ def build_chat_answer_message_id(user_message_id: str) -> str:
     return f"answer_{user_message_id}"
 
 
+_EXPECTED_SCOPE_UNSET = object()
+
+
 async def require_owned_knowledge_base(
     db: AsyncSession,
     *,
@@ -318,13 +321,16 @@ async def ask_in_chat_session(
     session_id: str,
     question: str,
     top_k: int,
-    answer_mode: AnswerMode = "kb_qa",
-    expected_knowledge_base_id: str | None = None,
+    answer_mode: AnswerMode | None = None,
+    expected_knowledge_base_id: str | None | object = _EXPECTED_SCOPE_UNSET,
     model_config_id: str | None = None,
     retry_message_id: str | None = None,
 ) -> tuple[ChatSession, list[ChatMessage]]:
     session = await require_owned_chat_session(db, current_user=current_user, session_id=session_id)
-    if expected_knowledge_base_id and session.knowledge_base_id != expected_knowledge_base_id:
+    if (
+        expected_knowledge_base_id is not _EXPECTED_SCOPE_UNSET
+        and session.knowledge_base_id != expected_knowledge_base_id
+    ):
         raise BusinessException(
             message="chat session does not belong to this knowledge base",
             code=4050,
@@ -333,7 +339,8 @@ async def ask_in_chat_session(
     if session.archived_at is not None:
         raise BusinessException(message="chat session is archived", code=4049, status_code=400)
 
-    if answer_mode != "general_chat" and session.knowledge_base_id is None:
+    selected_mode: AnswerMode = answer_mode or session.answer_mode
+    if selected_mode != "general_chat" and session.knowledge_base_id is None:
         raise BusinessException(message="knowledge base is required for this answer mode", code=4053)
 
     if not settings.MEMORY_AGENT_ENABLED:
@@ -345,12 +352,13 @@ async def ask_in_chat_session(
                 knowledge_base_id=session.knowledge_base_id,
                 user_id=current_user.id,
                 top_k=top_k,
-                answer_mode=answer_mode,
+                answer_mode=selected_mode,
                 llm_config=llm_config,
             )
         )
         result = agent_response.to_legacy_result()
-        session.answer_mode = answer_mode
+        if answer_mode is not None:
+            session.answer_mode = answer_mode
         return await _persist_legacy_answer(
             db,
             session=session,
@@ -401,14 +409,15 @@ async def ask_in_chat_session(
             session.title = question[:80]
         session.message_count = (session.message_count or 0) + 1
         session.last_message_at = datetime.now(timezone.utc)
-    session.answer_mode = answer_mode
+    if answer_mode is not None:
+        session.answer_mode = answer_mode
     await db.commit()
 
     try:
         agent_response = await answer_via_memory_agent(
             owner_id=current_user.id,
             question=question,
-            answer_mode=answer_mode,
+            answer_mode=selected_mode,
             top_k=top_k,
             knowledge_base_id=session.knowledge_base_id,
             session_id=session.id,

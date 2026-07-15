@@ -136,10 +136,10 @@ class MemoryAgentClient:
             if response.is_error:
                 agent_code = _agent_error_code(response)
                 message = f"memory agent HTTP {response.status_code}: {_http_error_reason(response.status_code)}"
-                if 400 <= response.status_code < 500:
-                    raise MemoryAgentRejected(message, status_code=response.status_code)
                 if response.status_code in RETRYABLE_STATUS_CODES:
                     raise MemoryAgentRetryable(message, agent_code=agent_code)
+                if 400 <= response.status_code < 500:
+                    raise MemoryAgentRejected(message, status_code=response.status_code)
                 raise MemoryAgentPermanentFailure(message, agent_code=agent_code)
             return response
 
