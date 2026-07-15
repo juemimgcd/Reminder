@@ -17,6 +17,7 @@ export function useWorkspaceLoaders(loaders: Record<WorkspaceView, ViewLoader>) 
     notes: createLoadState(),
     graph: createLoadState(),
     ai: createLoadState(),
+    memory: createLoadState(),
     settings: createLoadState(),
   } satisfies Record<WorkspaceView, ReturnType<typeof createLoadState>>;
 

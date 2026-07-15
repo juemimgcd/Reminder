@@ -9,9 +9,10 @@ async def create_chat_session(
     *,
     session_id: str,
     user_id: int,
-    knowledge_base_id: str,
-    knowledge_base_pk: int,
+    knowledge_base_id: str | None,
+    knowledge_base_pk: int | None,
     title: str | None,
+    answer_mode: str = "kb_qa",
 ) -> ChatSession:
     session = ChatSession(
         id=session_id,
@@ -19,6 +20,7 @@ async def create_chat_session(
         knowledge_base_id=knowledge_base_id,
         knowledge_base_pk=knowledge_base_pk,
         title=title,
+        answer_mode=answer_mode,
     )
     db.add(session)
     await db.flush()

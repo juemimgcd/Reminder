@@ -9,10 +9,12 @@ from app.mneme.domains.chat.service import (
     get_chat_session_detail,
     list_chat_sessions,
     message_to_data,
+    remember_chat_message,
     update_chat_session,
 )
 from app.mneme.models.user import User
 from app.mneme.schemas.chat_session import (
+    ChatMessageRememberData,
     ChatSessionCreateRequest,
     ChatSessionData,
     ChatSessionDetailData,
@@ -22,7 +24,6 @@ from app.mneme.schemas.chat_session import (
 )
 from app.mneme.utils.auth import get_current_user
 from app.mneme.utils.response import success_response
-
 
 router = APIRouter(prefix="/kb/chat/sessions", tags=["chat"])
 
@@ -49,6 +50,7 @@ async def create_chat_session_api(
         current_user=current_user,
         knowledge_base_id=payload.knowledge_base_id,
         title=payload.title,
+        answer_mode=payload.answer_mode,
     )
     return success_response(data=ChatSessionData.model_validate(session), message="chat session created")
 
@@ -81,6 +83,7 @@ async def update_chat_session_api(
         session_id=session_id,
         title=payload.title,
         archived=payload.archived,
+        answer_mode=payload.answer_mode,
     )
     return success_response(data=ChatSessionData.model_validate(session), message="chat session updated")
 
@@ -92,7 +95,9 @@ async def delete_chat_session_api(
     db: AsyncSession = Depends(get_write_database),
 ):
     deleted_count = await delete_chat_session(db, current_user=current_user, session_id=session_id)
-    return success_response(data={"session_id": session_id, "deleted_count": deleted_count}, message="chat session deleted")
+    return success_response(
+        data={"session_id": session_id, "deleted_count": deleted_count}, message="chat session deleted"
+    )
 
 
 @router.post("/{session_id}/messages")
@@ -109,7 +114,9 @@ async def create_chat_message_api(
         question=payload.question,
         top_k=payload.top_k,
         answer_mode=payload.answer_mode,
-        expected_knowledge_base_id=None,
+        model_config_id=payload.model_config_id,
+        retry_message_id=payload.retry_message_id,
+        regenerate_message_id=payload.regenerate_message_id,
     )
     return success_response(
         data=ChatSessionDetailData(
@@ -117,4 +124,23 @@ async def create_chat_message_api(
             messages=[message_to_data(message) for message in messages],
         ),
         message="chat message created",
+    )
+
+
+@router.post("/{session_id}/messages/{message_id}/remember")
+async def remember_chat_message_api(
+    session_id: str,
+    message_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_write_database),
+):
+    message, requested = await remember_chat_message(
+        db,
+        current_user=current_user,
+        session_id=session_id,
+        message_id=message_id,
+    )
+    return success_response(
+        data=ChatMessageRememberData(message_id=message.id, requested=requested),
+        message="memory requested",
     )

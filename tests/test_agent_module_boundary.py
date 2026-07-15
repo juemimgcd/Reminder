@@ -154,6 +154,7 @@ def test_agent_routes_the_user_selected_answer_mode(answer_mode, target_pipeline
 def test_online_answer_consumers_use_the_agent_entry_point():
     for path in ONLINE_AGENT_CONSUMERS:
         source = path.read_text(encoding="utf-8")
-        assert "build_mneme_agent" in source, f"{path.name} does not build the Agent"
-        assert "AgentRequest" in source, f"{path.name} does not use the Agent contract"
+        assert "answer_via_memory_agent" in source, f"{path.name} does not use the Memory Agent client"
+        assert "build_mneme_agent" not in source, f"{path.name} retains the in-process Agent"
+        assert "AgentRequest" not in source, f"{path.name} retains the in-process Agent contract"
         assert "domains.retrieval.query_service import generate_rag_answer" not in source

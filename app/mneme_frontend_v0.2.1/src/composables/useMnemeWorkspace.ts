@@ -3,6 +3,7 @@ import { useI18n } from "./useI18n";
 import { useDocumentWorkspace } from "./useDocumentWorkspace";
 import { useWorkspaceLoaders, type ViewLoadResult } from "./useWorkspaceLoaders";
 import { api, API_BASE_URL, IS_PREVIEW_MODE, PREVIEW_TOKEN } from "../lib/api";
+import { ApiError } from "../lib/api";
 import { safeStorageGet, safeStorageRemove, safeStorageSet } from "../lib/safeStorage";
 import type {
   AiModelConfigData,
@@ -86,6 +87,9 @@ export function useMnemeWorkspace() {
   const aiModelActionStatus = ref("");
   const chatSessionFilter = ref("");
   const chatAnswerMode = ref<AnswerMode>("kb_qa");
+  const memoryPendingCount = ref(0);
+  const chatPending = ref(false);
+  const chatError = ref<{ message: string; messageId: string | null; retryable: boolean } | null>(null);
   const indexTaskMonitors = new Map<string, AbortController>();
   let documentPreviewGeneration = 0;
 
@@ -118,6 +122,7 @@ export function useMnemeWorkspace() {
     notes: loadNotesView,
     graph: loadGraphView,
     ai: loadAiView,
+    memory: async () => ({}),
     settings: loadSettingsView,
   });
   const { ensureViewLoaded, viewLoadStates } = workspaceLoaders;
@@ -169,16 +174,19 @@ export function useMnemeWorkspace() {
   }
 
   async function loadAiView(generation: number): Promise<ViewLoadResult> {
-    if (!token.value || !activeKnowledgeBaseId.value) return { empty: true };
+    if (!token.value) return { empty: true };
+    const scope = !activeKnowledgeBaseId.value || chatAnswerMode.value === "general_chat" ? null : activeKnowledgeBaseId.value;
     const sessionsRequest = (async () => {
       try {
-        const data = await api.listChatSessions(token.value, activeKnowledgeBaseId.value);
+        const data = await api.listChatSessions(token.value, scope);
         const sessionId = data.items[0]?.id ?? "";
         const detail = sessionId ? await api.getChatSession(token.value, sessionId) : null;
         if (workspaceLoaders.isCurrent(generation)) {
           chatSessions.value = data.items;
           activeChatSessionId.value = sessionId;
           chatMessages.value = detail?.messages ?? [];
+          if (detail) chatAnswerMode.value = detail.session.answer_mode;
+          else if (!activeKnowledgeBaseId.value) chatAnswerMode.value = "general_chat";
         }
         return true;
       } catch {
@@ -228,6 +236,7 @@ export function useMnemeWorkspace() {
       if (selectedKnowledgeBaseId.value) {
         safeStorageSet(SELECTED_KB_KEY, selectedKnowledgeBaseId.value);
       }
+      void refreshMemoryPendingCount();
 
       void ensureViewLoaded(view.value, true);
 
@@ -474,13 +483,14 @@ export function useMnemeWorkspace() {
   }
 
   async function loadChatSessions() {
-    if (!token.value || !activeKnowledgeBaseId.value) {
+    if (!token.value) {
       chatSessions.value = [];
       chatMessages.value = [];
       activeChatSessionId.value = "";
       return;
     }
-    const data = await api.listChatSessions(token.value, activeKnowledgeBaseId.value);
+    const scope = chatAnswerMode.value === "general_chat" ? null : activeKnowledgeBaseId.value || null;
+    const data = await api.listChatSessions(token.value, scope);
     chatSessions.value = data.items;
     if (!data.items.length) {
       chatMessages.value = [];
@@ -500,15 +510,19 @@ export function useMnemeWorkspace() {
     activeChatSessionId.value = sessionId;
     const detail = await api.getChatSession(token.value, sessionId);
     chatMessages.value = detail.messages;
+    chatAnswerMode.value = detail.session.answer_mode;
   }
 
   async function createChatSession() {
-    if (!token.value || !activeKnowledgeBaseId.value) {
+    if (!token.value) {
       return;
     }
+    const knowledgeBaseId = chatAnswerMode.value === "general_chat" ? null : activeKnowledgeBaseId.value || null;
+    if (chatAnswerMode.value !== "general_chat" && !knowledgeBaseId) return;
     const session = await api.createChatSession(token.value, {
-      knowledge_base_id: activeKnowledgeBaseId.value,
+      knowledge_base_id: knowledgeBaseId,
       title: "New Chat",
+      answer_mode: chatAnswerMode.value,
     });
     chatSessions.value = [session, ...chatSessions.value];
     activeChatSessionId.value = session.id;
@@ -525,8 +539,14 @@ export function useMnemeWorkspace() {
     await loadChatSessions();
   }
 
-  async function sendChatMessage() {
-    if (!token.value || !activeKnowledgeBaseId.value || !chatQuestion.value.trim()) {
+  function mergeChatMessages(items: ChatMessageData[]) {
+    const merged = new Map(chatMessages.value.map((item) => [item.id, item]));
+    items.forEach((item) => merged.set(item.id, item));
+    chatMessages.value = [...merged.values()].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
+  }
+
+  async function sendChatMessage(options: { retryMessageId?: string; regenerateMessageId?: string; mode?: AnswerMode } = {}) {
+    if (!token.value || !chatQuestion.value.trim() || chatPending.value) {
       return;
     }
     if (!activeChatSessionId.value) {
@@ -536,14 +556,69 @@ export function useMnemeWorkspace() {
       return;
     }
     const question = chatQuestion.value.trim();
-    chatQuestion.value = "";
-    const detail = await api.sendChatSessionMessage(token.value, activeChatSessionId.value, {
-      question,
-      answer_mode: chatAnswerMode.value,
-      top_k: 4,
-    });
-    chatMessages.value = [...chatMessages.value, ...detail.messages];
-    chatSessions.value = chatSessions.value.map((session) => (session.id === detail.session.id ? detail.session : session));
+    if (!options.retryMessageId && !options.regenerateMessageId) chatQuestion.value = "";
+    chatPending.value = true;
+    chatError.value = null;
+    try {
+      const detail = await api.sendChatSessionMessage(token.value, activeChatSessionId.value, {
+        question,
+        answer_mode: options.mode ?? chatAnswerMode.value,
+        top_k: 4,
+        retry_message_id: options.retryMessageId,
+        regenerate_message_id: options.regenerateMessageId,
+      });
+      mergeChatMessages(detail.messages);
+      chatSessions.value = chatSessions.value.map((session) => (session.id === detail.session.id ? detail.session : session));
+      chatAnswerMode.value = detail.session.answer_mode;
+    } catch (error) {
+      const data = error instanceof ApiError && error.data && typeof error.data === "object" ? error.data as Record<string, unknown> : {};
+      chatError.value = { message: errorMessage(error, "Unable to answer."), messageId: typeof data.message_id === "string" ? data.message_id : null, retryable: data.retryable === true };
+      const detail = await api.getChatSession(token.value, activeChatSessionId.value);
+      mergeChatMessages(detail.messages);
+    } finally { chatPending.value = false; }
+  }
+
+  async function regenerateChatMessage(messageId: string, mode: AnswerMode) {
+    const original = chatMessages.value.find((item) => item.id === messageId);
+    if (!original) return;
+    chatQuestion.value = original.content;
+    await sendChatMessage({ regenerateMessageId: messageId, mode });
+  }
+
+  async function retryFailedChatMessage() {
+    if (!chatError.value?.retryable || !chatError.value.messageId) return;
+    const original = chatMessages.value.find((item) => item.id === chatError.value?.messageId);
+    if (!original) return;
+    chatQuestion.value = original.content;
+    await sendChatMessage({ retryMessageId: original.id });
+  }
+
+  async function selectChatAnswerMode(mode: AnswerMode) {
+    if (!token.value || !activeChatSessionId.value) {
+      if (mode !== "general_chat" && !activeKnowledgeBaseId.value) {
+        banner.value = "Choose a knowledge base before using a private answer mode.";
+        return;
+      }
+      chatAnswerMode.value = mode;
+      if (mode === "general_chat") await loadChatSessions();
+      return;
+    }
+    const session = chatSessions.value.find((item) => item.id === activeChatSessionId.value);
+    if (mode !== "general_chat" && !session?.knowledge_base_id) {
+      banner.value = "This chat has no knowledge base. Keep General chat or create a scoped chat.";
+      return;
+    }
+    const updated = await api.updateChatSession(token.value, activeChatSessionId.value, mode);
+    chatAnswerMode.value = updated.answer_mode;
+    chatSessions.value = chatSessions.value.map((item) => item.id === updated.id ? updated : item);
+  }
+
+  async function refreshMemoryPendingCount() {
+    if (!token.value) { memoryPendingCount.value = 0; return; }
+    try {
+      const page = await api.listMemoryCandidates(token.value, activeKnowledgeBaseId.value || null);
+      memoryPendingCount.value = page.pending_count ?? page.total;
+    } catch { memoryPendingCount.value = 0; }
   }
 
   async function loadAiModelConfigs() {
@@ -660,6 +735,7 @@ export function useMnemeWorkspace() {
     safeStorageSet(SELECTED_KB_KEY, id);
     workspaceLoaders.invalidate();
     void ensureViewLoaded(view.value);
+    void refreshMemoryPendingCount();
   }
 
   function dismissBanner() {
@@ -709,6 +785,9 @@ export function useMnemeWorkspace() {
     banner,
     chatQuestion,
     chatAnswerMode,
+    memoryPendingCount,
+    chatPending,
+    chatError,
     chatResult,
     chatMessages,
     chatSessionFilter,
@@ -759,6 +838,10 @@ export function useMnemeWorkspace() {
     selectKnowledgeBase,
     selectChatSession,
     sendChatMessage,
+    regenerateChatMessage,
+    retryFailedChatMessage,
+    refreshMemoryPendingCount,
+    selectChatAnswerMode,
     serviceHealth,
     setAuthMode,
     setDefaultAiModelConfig,
@@ -771,6 +854,7 @@ export function useMnemeWorkspace() {
     uploadFile,
     uploadInputKey,
     user,
+    token,
     view,
     viewLoadStates,
     workspaceCommandTab,

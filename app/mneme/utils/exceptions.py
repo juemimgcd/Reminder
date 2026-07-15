@@ -5,10 +5,11 @@ from app.mneme.conf.logging import app_logger
 
 
 class BusinessException(Exception):
-    def __init__(self, message: str, code: int = 4000, status_code: int = 400):
+    def __init__(self, message: str, code: int = 4000, status_code: int = 400, data: object = None):
         self.message = message
         self.code = code
         self.status_code = status_code
+        self.data = data
 
 
 async def business_exception_handler(request: Request, exc: BusinessException):
@@ -21,6 +22,6 @@ async def business_exception_handler(request: Request, exc: BusinessException):
         content={
             "code": exc.code,
             "message": exc.message,
-            "data": None,
+            "data": exc.data,
         },
     )
