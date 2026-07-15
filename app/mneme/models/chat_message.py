@@ -1,4 +1,4 @@
-from sqlalchemy import BigInteger, ForeignKey, Index, JSON, String, Text
+from sqlalchemy import JSON, BigInteger, ForeignKey, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.mneme.models.base import Base
@@ -36,5 +36,6 @@ class ChatMessage(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False, comment="message content")
     sources_json: Mapped[list | None] = mapped_column(JSON, nullable=True, comment="chat sources")
     citations_json: Mapped[list | None] = mapped_column(JSON, nullable=True, comment="chat citations")
+    tool_calls_json: Mapped[list | None] = mapped_column(JSON, nullable=True, comment="agent tool evidence")
     route_json: Mapped[dict | None] = mapped_column(JSON, nullable=True, comment="query route")
     model_config_id: Mapped[str | None] = mapped_column(String(64), nullable=True, comment="AI model config id")

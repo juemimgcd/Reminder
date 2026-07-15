@@ -2,6 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.mneme.agent.contracts import AnswerMode
 
 QueryType = Literal[
     "general_chat",
@@ -26,6 +27,7 @@ class ChatQueryRequest(BaseModel):
     knowledge_base_id: str = Field(..., description="Knowledge base ID")
     top_k: int = Field(default=4, ge=1, le=10, description="Recall size")
     session_id: str | None = Field(default=None, description="Optional session ID")
+    answer_mode: AnswerMode = Field(default="kb_qa", description="User-selected answer mode")
 
 
 class ChatSourceItem(BaseModel):

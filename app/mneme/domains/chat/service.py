@@ -1,10 +1,15 @@
+import asyncio
 import uuid
+from collections.abc import AsyncIterator
 from datetime import datetime, timezone
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mneme.agent.adapters import build_mneme_agent
-from app.mneme.agent.contracts import AgentRequest
+from app.mneme.agent.contracts import AgentRequest, AgentResponse, AnswerMode
+from app.mneme.agent.events import AgentEvent
+from app.mneme.agent.history import build_agent_history
 from app.mneme.crud.ai_model_config import get_default_ai_model_config
 from app.mneme.crud.chat_message import create_chat_message, delete_chat_messages, list_chat_messages
 from app.mneme.crud.chat_session import (
@@ -154,6 +159,7 @@ def message_to_data(message: ChatMessage) -> ChatMessageData:
         content=message.content,
         sources=sources,
         citations=citations,
+        tool_calls=message.tool_calls_json or [],
         route=route,
         model_config_id=message.model_config_id,
         created_at=message.created_at,
@@ -167,6 +173,7 @@ async def ask_in_chat_session(
     session_id: str,
     question: str,
     top_k: int,
+    answer_mode: AnswerMode = "kb_qa",
     expected_knowledge_base_id: str | None = None,
 ) -> tuple[ChatSession, list[ChatMessage]]:
     session = await require_owned_chat_session(db, current_user=current_user, session_id=session_id)
@@ -179,18 +186,60 @@ async def ask_in_chat_session(
     if session.archived_at is not None:
         raise BusinessException(message="chat session is archived", code=4049, status_code=400)
 
+    model_config, agent_request = await build_chat_agent_request(
+        db,
+        current_user=current_user,
+        session=session,
+        question=question,
+        top_k=top_k,
+        answer_mode=answer_mode,
+    )
+    agent_response = await build_mneme_agent(db).run(agent_request)
+    messages = await persist_chat_exchange(
+        db,
+        current_user=current_user,
+        session=session,
+        question=question,
+        response=agent_response,
+        model_config=model_config,
+    )
+    return session, messages
+
+
+async def build_chat_agent_request(
+    db: AsyncSession,
+    *,
+    current_user: User,
+    session: ChatSession,
+    question: str,
+    top_k: int,
+    answer_mode: AnswerMode,
+) -> tuple[Any, AgentRequest]:
     model_config = await get_default_ai_model_config(db, user_id=current_user.id)
     llm_config = ai_model_config_runtime_kwargs(model_config) if model_config else None
-    agent_response = await build_mneme_agent(db).run(
-        AgentRequest(
-            question=question,
-            knowledge_base_id=session.knowledge_base_id,
-            user_id=current_user.id,
-            top_k=top_k,
-            llm_config=llm_config,
-        )
+    persisted_messages = await list_chat_messages(db, session_id=session.id, user_id=current_user.id)
+    return model_config, AgentRequest(
+        question=question,
+        knowledge_base_id=session.knowledge_base_id,
+        user_id=current_user.id,
+        session_id=session.id,
+        top_k=top_k,
+        answer_mode=answer_mode,
+        llm_config=llm_config,
+        history=build_agent_history(persisted_messages),
     )
-    result = agent_response.to_legacy_result()
+
+
+async def persist_chat_exchange(
+    db: AsyncSession,
+    *,
+    current_user: User,
+    session: ChatSession,
+    question: str,
+    response: AgentResponse,
+    model_config: Any,
+) -> list[ChatMessage]:
+    result = response.to_legacy_result()
     now = datetime.now(timezone.utc)
     user_message = await create_chat_message(
         db,
@@ -213,6 +262,7 @@ async def ask_in_chat_session(
         content=result["answer"],
         sources_json=result.get("sources") or [],
         citations_json=result.get("citations") or [],
+        tool_calls_json=response.tool_calls,
         route_json=result.get("route"),
         model_config_id=model_config.id if model_config else None,
     )
@@ -222,4 +272,44 @@ async def ask_in_chat_session(
     session.last_message_at = now
     await db.flush()
     await db.refresh(session)
-    return session, [user_message, assistant_message]
+    return [user_message, assistant_message]
+
+
+async def stream_in_chat_session(
+    db: AsyncSession,
+    *,
+    current_user: User,
+    session_id: str,
+    question: str,
+    top_k: int,
+    answer_mode: AnswerMode = "kb_qa",
+    abort_signal: asyncio.Event | None = None,
+) -> AsyncIterator[AgentEvent]:
+    session = await require_owned_chat_session(db, current_user=current_user, session_id=session_id)
+    if session.archived_at is not None:
+        raise BusinessException(message="chat session is archived", code=4049, status_code=400)
+
+    model_config, agent_request = await build_chat_agent_request(
+        db,
+        current_user=current_user,
+        session=session,
+        question=question,
+        top_k=top_k,
+        answer_mode=answer_mode,
+    )
+    agent = build_mneme_agent(db)
+    persisted = False
+    async for event in agent.stream(agent_request, abort_signal=abort_signal):
+        response_payload = event.metadata.get("response")
+        if response_payload and not persisted:
+            response = AgentResponse.model_validate(response_payload)
+            await persist_chat_exchange(
+                db,
+                current_user=current_user,
+                session=session,
+                question=question,
+                response=response,
+                model_config=model_config,
+            )
+            persisted = True
+        yield event

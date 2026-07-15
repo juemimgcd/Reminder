@@ -2,7 +2,6 @@ from importlib import import_module
 
 from fastapi import FastAPI
 
-
 ROUTER_MODULE_NAMES = [
     "app.mneme.domains.health.router",
     "app.mneme.domains.auth.router",
@@ -11,6 +10,7 @@ ROUTER_MODULE_NAMES = [
     "app.mneme.domains.documents.router",
     "app.mneme.domains.documents.folders",
     "app.mneme.domains.chat.router",
+    "app.mneme.domains.chat.run_router",
     "app.mneme.domains.retrieval.router",
     "app.mneme.domains.memory.router",
     "app.mneme.domains.advice.router",

@@ -7,6 +7,8 @@ import { safeStorageGet, safeStorageRemove, safeStorageSet } from "../lib/safeSt
 import type {
   AiModelConfigData,
   AiModelProviderPreset,
+  AgentStreamEvent,
+  AnswerMode,
   AuthMode,
   ChatQueryData,
   ChatMessageData,
@@ -84,6 +86,7 @@ export function useMnemeWorkspace() {
   const graphRagStatus = ref("");
   const aiModelActionStatus = ref("");
   const chatSessionFilter = ref("");
+  const chatAnswerMode = ref<AnswerMode>("kb_qa");
   const indexTaskMonitors = new Map<string, AbortController>();
   let documentPreviewGeneration = 0;
 
@@ -453,6 +456,7 @@ export function useMnemeWorkspace() {
     chatResult.value = await api.chatQuery(token.value, {
       question: chatQuestion.value.trim(),
       knowledge_base_id: activeKnowledgeBaseId.value,
+      answer_mode: chatAnswerMode.value,
       top_k: 4,
     });
   }
@@ -534,12 +538,79 @@ export function useMnemeWorkspace() {
     }
     const question = chatQuestion.value.trim();
     chatQuestion.value = "";
-    const detail = await api.sendChatSessionMessage(token.value, activeChatSessionId.value, {
-      question,
-      top_k: 4,
-    });
-    chatMessages.value = [...chatMessages.value, ...detail.messages];
-    chatSessions.value = chatSessions.value.map((session) => (session.id === detail.session.id ? detail.session : session));
+    if (IS_PREVIEW_MODE) {
+      const detail = await api.sendChatSessionMessage(token.value, activeChatSessionId.value, {
+        question,
+        answer_mode: chatAnswerMode.value,
+        top_k: 4,
+      });
+      chatMessages.value = [...chatMessages.value, ...detail.messages];
+      chatSessions.value = chatSessions.value.map((session) =>
+        session.id === detail.session.id ? detail.session : session,
+      );
+      return;
+    }
+
+    const sessionId = activeChatSessionId.value;
+    const now = new Date().toISOString();
+    const pendingUserId = `pending-user-${Date.now()}`;
+    const pendingAssistantId = `pending-assistant-${Date.now()}`;
+    chatMessages.value = [
+      ...chatMessages.value,
+      {
+        id: pendingUserId,
+        session_id: sessionId,
+        user_id: user.value?.id ?? 0,
+        knowledge_base_id: activeKnowledgeBaseId.value,
+        role: "user",
+        content: question,
+        sources: [],
+        citations: [],
+        route: null,
+        model_config_id: null,
+        created_at: now,
+      },
+      {
+        id: pendingAssistantId,
+        session_id: sessionId,
+        user_id: user.value?.id ?? 0,
+        knowledge_base_id: activeKnowledgeBaseId.value,
+        role: "assistant",
+        content: "",
+        sources: [],
+        citations: [],
+        route: null,
+        model_config_id: null,
+        created_at: now,
+      },
+    ];
+
+    const handleEvent = (event: AgentStreamEvent) => {
+      if (event.type === "assistant" && event.content) {
+        chatMessages.value = chatMessages.value.map((message) =>
+          message.id === pendingAssistantId
+            ? { ...message, content: message.content + event.content }
+            : message,
+        );
+      } else if (event.type === "tool" && event.tool) {
+        banner.value = event.phase === "start" ? `Running ${event.tool}...` : `${event.tool} completed`;
+      } else if (event.type === "error" && event.error) {
+        banner.value = event.error;
+      }
+    };
+
+    try {
+      const run = await api.createAgentRun(token.value, sessionId, {
+        question,
+        answer_mode: chatAnswerMode.value,
+        top_k: 4,
+      });
+      await api.streamAgentRun(token.value, run.run_id, handleEvent);
+    } finally {
+      await selectChatSession(sessionId);
+      const sessions = await api.listChatSessions(token.value, activeKnowledgeBaseId.value);
+      chatSessions.value = sessions.items;
+    }
   }
 
   async function loadAiModelConfigs() {
@@ -704,6 +775,7 @@ export function useMnemeWorkspace() {
     authStatus,
     banner,
     chatQuestion,
+    chatAnswerMode,
     chatResult,
     chatMessages,
     chatSessionFilter,

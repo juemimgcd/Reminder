@@ -50,6 +50,7 @@ async def query_chat(
             session_id=payload.session_id,
             question=payload.question,
             top_k=payload.top_k,
+            answer_mode=payload.answer_mode,
             expected_knowledge_base_id=payload.knowledge_base_id,
         )
         assistant_message = message_to_data(messages[-1])
@@ -70,6 +71,7 @@ async def query_chat(
             knowledge_base_id=payload.knowledge_base_id,
             user_id=current_user.id,
             top_k=payload.top_k,
+            answer_mode=payload.answer_mode,
         )
     )
     result = agent_response.to_legacy_result()

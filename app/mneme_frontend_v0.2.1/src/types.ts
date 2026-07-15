@@ -227,6 +227,8 @@ export interface QueryRouteDecision {
   reason: string;
 }
 
+export type AnswerMode = "kb_qa" | "memory_query" | "profile_query" | "analysis_query" | "general_chat";
+
 export interface ChatSourceItem {
   source_id: string;
   knowledge_base_id: string | null;
@@ -280,6 +282,7 @@ export interface ChatMessageData {
   content: string;
   sources: ChatSourceItem[];
   citations: ChatCitationItem[];
+  tool_calls?: Record<string, unknown>[];
   route: QueryRouteDecision | null;
   model_config_id: string | null;
   created_at: string;
@@ -305,6 +308,32 @@ export interface ChatSessionListData {
 export interface ChatSessionDetailData {
   session: ChatSessionData;
   messages: ChatMessageData[];
+}
+
+export interface AgentStreamEvent {
+  type: "lifecycle" | "assistant" | "tool" | "compaction" | "error";
+  phase?: string;
+  content?: string;
+  tool?: string;
+  error?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export type AgentRunStatus = "queued" | "running" | "completed" | "failed" | "aborting" | "aborted";
+
+export interface AgentRunData {
+  run_id: string;
+  session_id: string;
+  user_id: number;
+  question: string;
+  top_k: number;
+  answer_mode: AnswerMode;
+  status: AgentRunStatus;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  error: string | null;
+  last_event_id: string | null;
 }
 
 export interface GraphNodeData {

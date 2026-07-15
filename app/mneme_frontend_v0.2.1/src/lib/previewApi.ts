@@ -1,6 +1,9 @@
 ﻿import type {
   AiModelConfigData,
   AiModelConfigListData,
+  AgentRunData,
+  AgentStreamEvent,
+  AnswerMode,
   AuthTokenData,
   ChatMessageData,
   ChatQueryData,
@@ -72,6 +75,11 @@ let knowledgeBases: KnowledgeBaseData[] = [
     created_at: "2026-06-22T11:30:00.000Z",
   },
 ];
+
+const previewAgentRuns = new Map<
+  string,
+  AgentRunData & { payload: { question: string; answer_mode: AnswerMode; top_k?: number } }
+>();
 
 let documents: DocumentListItem[] = [
   {
@@ -658,7 +666,7 @@ const previewApi = {
     delete chatMessages[sessionId];
     return delay({ session_id: sessionId, deleted_count: 1 });
   },
-  sendChatSessionMessage(_token: string, sessionId: string, payload: { question: string; top_k?: number }): Promise<ChatSessionDetailData> {
+  sendChatSessionMessage(_token: string, sessionId: string, payload: { question: string; answer_mode: AnswerMode; top_k?: number }): Promise<ChatSessionDetailData> {
     const session = chatSessions.find((item) => item.id === sessionId) ?? chatSessions[0];
     const createdAt = new Date().toISOString();
     const nextMessages: ChatMessageData[] = [
@@ -694,6 +702,63 @@ const previewApi = {
     session.last_message_at = createdAt;
     return delay({ session, messages: nextMessages });
   },
+  async streamChatSessionMessage(
+    token: string,
+    sessionId: string,
+    payload: { question: string; answer_mode: AnswerMode; top_k?: number },
+    onEvent: (event: import("../types").AgentStreamEvent) => void,
+  ): Promise<void> {
+    onEvent({ type: "lifecycle", phase: "start" });
+    const detail = await this.sendChatSessionMessage(token, sessionId, payload);
+    const answer = detail.messages.find((item) => item.role === "assistant")?.content ?? "";
+    if (answer) onEvent({ type: "assistant", content: answer });
+      onEvent({ type: "lifecycle", phase: "end" });
+    },
+    createAgentRun(
+      _token: string,
+      sessionId: string,
+      payload: { question: string; answer_mode: AnswerMode; top_k?: number },
+    ): Promise<AgentRunData> {
+      const createdAt = new Date().toISOString();
+      const run = {
+        run_id: `run-preview-${Date.now()}`,
+        session_id: sessionId,
+        user_id: previewUser.id,
+        question: payload.question,
+        top_k: payload.top_k ?? 4,
+        answer_mode: payload.answer_mode,
+        status: "queued" as const,
+        created_at: createdAt,
+        started_at: null,
+        completed_at: null,
+        error: null,
+        last_event_id: null,
+        payload,
+      };
+      previewAgentRuns.set(run.run_id, run);
+      return delay(run);
+    },
+    async streamAgentRun(
+      token: string,
+      runId: string,
+      onEvent: (event: AgentStreamEvent) => void,
+    ): Promise<void> {
+      const run = previewAgentRuns.get(runId);
+      if (!run) return;
+      run.status = "running";
+      await this.streamChatSessionMessage(token, run.session_id, run.payload, onEvent);
+      run.status = "completed";
+      run.completed_at = new Date().toISOString();
+    },
+    getAgentRun(_token: string, runId: string): Promise<AgentRunData> {
+      return delay(previewAgentRuns.get(runId) ?? [...previewAgentRuns.values()][0]);
+    },
+    abortAgentRun(_token: string, runId: string): Promise<AgentRunData> {
+      const run = previewAgentRuns.get(runId) ?? [...previewAgentRuns.values()][0];
+      run.status = "aborted";
+      run.completed_at = new Date().toISOString();
+      return delay(run);
+    },
   listAiModelConfigs(): Promise<AiModelConfigListData> {
     return delay({
       provider_presets: [

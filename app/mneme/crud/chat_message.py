@@ -16,6 +16,7 @@ async def create_chat_message(
     content: str,
     sources_json: list | None = None,
     citations_json: list | None = None,
+    tool_calls_json: list | None = None,
     route_json: dict | None = None,
     model_config_id: str | None = None,
 ) -> ChatMessage:
@@ -29,6 +30,7 @@ async def create_chat_message(
         content=content,
         sources_json=sources_json,
         citations_json=citations_json,
+        tool_calls_json=tool_calls_json,
         route_json=route_json,
         model_config_id=model_config_id,
     )

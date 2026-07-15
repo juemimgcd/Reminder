@@ -3,7 +3,8 @@ from typing import Any
 from langchain_core.output_parsers import PydanticOutputParser, StrOutputParser
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.mneme.agent.router import route_query
+from app.mneme.agent.contracts import AnswerMode
+from app.mneme.agent.router import route_answer_mode
 from app.mneme.clients.llm_client import get_llm, get_llm_for_user_config
 from app.mneme.conf.config import settings
 from app.mneme.conf.logging import app_logger, log_event
@@ -158,9 +159,10 @@ async def generate_rag_answer(
     knowledge_base_id: str,
     user_id: int | None = None,
     top_k: int = 4,
+    answer_mode: AnswerMode = "kb_qa",
     llm_config: dict | None = None,
 ) -> dict[str, Any]:
-    route = route_query(question)
+    route = route_answer_mode(answer_mode)
     log_event(
         "query_service",
         "info",

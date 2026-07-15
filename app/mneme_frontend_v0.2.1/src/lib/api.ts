@@ -2,6 +2,9 @@ import previewApi, { isPreviewMode, PREVIEW_API_BASE_URL, PREVIEW_TOKEN } from "
 import type {
   AiModelConfigData,
   AiModelConfigListData,
+  AgentStreamEvent,
+  AgentRunData,
+  AnswerMode,
   ApiResponse,
   AuthTokenData,
   ChatSessionDetailData,
@@ -212,6 +215,53 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 }
 
+async function streamAgentEvents(
+  path: string,
+  token: string,
+  body: Record<string, unknown>,
+  onEvent: (event: AgentStreamEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!response.ok) throw await responseError(response);
+  await consumeAgentEventStream(response, onEvent);
+}
+
+async function consumeAgentEventStream(
+  response: Response,
+  onEvent: (event: AgentStreamEvent) => void,
+): Promise<void> {
+  if (!response.body) throw new ApiError("Streaming response has no body.", response.status);
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value, { stream: !done }).replace(/\r\n/g, "\n");
+    const frames = buffer.split("\n\n");
+    buffer = frames.pop() ?? "";
+    for (const frame of frames) {
+      const data = frame
+        .split("\n")
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice(5).trimStart())
+        .join("\n");
+      if (data) onEvent(JSON.parse(data) as AgentStreamEvent);
+    }
+    if (done) break;
+  }
+}
+
 const realApi = {
   health() {
     return request<ServiceHealthData>("/health");
@@ -380,7 +430,7 @@ const realApi = {
   },
   chatQuery(
     token: string,
-    payload: { question: string; knowledge_base_id: string; top_k?: number; session_id?: string | null },
+    payload: { question: string; knowledge_base_id: string; answer_mode: AnswerMode; top_k?: number; session_id?: string | null },
   ) {
     return request<ChatQueryData>("/kb/chat/query", {
       method: "POST",
@@ -388,6 +438,7 @@ const realApi = {
       body: {
         question: payload.question,
         knowledge_base_id: payload.knowledge_base_id,
+        answer_mode: payload.answer_mode,
         top_k: payload.top_k ?? 4,
         session_id: payload.session_id ?? null,
       },
@@ -415,15 +466,74 @@ const realApi = {
       token,
     });
   },
-  sendChatSessionMessage(token: string, sessionId: string, payload: { question: string; top_k?: number }) {
+  sendChatSessionMessage(token: string, sessionId: string, payload: { question: string; answer_mode: AnswerMode; top_k?: number }) {
     return request<ChatSessionDetailData>(`/kb/chat/sessions/${sessionId}/messages`, {
       method: "POST",
       token,
       body: {
         question: payload.question,
+        answer_mode: payload.answer_mode,
         top_k: payload.top_k ?? 4,
       },
     });
+  },
+  streamChatSessionMessage(
+    token: string,
+    sessionId: string,
+    payload: { question: string; answer_mode: AnswerMode; top_k?: number },
+    onEvent: (event: AgentStreamEvent) => void,
+    options: { signal?: AbortSignal } = {},
+  ) {
+    return streamAgentEvents(
+      `/kb/chat/sessions/${sessionId}/messages/stream`,
+      token,
+      {
+        question: payload.question,
+        answer_mode: payload.answer_mode,
+        top_k: payload.top_k ?? 4,
+      },
+      onEvent,
+      options.signal,
+    );
+  },
+  createAgentRun(
+    token: string,
+    sessionId: string,
+    payload: { question: string; answer_mode: AnswerMode; top_k?: number },
+  ) {
+    return request<AgentRunData>(`/kb/chat/sessions/${sessionId}/runs`, {
+      method: "POST",
+      token,
+      body: {
+        question: payload.question,
+        answer_mode: payload.answer_mode,
+        top_k: payload.top_k ?? 4,
+      },
+    });
+  },
+  async streamAgentRun(
+    token: string,
+    runId: string,
+    onEvent: (event: AgentStreamEvent) => void,
+    options: { signal?: AbortSignal; cursor?: string } = {},
+  ) {
+    const response = await fetch(`${API_BASE_URL}/kb/chat/runs/${runId}/stream`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "text/event-stream",
+        ...(options.cursor ? { "Last-Event-ID": options.cursor } : {}),
+      },
+      signal: options.signal,
+    });
+    if (!response.ok) throw await responseError(response);
+    await consumeAgentEventStream(response, onEvent);
+  },
+  getAgentRun(token: string, runId: string) {
+    return request<AgentRunData>(`/kb/chat/runs/${runId}`, { token });
+  },
+  abortAgentRun(token: string, runId: string) {
+    return request<AgentRunData>(`/kb/chat/runs/${runId}/abort`, { method: "POST", token });
   },
   listAiModelConfigs(token: string) {
     return request<AiModelConfigListData>("/settings/ai-models", { token });

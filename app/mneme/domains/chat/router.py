@@ -1,4 +1,8 @@
-from fastapi import APIRouter, Depends, Query
+import asyncio
+import json
+
+from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mneme.conf.database import get_database, get_write_database
@@ -9,6 +13,8 @@ from app.mneme.domains.chat.service import (
     get_chat_session_detail,
     list_chat_sessions,
     message_to_data,
+    require_owned_chat_session,
+    stream_in_chat_session,
     update_chat_session,
 )
 from app.mneme.models.user import User
@@ -21,8 +27,8 @@ from app.mneme.schemas.chat_session import (
     ChatSessionUpdateRequest,
 )
 from app.mneme.utils.auth import get_current_user
+from app.mneme.utils.exceptions import BusinessException
 from app.mneme.utils.response import success_response
-
 
 router = APIRouter(prefix="/kb/chat/sessions", tags=["chat"])
 
@@ -92,7 +98,10 @@ async def delete_chat_session_api(
     db: AsyncSession = Depends(get_write_database),
 ):
     deleted_count = await delete_chat_session(db, current_user=current_user, session_id=session_id)
-    return success_response(data={"session_id": session_id, "deleted_count": deleted_count}, message="chat session deleted")
+    return success_response(
+        data={"session_id": session_id, "deleted_count": deleted_count},
+        message="chat session deleted",
+    )
 
 
 @router.post("/{session_id}/messages")
@@ -108,6 +117,7 @@ async def create_chat_message_api(
         session_id=session_id,
         question=payload.question,
         top_k=payload.top_k,
+        answer_mode=payload.answer_mode,
         expected_knowledge_base_id=None,
     )
     return success_response(
@@ -116,4 +126,46 @@ async def create_chat_message_api(
             messages=[message_to_data(message) for message in messages],
         ),
         message="chat message created",
+    )
+
+
+@router.post("/{session_id}/messages/stream")
+async def stream_chat_message_api(
+    session_id: str,
+    payload: ChatSessionMessageRequest,
+    request_obj: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_write_database),
+):
+    session = await require_owned_chat_session(db, current_user=current_user, session_id=session_id)
+    if session.archived_at is not None:
+        raise BusinessException(message="chat session is archived", code=4049, status_code=400)
+    abort_signal = asyncio.Event()
+
+    async def event_stream():
+        try:
+            async for event in stream_in_chat_session(
+                db,
+                current_user=current_user,
+                session_id=session_id,
+                question=payload.question,
+                top_k=payload.top_k,
+                answer_mode=payload.answer_mode,
+                abort_signal=abort_signal,
+            ):
+                if await request_obj.is_disconnected():
+                    abort_signal.set()
+                    break
+                data = json.dumps(event.to_stream_dict(), ensure_ascii=False)
+                yield f"event: {event.type.value}\ndata: {data}\n\n"
+        finally:
+            abort_signal.set()
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
     )
