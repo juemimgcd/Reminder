@@ -1,3 +1,4 @@
+from app.mneme.agent.capabilities import CapabilityIndex, CapabilityProjection
 from app.mneme.agent.contracts import AnswerMode
 from app.mneme.agent.tools.base import ToolMetadata
 from app.mneme.agent.tools.builtin import (
@@ -17,19 +18,21 @@ TOOL_CATALOG: dict[str, ToolMetadata] = {
     )
 }
 
-ANSWER_MODE_TOOL_NAMES: dict[AnswerMode, str | None] = {
-    "kb_qa": KB_SEARCH_METADATA.name,
-    "memory_query": MEMORY_SEARCH_METADATA.name,
-    "profile_query": PROFILE_GET_METADATA.name,
-    "analysis_query": GROWTH_ANALYSIS_METADATA.name,
-    "general_chat": None,
-}
+CAPABILITY_INDEX = CapabilityIndex(
+    item.capability_metadata() for item in TOOL_CATALOG.values()
+)
 
 
 def get_tool_metadata(tool_name: str) -> ToolMetadata | None:
     return TOOL_CATALOG.get(tool_name)
 
 
-def get_tool_for_answer_mode(answer_mode: AnswerMode) -> ToolMetadata | None:
-    tool_name = ANSWER_MODE_TOOL_NAMES[answer_mode]
-    return TOOL_CATALOG.get(tool_name) if tool_name else None
+def project_capabilities(
+    *,
+    answer_mode: AnswerMode,
+    knowledge_base_id: str | None,
+) -> CapabilityProjection:
+    return CAPABILITY_INDEX.project(
+        answer_mode=answer_mode,
+        has_knowledge_base=bool(knowledge_base_id),
+    )

@@ -8,6 +8,7 @@ from app.mneme.agent.events import AgentEvent
 from app.mneme.agent.orchestrator import generate_rag_answer
 from app.mneme.agent.runner import MnemeAgentRunner
 from app.mneme.agent.runtime_context import AgentRunContext
+from app.mneme.agent.runtime_events import RuntimeEventDispatcher
 from app.mneme.agent.service import MnemeAgent
 
 
@@ -48,13 +49,22 @@ class RuntimeAnswerEngine:
             yield event
 
     def _build_context(self, request: AgentRequest, abort_signal: asyncio.Event) -> AgentRunContext:
+        runtime_events = RuntimeEventDispatcher(
+            trace_id=request.trace_id,
+            run_id=request.run_id,
+            session_id=request.session_id,
+            user_id=request.user_id,
+        )
         return AgentRunContext(
             db=self.db,
             user_id=request.user_id,
             knowledge_base_id=request.knowledge_base_id,
             session_id=request.session_id,
+            run_id=request.run_id,
+            trace_id=request.trace_id,
             llm_config=request.llm_config,
             abort_signal=abort_signal,
+            runtime_events=runtime_events,
         )
 
 

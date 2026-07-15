@@ -13,9 +13,20 @@ The surrounding domains retain their existing ownership:
 
 Backend callers construct a `MnemeAgent` through the RAG adapter, submit an
 `AgentRequest`, and persist the resulting `AgentResponse`. The Agent core
-contracts, port, and service do not depend on FastAPI, SQLAlchemy, CRUD, or ORM
-models. Infrastructure dependencies are isolated in `agent/adapters`.
+contracts, port, and service do not depend on FastAPI or HTTP routing.
+Infrastructure dependencies are isolated in adapters and runtime-event
+subscribers.
 
-During the first migration phase, `agent/orchestrator.py` delegates to the
-existing retrieval, profile, LLM, and citation services. No database schema or
-public response contract changes are part of this phase.
+`agent/capabilities.py` indexes the trusted backend capabilities. An
+`answer_mode` is treated as an intent hint and projected into the smallest
+eligible tool set for the current request. Every projection records eligible,
+selected, and excluded capability IDs with exclusion reasons; the Runner and
+tool policy consume the projection rather than a fixed answer-mode/tool map.
+
+`agent/runtime_events.py` is independent from the public SSE DTO. A trace-aware
+dispatcher publishes run, context, capability, model, tool, and persistence
+events to structured logging, bounded metrics, and best-effort PostgreSQL audit
+subscribers. The audit table stores identifiers, timings, token counts, error
+kinds, and capability IDs only; prompts, answers, tool arguments, and evidence
+payloads are not runtime-audit data. The SSE adapter preserves existing event
+types while attaching trace identity to lifecycle and tool events.

@@ -64,6 +64,7 @@ async def execute_agent_run(run_id: str) -> None:
                 answer_mode=record.answer_mode,
                 abort_signal=abort_signal,
                 agent_run_id=record.run_id,
+                trace_id=record.trace_id,
                 session_turn_claimed=True,
             ):
                 await agent_run_store.append_event(run_id, event)

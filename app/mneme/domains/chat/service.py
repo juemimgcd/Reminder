@@ -1,4 +1,5 @@
 import asyncio
+import time
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -17,6 +18,7 @@ from app.mneme.agent.contracts import AgentRequest, AgentResponse, AnswerMode
 from app.mneme.agent.events import AgentEvent
 from app.mneme.agent.history import build_agent_history
 from app.mneme.agent.prompt_builder import build_agent_system_prompt
+from app.mneme.agent.runtime_events import RuntimeEventDispatcher, RuntimeEventType
 from app.mneme.conf.config import settings
 from app.mneme.crud.ai_model_config import get_default_ai_model_config
 from app.mneme.crud.chat_message import (
@@ -215,15 +217,15 @@ async def ask_in_chat_session(
             answer_mode=answer_mode,
         )
         agent_response = await build_mneme_agent(db).run(agent_request)
-        messages = await persist_chat_exchange(
+        messages = await _persist_and_commit_chat_exchange(
             db,
             current_user=current_user,
             session=session,
             question=question,
             response=agent_response,
             model_config=model_config,
+            agent_request=agent_request,
         )
-        await db.commit()
         return session, messages
 
 
@@ -235,6 +237,8 @@ async def build_chat_agent_request(
     question: str,
     top_k: int,
     answer_mode: AnswerMode,
+    agent_run_id: str | None = None,
+    trace_id: str | None = None,
 ) -> tuple[Any, AgentRequest]:
     model_config = await get_default_ai_model_config(db, user_id=current_user.id)
     llm_config = ai_model_config_runtime_kwargs(model_config) if model_config else None
@@ -271,6 +275,8 @@ async def build_chat_agent_request(
         knowledge_base_id=session.knowledge_base_id,
         user_id=current_user.id,
         session_id=session.id,
+        run_id=agent_run_id,
+        trace_id=trace_id or f"trace_{uuid.uuid4().hex}",
         top_k=top_k,
         answer_mode=answer_mode,
         llm_config=llm_config,
@@ -370,6 +376,55 @@ async def persist_chat_exchange(
     return [user_message, assistant_message]
 
 
+async def _persist_and_commit_chat_exchange(
+    db: AsyncSession,
+    *,
+    current_user: User,
+    session: ChatSession,
+    question: str,
+    response: AgentResponse,
+    model_config: Any,
+    agent_request: AgentRequest,
+    agent_run_id: str | None = None,
+) -> list[ChatMessage]:
+    started_at = time.perf_counter()
+    dispatcher = RuntimeEventDispatcher(
+        trace_id=agent_request.trace_id,
+        run_id=agent_request.run_id,
+        session_id=session.id,
+        user_id=current_user.id,
+    )
+    try:
+        messages = await persist_chat_exchange(
+            db,
+            current_user=current_user,
+            session=session,
+            question=question,
+            response=response,
+            model_config=model_config,
+            agent_run_id=agent_run_id,
+        )
+        await db.commit()
+    except Exception as exc:
+        await dispatcher.emit(
+            RuntimeEventType.PERSISTENCE_FAILED,
+            duration_ms=int((time.perf_counter() - started_at) * 1000),
+            error_kind=type(exc).__name__,
+            payload={"operation": "chat_exchange"},
+        )
+        raise
+
+    await dispatcher.emit(
+        RuntimeEventType.PERSISTENCE_COMPLETED,
+        duration_ms=int((time.perf_counter() - started_at) * 1000),
+        payload={
+            "operation": "chat_exchange",
+            "message_count": len(messages),
+        },
+    )
+    return messages
+
+
 async def stream_in_chat_session(
     db: AsyncSession,
     *,
@@ -380,6 +435,7 @@ async def stream_in_chat_session(
     answer_mode: AnswerMode = "kb_qa",
     abort_signal: asyncio.Event | None = None,
     agent_run_id: str | None = None,
+    trace_id: str | None = None,
     session_turn_claimed: bool = False,
 ) -> AsyncIterator[AgentEvent]:
     session = await require_owned_chat_session(db, current_user=current_user, session_id=session_id)
@@ -401,6 +457,8 @@ async def stream_in_chat_session(
             question=question,
             top_k=top_k,
             answer_mode=answer_mode,
+            agent_run_id=agent_run_id,
+            trace_id=trace_id,
         )
         agent = build_mneme_agent(db)
         persisted = False
@@ -408,16 +466,16 @@ async def stream_in_chat_session(
             response_payload = event.metadata.get("response")
             if response_payload and not persisted:
                 response = AgentResponse.model_validate(response_payload)
-                await persist_chat_exchange(
+                await _persist_and_commit_chat_exchange(
                     db,
                     current_user=current_user,
                     session=session,
                     question=question,
                     response=response,
                     model_config=model_config,
+                    agent_request=agent_request,
                     agent_run_id=agent_run_id,
                 )
-                await db.commit()
                 persisted = True
             yield event
 

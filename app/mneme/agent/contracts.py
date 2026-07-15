@@ -1,3 +1,4 @@
+import uuid
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -19,6 +20,8 @@ class AgentRequest(BaseModel):
     knowledge_base_id: str = Field(..., min_length=1)
     user_id: int
     session_id: str | None = None
+    run_id: str | None = None
+    trace_id: str = Field(default_factory=lambda: f"trace_{uuid.uuid4().hex}")
     top_k: int = Field(default=4, ge=1, le=10)
     answer_mode: AnswerMode = "kb_qa"
     llm_config: dict[str, Any] | None = None
