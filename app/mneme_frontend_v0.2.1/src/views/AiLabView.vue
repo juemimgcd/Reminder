@@ -67,7 +67,7 @@ const modeLabel = (value?: string) =>
               <small
                 >{{ message.role === "user" ? "You" : "Mneme" }} ·
                 {{ formatDate(message.created_at) }}</small
-              ><span v-if="message.route" class="mode">{{
+              ><span v-if="message.route" data-testid="answer-mode-badge" class="mode">{{
                 modeLabel(message.route.query_type)
               }}</span>
               <p>{{ message.content }}</p>
@@ -131,7 +131,7 @@ const modeLabel = (value?: string) =>
         </button>
       </div>
       <form @submit.prevent="workspace.sendChatMessage()">
-        <div class="modes" role="radiogroup" aria-label="Answer mode">
+        <div data-testid="answer-mode-selector" class="modes" role="radiogroup" aria-label="Answer mode">
           <button
             v-for="mode in modes"
             :key="mode.value"
@@ -153,7 +153,7 @@ const modeLabel = (value?: string) =>
             <Send />
           </button>
         </div>
-        <small
+        <small data-testid="answer-mode-description"
           >The selected mode is authoritative; Mneme will not infer another
           mode.</small
         >
