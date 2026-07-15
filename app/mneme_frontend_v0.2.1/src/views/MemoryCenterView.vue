@@ -88,7 +88,7 @@ async function confirmed(message: string, action: () => Promise<void>) {
       </section>
       <CandidateInbox
         :items="center.candidates.value"
-        :pending="center.pending.value"
+        :pending="center.loading.value || center.pending.value"
         @action="center.candidateAction" />
       <div class="body">
         <section>
@@ -109,7 +109,7 @@ async function confirmed(message: string, action: () => Promise<void>) {
         <MemoryDetail
           v-if="center.detail.value"
           :detail="center.detail.value"
-          :pending="center.pending.value"
+          :pending="center.loading.value || center.pending.value"
           @revise="(value) => center.revise(center.detail.value!.memory, value)"
           @invalidate="
             confirmed(

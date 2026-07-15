@@ -22,7 +22,7 @@ export function useMemoryCenter(
     kind: BusyKind,
     operation: () => Promise<T>,
   ): Promise<T | undefined> {
-    if ((kind === "loading" && loading.value) || pending.value) return;
+    if (loading.value || pending.value) return;
     const busy = kind === "loading" ? loading : pending;
     busy.value = true;
     error.value = "";

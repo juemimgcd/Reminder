@@ -175,8 +175,7 @@ export function useMnemeWorkspace() {
 
   async function loadAiView(generation: number): Promise<ViewLoadResult> {
     if (!token.value) return { empty: true };
-    const scope = chatAnswerMode.value === "general_chat" ? null : activeKnowledgeBaseId.value || null;
-    if (chatAnswerMode.value !== "general_chat" && !scope) return { empty: true };
+    const scope = !activeKnowledgeBaseId.value || chatAnswerMode.value === "general_chat" ? null : activeKnowledgeBaseId.value;
     const sessionsRequest = (async () => {
       try {
         const data = await api.listChatSessions(token.value, scope);
@@ -187,6 +186,7 @@ export function useMnemeWorkspace() {
           activeChatSessionId.value = sessionId;
           chatMessages.value = detail?.messages ?? [];
           if (detail) chatAnswerMode.value = detail.session.answer_mode;
+          else if (!activeKnowledgeBaseId.value) chatAnswerMode.value = "general_chat";
         }
         return true;
       } catch {
@@ -600,6 +600,7 @@ export function useMnemeWorkspace() {
         return;
       }
       chatAnswerMode.value = mode;
+      if (mode === "general_chat") await loadChatSessions();
       return;
     }
     const session = chatSessions.value.find((item) => item.id === activeChatSessionId.value);
