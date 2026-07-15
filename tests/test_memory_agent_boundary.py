@@ -72,8 +72,9 @@ def test_import_from_scanner_detects_forbidden_parent_import():
     sample = fixture_dir / "sample.py"
     sample.write_text("from services.memory_agent import database\n", encoding="utf-8")
     try:
-        assert violations(fixture_dir, ("services.memory_agent.database",)) == [
-            ".boundary-scanner-fixture\\sample.py: services.memory_agent.database"
+        found = violations(fixture_dir, ("services.memory_agent.database",))
+        assert [item.replace("\\", "/") for item in found] == [
+            ".boundary-scanner-fixture/sample.py: services.memory_agent.database"
         ]
     finally:
         sample.unlink(missing_ok=True)
