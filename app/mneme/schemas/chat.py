@@ -24,28 +24,33 @@ class QueryRouteDecision(BaseModel):
 
 class ChatQueryRequest(BaseModel):
     question: str = Field(..., description="User question")
-    knowledge_base_id: str = Field(..., description="Knowledge base ID")
+    knowledge_base_id: str | None = Field(default=None, description="Knowledge base ID")
     top_k: int = Field(default=4, ge=1, le=10, description="Recall size")
     session_id: str | None = Field(default=None, description="Optional session ID")
     answer_mode: AnswerMode = Field(default="kb_qa", description="User-selected answer mode")
+    model_config_id: str | None = Field(default=None, description="Owned AI model configuration")
 
 
 class ChatSourceItem(BaseModel):
     source_id: str
     knowledge_base_id: str | None = None
-    document_id: str
-    chunk_id: str
+    document_id: str | None = None
+    chunk_id: str | None = None
+    source_type: str | None = None
+    evidence_id: str | None = None
     page_no: int | None = None
     text: str
 
 
 class ChatCitationItem(BaseModel):
     source_id: str = Field(..., description="Stable source ID, for example S1")
-    document_id: str = Field(..., description="Source document ID")
-    chunk_id: str = Field(..., description="Source chunk ID")
+    document_id: str | None = Field(default=None, description="Source document ID")
+    chunk_id: str | None = Field(default=None, description="Source chunk ID")
     page_no: int | None = Field(default=None, description="Source page number")
-    quote: str = Field(..., description="Quoted evidence text")
-    reason: str = Field(..., description="Why this evidence supports the answer")
+    quote: str = Field(default="", description="Quoted evidence text")
+    reason: str = Field(default="", description="Why this evidence supports the answer")
+    source_type: str | None = None
+    evidence_id: str | None = None
     validation_status: str | None = Field(default=None, description="valid / invalid")
     quote_found: bool | None = Field(default=None, description="Whether quote exists in source text")
     validation_reason: str | None = Field(default=None, description="Citation validation detail")

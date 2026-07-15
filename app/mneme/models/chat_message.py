@@ -1,4 +1,4 @@
-from sqlalchemy import BigInteger, ForeignKey, Index, JSON, String, Text
+from sqlalchemy import JSON, BigInteger, ForeignKey, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.mneme.models.base import Base
@@ -25,11 +25,11 @@ class ChatMessage(Base):
         nullable=False,
         comment="owner user id",
     )
-    knowledge_base_id: Mapped[str] = mapped_column(String(64), nullable=False, comment="knowledge base public id")
-    knowledge_base_pk: Mapped[int] = mapped_column(
+    knowledge_base_id: Mapped[str | None] = mapped_column(String(64), nullable=True, comment="knowledge base public id")
+    knowledge_base_pk: Mapped[int | None] = mapped_column(
         BigInteger,
         ForeignKey("knowledge_bases.pk"),
-        nullable=False,
+        nullable=True,
         comment="knowledge base internal id",
     )
     role: Mapped[str] = mapped_column(String(32), nullable=False, comment="user or assistant")
@@ -38,3 +38,4 @@ class ChatMessage(Base):
     citations_json: Mapped[list | None] = mapped_column(JSON, nullable=True, comment="chat citations")
     route_json: Mapped[dict | None] = mapped_column(JSON, nullable=True, comment="query route")
     model_config_id: Mapped[str | None] = mapped_column(String(64), nullable=True, comment="AI model config id")
+    agent_run_id: Mapped[str | None] = mapped_column(String(64), nullable=True, comment="memory agent answer run id")

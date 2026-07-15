@@ -89,7 +89,7 @@ class EventReceipt(BaseModel):
 class MemoryAgentAnswerRequest(BaseModel):
     request_id: str
     owner_id: int
-    knowledge_base_id: str
+    knowledge_base_id: str | None = None
     session_id: str | None = None
     message_id: str
     question: str = Field(min_length=1)

@@ -50,6 +50,7 @@ async def create_chat_session_api(
         current_user=current_user,
         knowledge_base_id=payload.knowledge_base_id,
         title=payload.title,
+        answer_mode=payload.answer_mode,
     )
     return success_response(data=ChatSessionData.model_validate(session), message="chat session created")
 
@@ -82,6 +83,7 @@ async def update_chat_session_api(
         session_id=session_id,
         title=payload.title,
         archived=payload.archived,
+        answer_mode=payload.answer_mode,
     )
     return success_response(data=ChatSessionData.model_validate(session), message="chat session updated")
 
@@ -93,7 +95,9 @@ async def delete_chat_session_api(
     db: AsyncSession = Depends(get_write_database),
 ):
     deleted_count = await delete_chat_session(db, current_user=current_user, session_id=session_id)
-    return success_response(data={"session_id": session_id, "deleted_count": deleted_count}, message="chat session deleted")
+    return success_response(
+        data={"session_id": session_id, "deleted_count": deleted_count}, message="chat session deleted"
+    )
 
 
 @router.post("/{session_id}/messages")
@@ -110,6 +114,8 @@ async def create_chat_message_api(
         question=payload.question,
         top_k=payload.top_k,
         answer_mode=payload.answer_mode,
+        model_config_id=payload.model_config_id,
+        retry_message_id=payload.retry_message_id,
         expected_knowledge_base_id=None,
     )
     return success_response(
