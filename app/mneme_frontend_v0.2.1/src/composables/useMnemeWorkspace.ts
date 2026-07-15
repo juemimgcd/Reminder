@@ -87,6 +87,7 @@ export function useMnemeWorkspace() {
   const aiModelActionStatus = ref("");
   const chatSessionFilter = ref("");
   const chatAnswerMode = ref<AnswerMode>("kb_qa");
+  const memoryPendingCount = ref(0);
   const chatPending = ref(false);
   const chatError = ref<{ message: string; messageId: string | null; retryable: boolean } | null>(null);
   const indexTaskMonitors = new Map<string, AbortController>();
@@ -173,16 +174,19 @@ export function useMnemeWorkspace() {
   }
 
   async function loadAiView(generation: number): Promise<ViewLoadResult> {
-    if (!token.value || !activeKnowledgeBaseId.value) return { empty: true };
+    if (!token.value) return { empty: true };
+    const scope = chatAnswerMode.value === "general_chat" ? null : activeKnowledgeBaseId.value || null;
+    if (chatAnswerMode.value !== "general_chat" && !scope) return { empty: true };
     const sessionsRequest = (async () => {
       try {
-        const data = await api.listChatSessions(token.value, activeKnowledgeBaseId.value);
+        const data = await api.listChatSessions(token.value, scope);
         const sessionId = data.items[0]?.id ?? "";
         const detail = sessionId ? await api.getChatSession(token.value, sessionId) : null;
         if (workspaceLoaders.isCurrent(generation)) {
           chatSessions.value = data.items;
           activeChatSessionId.value = sessionId;
           chatMessages.value = detail?.messages ?? [];
+          if (detail) chatAnswerMode.value = detail.session.answer_mode;
         }
         return true;
       } catch {
@@ -232,6 +236,7 @@ export function useMnemeWorkspace() {
       if (selectedKnowledgeBaseId.value) {
         safeStorageSet(SELECTED_KB_KEY, selectedKnowledgeBaseId.value);
       }
+      void refreshMemoryPendingCount();
 
       void ensureViewLoaded(view.value, true);
 
@@ -589,12 +594,30 @@ export function useMnemeWorkspace() {
   }
 
   async function selectChatAnswerMode(mode: AnswerMode) {
-    chatAnswerMode.value = mode;
-    if (!token.value || !activeChatSessionId.value) return;
+    if (!token.value || !activeChatSessionId.value) {
+      if (mode !== "general_chat" && !activeKnowledgeBaseId.value) {
+        banner.value = "Choose a knowledge base before using a private answer mode.";
+        return;
+      }
+      chatAnswerMode.value = mode;
+      return;
+    }
     const session = chatSessions.value.find((item) => item.id === activeChatSessionId.value);
-    if (mode !== "general_chat" && !session?.knowledge_base_id) return;
+    if (mode !== "general_chat" && !session?.knowledge_base_id) {
+      banner.value = "This chat has no knowledge base. Keep General chat or create a scoped chat.";
+      return;
+    }
     const updated = await api.updateChatSession(token.value, activeChatSessionId.value, mode);
+    chatAnswerMode.value = updated.answer_mode;
     chatSessions.value = chatSessions.value.map((item) => item.id === updated.id ? updated : item);
+  }
+
+  async function refreshMemoryPendingCount() {
+    if (!token.value) { memoryPendingCount.value = 0; return; }
+    try {
+      const page = await api.listMemoryCandidates(token.value, activeKnowledgeBaseId.value || null);
+      memoryPendingCount.value = page.pending_count ?? page.total;
+    } catch { memoryPendingCount.value = 0; }
   }
 
   async function loadAiModelConfigs() {
@@ -711,6 +734,7 @@ export function useMnemeWorkspace() {
     safeStorageSet(SELECTED_KB_KEY, id);
     workspaceLoaders.invalidate();
     void ensureViewLoaded(view.value);
+    void refreshMemoryPendingCount();
   }
 
   function dismissBanner() {
@@ -760,6 +784,7 @@ export function useMnemeWorkspace() {
     banner,
     chatQuestion,
     chatAnswerMode,
+    memoryPendingCount,
     chatPending,
     chatError,
     chatResult,
@@ -814,6 +839,7 @@ export function useMnemeWorkspace() {
     sendChatMessage,
     regenerateChatMessage,
     retryFailedChatMessage,
+    refreshMemoryPendingCount,
     selectChatAnswerMode,
     serviceHealth,
     setAuthMode,

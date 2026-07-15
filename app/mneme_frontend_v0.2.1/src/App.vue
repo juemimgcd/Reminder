@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Component } from "vue";
-import { computed, ref } from "vue";
+import { computed } from "vue";
 import {
   BookOpen,
   BrainCircuit,
@@ -40,14 +40,13 @@ type ViewItem = { id: WorkspaceView; label: string; shortLabel: string; icon: Co
 const workspace = useMnemeWorkspace();
 const shell = useResponsiveShell();
 const { formatDate, t } = useI18n();
-const memoryPendingCount = ref(0);
 
 const VIEW_ITEMS = computed<ViewItem[]>(() => [
   { id: "dashboard", label: t("nav.map"), shortLabel: t("nav.short.map"), icon: Network, hint: t("nav.hint.map") },
   { id: "notes", label: t("nav.vault"), shortLabel: t("nav.short.vault"), icon: FolderOpen, hint: t("nav.hint.vault") },
   { id: "graph", label: t("nav.graph"), shortLabel: t("nav.short.graph"), icon: GitBranch, hint: t("nav.hint.graph") },
   { id: "ai", label: t("nav.ai"), shortLabel: t("nav.short.ai"), icon: FlaskConical, hint: t("nav.hint.ai") },
-  { id: "memory", label: `${t("nav.memory")}${memoryPendingCount.value ? ` (${memoryPendingCount.value})` : ""}`, shortLabel: t("nav.short.memory"), icon: Brain, hint: t("nav.hint.memory") },
+  { id: "memory", label: `${t("nav.memory")}${workspace.memoryPendingCount.value ? ` (${workspace.memoryPendingCount.value})` : ""}`, shortLabel: t("nav.short.memory"), icon: Brain, hint: t("nav.hint.memory") },
   { id: "settings", label: t("nav.settings"), shortLabel: t("nav.short.settings"), icon: SlidersHorizontal, hint: t("nav.hint.settings") },
 ]);
 
@@ -162,7 +161,7 @@ function openCreateCommand() {
           <VaultView v-else-if="workspace.view.value === 'notes'" :workspace="workspace" @create="openCreateCommand" />
           <GraphView v-else-if="workspace.view.value === 'graph'" :workspace="workspace" />
           <AiLabView v-else-if="workspace.view.value === 'ai'" :workspace="workspace" :format-date="formatDate" />
-          <MemoryCenterView v-else-if="workspace.view.value === 'memory'" :workspace="workspace" @pending-count="memoryPendingCount = $event" />
+          <MemoryCenterView v-else-if="workspace.view.value === 'memory'" :workspace="workspace" />
           <SettingsView v-else :workspace="workspace" :health-label="activeHealthLabel" />
         </section>
 
