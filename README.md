@@ -125,7 +125,9 @@ bash start.sh --backend-port 8001
 
 ## Docker
 
-Compose 同时运行现有 Mneme 服务和独立 Memory Agent 服务。当前阶段 `MEMORY_AGENT_ENABLED=false`，因此用户请求仍只进入 Mneme；Memory Agent API 仅在 Compose 网络内通过 `memory-agent-api:8010` 提供 `/health` 和 `/health/readiness`。
+Compose 同时运行现有 Mneme 服务和独立 Memory Agent 服务。在线回答已统一通过 Mneme 到
+Memory Agent 的 HTTP 契约；Memory Agent API 仅在 Compose 网络内通过 `memory-agent-api:8010`
+提供 `/health` 和 `/health/readiness`。`MEMORY_AGENT_ENABLED` 仅保留给文档资源迁移分支。
 
 服务所有权边界如下：
 
@@ -268,11 +270,13 @@ broker/worker diagnostic at `/health/worker`, and low-cardinality persisted metr
 `/metrics`. Structured logs correlate `request_id`, `run_id`, and `event_id`; request content,
 answers, evidence, memory values, prompts and credentials are excluded by policy.
 
-Production cutover starts with `MEMORY_AGENT_ENABLED=false`, runs both database migrations and
-the projection backfill, compares safe counts/hashes, then enables the flag and recreates both
-Mneme `app` and `worker`. Agent failures never trigger legacy fallback in the same request.
-Rollback sets the flag false, recreates `app` and `worker`, and pauses `memory-agent-worker`
-without deleting retained Outbox/Inbox, projections, memories, deletion fences, or answer runs.
+Online answer cutover is complete: chat, retrieval, companion, and regeneration requests call
+`MemoryAgentClient` as their sole answer path. Agent failures are surfaced as retryable errors;
+they never trigger an in-process fallback in the same request. The migration flag remains only
+for document/resource branches that still need cleanup and must not be used to select an answer
+runtime. Runtime rollback now means deploying the previous application image and pausing the
+Agent worker, without deleting retained Outbox/Inbox, projections, memories, deletion fences, or
+answer runs.
 See `deploy/DEPLOY.md` for exact commands, thresholds, and inspection steps. Mneme-local Outbox
 age/dead-letter diagnostics are available with:
 

@@ -386,7 +386,7 @@ APP_HOST_PORT=127.0.0.1:8000
 The cutover switch is explicit and is read by both Mneme API and worker processes.
 There is no same-request fallback: an Agent error remains visible and retryable.
 
-1. Deploy with `MEMORY_AGENT_ENABLED=false`. Create the Agent database, then run the
+1. Deploy the Mneme and Memory Agent images together. Create the Agent database, then run the
    Mneme and Agent expand migrations before starting either new binary:
 
 ```bash
@@ -418,7 +418,8 @@ docker compose exec app python -m app.mneme.cli.export_agent_projection --batch-
 docker compose exec memory-agent-api python -m services.memory_agent.cli.backfill --batch-size 100
 ```
 
-4. Set `MEMORY_AGENT_ENABLED=true` and recreate both Mneme consumers of the flag:
+4. Online answer traffic already uses `MemoryAgentClient` exclusively. Recreate the Mneme
+   API and worker after migrations/backfill so they load the Agent endpoint and service token:
 
 ```bash
 docker compose up -d --no-deps --force-recreate app worker
@@ -440,11 +441,12 @@ access logging is disabled (so query strings cannot leak), while Uvicorn errors 
 API/worker processes use the same whitelist formatter and discard arbitrary messages,
 arguments, exception text, prompts, payloads, and credentials.
 
-Rollback does not downgrade either database and does not delete Agent data. Set the flag
-false, recreate Mneme API and worker, then pause Agent consumption after in-flight tasks settle:
+Rollback does not downgrade either database and does not delete Agent data. Deploy the previous
+application image, recreate Mneme API and worker, then pause Agent consumption after in-flight
+tasks settle. The migration flag is retained only for document/resource cleanup and is not an
+answer-runtime switch:
 
 ```bash
-# edit .env: MEMORY_AGENT_ENABLED=false
 docker compose up -d --no-deps --force-recreate app worker
 docker compose stop memory-agent-worker
 ```
