@@ -18,7 +18,7 @@ const modeLabel = (value?: string) =>
 </script>
 <template>
   <div data-testid="stitch-ai-laboratory-layout" class="ai-layout">
-    <aside>
+    <aside data-testid="ai-history-rail">
       <header>
         <h2>Chats</h2>
         <button @click="workspace.createChatSession">New chat</button>
