@@ -127,7 +127,7 @@ bash start.sh --backend-port 8001
 
 Compose 同时运行现有 Mneme 服务和独立 Memory Agent 服务。在线回答已统一通过 Mneme 到
 Memory Agent 的 HTTP 契约；Memory Agent API 仅在 Compose 网络内通过 `memory-agent-api:8010`
-提供 `/health` 和 `/health/readiness`。`MEMORY_AGENT_ENABLED` 仅保留给文档资源迁移分支。
+提供 `/health` 和 `/health/readiness`；在线回答不再依赖迁移开关。
 
 服务所有权边界如下：
 
