@@ -48,6 +48,10 @@ async def create_agent_run_api(
             record.run_id,
             AgentEvent.lifecycle(
                 "queued",
+                trace_id=record.trace_id,
+                run_id=record.run_id,
+                session_id=record.session_id,
+                user_id=record.user_id,
                 loop_index=0,
                 loop_reason="session_fifo",
             ),

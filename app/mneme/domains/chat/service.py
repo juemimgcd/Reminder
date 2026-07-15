@@ -537,12 +537,13 @@ async def stream_in_chat_session(
     answer_mode: AnswerMode | None = None,
     abort_signal: asyncio.Event | None = None,
     agent_run_id: str | None = None,
+    trace_id: str | None = None,
     session_turn_claimed: bool = False,
 ) -> AsyncIterator[AgentEvent]:
     if abort_signal is not None and abort_signal.is_set():
-        yield AgentEvent.lifecycle("aborted", reason="abort_before_start")
+        yield AgentEvent.lifecycle("aborted", reason="abort_before_start", trace_id=trace_id, run_id=agent_run_id)
         return
-    yield AgentEvent.lifecycle("start")
+    yield AgentEvent.lifecycle("start", trace_id=trace_id, run_id=agent_run_id)
     async with _chat_session_turn(
         session_id,
         abort_signal=abort_signal,
@@ -558,10 +559,10 @@ async def stream_in_chat_session(
             agent_run_id=agent_run_id,
         )
     if abort_signal is not None and abort_signal.is_set():
-        yield AgentEvent.lifecycle("aborted", reason="abort_after_answer")
+        yield AgentEvent.lifecycle("aborted", reason="abort_after_answer", trace_id=trace_id, run_id=agent_run_id)
         return
-    yield AgentEvent.assistant_delta(messages[-1].content)
-    yield AgentEvent.lifecycle("end")
+    yield AgentEvent.assistant_delta(messages[-1].content, trace_id=trace_id, run_id=agent_run_id)
+    yield AgentEvent.lifecycle("end", trace_id=trace_id, run_id=agent_run_id)
 
 
 @asynccontextmanager

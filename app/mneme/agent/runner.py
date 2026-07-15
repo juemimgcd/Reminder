@@ -1,6 +1,7 @@
 import asyncio
 import json
 import re
+import time
 from collections import Counter
 from collections.abc import AsyncIterator
 from typing import Any
@@ -8,19 +9,21 @@ from typing import Any
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.messages.utils import message_chunk_to_message
 
+from app.mneme.agent.capabilities import CapabilityProjection
 from app.mneme.agent.context_manager import apply_history_budget, merge_history_summaries
 from app.mneme.agent.contracts import AgentHistoryMessage, AgentRequest, AgentResponse
 from app.mneme.agent.events import AgentEvent
 from app.mneme.agent.guards import AgentRunAbortedError, AgentRunLimitError, AgentRunLimits
 from app.mneme.agent.prompt_builder import build_agent_system_prompt
 from app.mneme.agent.runtime_context import AgentRunContext
+from app.mneme.agent.runtime_events import RuntimeEventType, RuntimeSseAdapter
 from app.mneme.agent.tools import (
-    BACKEND_TOOL_NAMES,
     BackendToolResult,
     execute_backend_tool,
     get_backend_tool_schemas,
 )
 from app.mneme.agent.tools.policy import evaluate_tool_call
+from app.mneme.agent.tools.registry import project_capabilities
 from app.mneme.clients.llm_client import get_llm, get_llm_for_user_config
 from app.mneme.conf.config import settings
 
@@ -43,7 +46,16 @@ class MnemeAgentRunner:
         return response
 
     async def stream(self, request: AgentRequest, context: AgentRunContext) -> AsyncIterator[AgentEvent]:
-        yield AgentEvent.lifecycle("start", loop_index=0, loop_reason="initial_request")
+        run_started_at = time.perf_counter()
+        runtime_start = await context.runtime_events.emit(
+            RuntimeEventType.RUN_STARTED,
+            loop_index=0,
+            payload={"answer_mode": request.answer_mode},
+        )
+        yield RuntimeSseAdapter.enrich(
+            AgentEvent.lifecycle("start", loop_index=0, loop_reason="initial_request"),
+            runtime_start,
+        )
         system_prompt = build_agent_system_prompt(answer_mode=request.answer_mode)
         context_window = int((context.llm_config or {}).get("context_window") or 64_000)
         if not request.history_prepared:
@@ -84,6 +96,16 @@ class MnemeAgentRunner:
             history_summary = request.history_summary
             compaction = request.history_compaction
 
+        await context.runtime_events.emit(
+            RuntimeEventType.CONTEXT_READY,
+            loop_index=0,
+            payload={
+                "history_message_count": len(history_messages),
+                "history_summary_present": bool(history_summary),
+                "compacted": bool(compaction),
+            },
+        )
+
         if compaction:
             yield AgentEvent.compaction(
                 "start",
@@ -112,29 +134,75 @@ class MnemeAgentRunner:
                     response_payload = event.metadata.get("response")
                     if response_payload:
                         response = AgentResponse.model_validate(response_payload)
+                        selected_capability_ids = (
+                            ((response.debug or {}).get("agent_runtime") or {}).get(
+                                "selected_capability_ids"
+                            )
+                            or []
+                        )
+                        runtime_end = await context.runtime_events.emit(
+                            RuntimeEventType.RUN_COMPLETED,
+                            loop_index=event.metadata.get("loop_index"),
+                            duration_ms=int((time.perf_counter() - run_started_at) * 1000),
+                            selected_capability_ids=selected_capability_ids,
+                        )
+                        event = RuntimeSseAdapter.enrich(event, runtime_end)
                     yield event
                 if response is None:
                     raise RuntimeError("agent execution produced no final response")
         except AgentRunAbortedError:
-            yield AgentEvent.lifecycle("aborted", loop_index=0, loop_reason="abort_requested")
+            runtime_aborted = await context.runtime_events.emit(
+                RuntimeEventType.RUN_ABORTED,
+                loop_index=0,
+                duration_ms=int((time.perf_counter() - run_started_at) * 1000),
+                error_kind="abort_requested",
+            )
+            yield RuntimeSseAdapter.enrich(
+                AgentEvent.lifecycle("aborted", loop_index=0, loop_reason="abort_requested"),
+                runtime_aborted,
+            )
             return
         except TimeoutError:
-            yield AgentEvent.error_event(
-                "Agent run timed out.", loop_index=0, loop_reason="run_timeout"
+            runtime_failed = await context.runtime_events.emit(
+                RuntimeEventType.RUN_FAILED,
+                loop_index=0,
+                duration_ms=int((time.perf_counter() - run_started_at) * 1000),
+                error_kind="timeout",
             )
-            yield AgentEvent.lifecycle(
-                "error", reason="timeout", loop_index=0, loop_reason="run_timeout"
+            yield RuntimeSseAdapter.enrich(
+                AgentEvent.error_event(
+                    "Agent run timed out.", loop_index=0, loop_reason="run_timeout"
+                ),
+                runtime_failed,
+            )
+            yield RuntimeSseAdapter.enrich(
+                AgentEvent.lifecycle(
+                    "error", reason="timeout", loop_index=0, loop_reason="run_timeout"
+                ),
+                runtime_failed,
             )
             return
         except Exception as exc:
-            yield AgentEvent.error_event(
-                str(exc),
-                error_type=type(exc).__name__,
+            runtime_failed = await context.runtime_events.emit(
+                RuntimeEventType.RUN_FAILED,
                 loop_index=0,
-                loop_reason="execution_error",
+                duration_ms=int((time.perf_counter() - run_started_at) * 1000),
+                error_kind=type(exc).__name__,
             )
-            yield AgentEvent.lifecycle(
-                "error", reason="execution_error", loop_index=0, loop_reason="execution_error"
+            yield RuntimeSseAdapter.enrich(
+                AgentEvent.error_event(
+                    str(exc),
+                    error_type=type(exc).__name__,
+                    loop_index=0,
+                    loop_reason="execution_error",
+                ),
+                runtime_failed,
+            )
+            yield RuntimeSseAdapter.enrich(
+                AgentEvent.lifecycle(
+                    "error", reason="execution_error", loop_index=0, loop_reason="execution_error"
+                ),
+                runtime_failed,
             )
 
     async def _execute(
@@ -163,21 +231,76 @@ class MnemeAgentRunner:
             messages.extend(_history_model_messages(item))
         messages.append(HumanMessage(content=request.question))
 
-        tool_schemas = get_backend_tool_schemas(request.answer_mode)
+        projection = project_capabilities(
+            answer_mode=request.answer_mode,
+            knowledge_base_id=request.knowledge_base_id,
+        )
+        runtime_projection = await context.runtime_events.emit(
+            RuntimeEventType.CAPABILITY_PROJECTED,
+            loop_index=0,
+            selected_capability_ids=projection.selected_capability_ids,
+            payload=projection.trace_payload(),
+        )
+        yield RuntimeSseAdapter.enrich(
+            AgentEvent.lifecycle(
+                "capability_projection",
+                loop_index=0,
+                loop_reason="minimal_toolset_projection",
+                **projection.trace_payload(),
+            ),
+            runtime_projection,
+        )
+        if projection.requires_tool and not projection.selected_capability_ids:
+            raise AgentRunLimitError(
+                projection.exclusion_reason or "no eligible backend capability"
+            )
+
+        tool_schemas = get_backend_tool_schemas(projection)
         tool_results: list[BackendToolResult] = []
         tool_calls: list[dict[str, Any]] = []
         call_counts: Counter[str] = Counter()
 
         if not tool_schemas:
             answer_parts: list[str] = []
-            async for content, _ in self._stream_model(llm, messages, context):
-                answer_parts.append(content)
-                yield AgentEvent.assistant_delta(
-                    content,
+            model_started_at = time.perf_counter()
+            await context.runtime_events.emit(
+                RuntimeEventType.LLM_REQUESTED,
+                loop_index=0,
+                selected_capability_ids=projection.selected_capability_ids,
+            )
+            model_message: AIMessage | None = None
+            try:
+                async for content, final_message in self._stream_model(llm, messages, context):
+                    answer_parts.append(content)
+                    if final_message is not None:
+                        model_message = final_message
+                    if content:
+                        yield AgentEvent.assistant_delta(
+                            content,
+                            trace_id=context.trace_id,
+                            run_id=context.run_id,
+                            loop_index=0,
+                            loop_reason="direct_answer",
+                            selected_capability_ids=[],
+                        )
+            except Exception as exc:
+                await context.runtime_events.emit(
+                    RuntimeEventType.LLM_FAILED,
                     loop_index=0,
-                    loop_reason="direct_answer",
-                    selected_capability_ids=[],
+                    duration_ms=int((time.perf_counter() - model_started_at) * 1000),
+                    error_kind=type(exc).__name__,
+                    selected_capability_ids=projection.selected_capability_ids,
                 )
+                raise
+            input_tokens, output_tokens = _message_token_usage(model_message)
+            await context.runtime_events.emit(
+                RuntimeEventType.LLM_COMPLETED,
+                loop_index=0,
+                duration_ms=int((time.perf_counter() - model_started_at) * 1000),
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                selected_capability_ids=projection.selected_capability_ids,
+            )
             answer = "".join(answer_parts).strip()
             response = AgentResponse(
                 answer=answer,
@@ -190,7 +313,19 @@ class MnemeAgentRunner:
                     "confidence": "high",
                     "reason": "general chat has no backend capability",
                 },
-                debug={"agent_runtime": {"model_loops": 1, "tool_call_count": 0}},
+                debug={
+                    "agent_runtime": {
+                        "model_loops": 1,
+                        "tool_call_count": 0,
+                    }
+                },
+            )
+            response = _attach_runtime_debug(
+                response,
+                context=context,
+                projection=projection,
+                model_loops=1,
+                tool_call_count=0,
             )
             yield AgentEvent.lifecycle(
                 "end", loop_index=0, loop_reason="direct_answer", response=response.model_dump()
@@ -205,18 +340,45 @@ class MnemeAgentRunner:
             self._check_aborted(context)
             model_loops += 1
             model = required_model if not tool_results else auto_model
+            model_started_at = time.perf_counter()
+            await context.runtime_events.emit(
+                RuntimeEventType.LLM_REQUESTED,
+                loop_index=loop_index,
+                selected_capability_ids=projection.selected_capability_ids,
+            )
             try:
                 answer_parts, model_message = await self._collect_model_message(
                     model, messages, context
                 )
-            except Exception:
+            except Exception as exc:
+                await context.runtime_events.emit(
+                    RuntimeEventType.LLM_FAILED,
+                    loop_index=loop_index,
+                    duration_ms=int((time.perf_counter() - model_started_at) * 1000),
+                    error_kind=type(exc).__name__,
+                    selected_capability_ids=projection.selected_capability_ids,
+                )
                 answer_parts, model_message = [], None
+            else:
+                input_tokens, output_tokens = _message_token_usage(model_message)
+                await context.runtime_events.emit(
+                    RuntimeEventType.LLM_COMPLETED,
+                    loop_index=loop_index,
+                    duration_ms=int((time.perf_counter() - model_started_at) * 1000),
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    selected_capability_ids=projection.selected_capability_ids,
+                )
 
             requested_calls = (
                 list(getattr(model_message, "tool_calls", []) or []) if model_message else []
             )
             if not requested_calls and not tool_results:
-                selected_tool = BACKEND_TOOL_NAMES[request.answer_mode]
+                selected_tool = (
+                    projection.selected_tool_names[0]
+                    if projection.selected_tool_names
+                    else None
+                )
                 if selected_tool:
                     requested_calls = [
                         {
@@ -241,7 +403,7 @@ class MnemeAgentRunner:
                     tool_name = str(call.get("name") or "")
                     arguments = call.get("args") if isinstance(call.get("args"), dict) else {}
                     policy = evaluate_tool_call(
-                        answer_mode=request.answer_mode,
+                        projection=projection,
                         tool_name=tool_name,
                     )
                     if not policy.allowed:
@@ -255,7 +417,11 @@ class MnemeAgentRunner:
 
                     self._check_aborted(context)
                     call_id = str(call.get("id") or f"tool_{len(tool_calls) + 1}")
-                    capability_ids = [f"tool:{tool_name}"]
+                    capability_ids = [
+                        policy.metadata.capability_id
+                        if policy.metadata
+                        else f"tool:{tool_name}"
+                    ]
                     tool_call = {
                         "id": call_id,
                         "name": tool_name,
@@ -264,16 +430,26 @@ class MnemeAgentRunner:
                         "outcome": "running",
                     }
                     tool_calls.append(tool_call)
-                    yield AgentEvent.tool_event(
-                        "start",
-                        tool_name,
-                        call_id=call_id,
+                    tool_started_at = time.perf_counter()
+                    runtime_tool_start = await context.runtime_events.emit(
+                        RuntimeEventType.TOOL_STARTED,
+                        tool_call_id=call_id,
                         loop_index=loop_index,
-                        loop_reason="evidence_required",
                         selected_capability_ids=capability_ids,
                     )
+                    yield RuntimeSseAdapter.enrich(
+                        AgentEvent.tool_event(
+                            "start",
+                            tool_name,
+                            call_id=call_id,
+                            loop_index=loop_index,
+                            loop_reason="evidence_required",
+                            selected_capability_ids=capability_ids,
+                        ),
+                        runtime_tool_start,
+                    )
                     result = await execute_backend_tool(
-                        answer_mode=request.answer_mode,
+                        projection=projection,
                         tool_name=tool_name,
                         arguments=arguments,
                         fallback_question=request.question,
@@ -296,22 +472,50 @@ class MnemeAgentRunner:
                         citation_count=len(result.citations),
                         evidence_count=evidence_count,
                     )
-                    yield AgentEvent.tool_event(
-                        "error" if result.is_error else "end",
-                        tool_name,
-                        call_id=call_id,
+                    runtime_tool_end = await context.runtime_events.emit(
+                        RuntimeEventType.TOOL_FAILED
+                        if result.is_error
+                        else RuntimeEventType.TOOL_COMPLETED,
+                        tool_call_id=call_id,
                         loop_index=loop_index,
-                        loop_reason="tool_failure" if result.is_error else "evidence_collected",
+                        duration_ms=int((time.perf_counter() - tool_started_at) * 1000),
                         selected_capability_ids=capability_ids,
-                        confidence=result.confidence,
-                        source_count=len(result.sources),
-                        citation_count=len(result.citations),
-                        evidence_count=evidence_count,
                         error_kind=result.error_kind.value if result.error_kind else None,
-                        error=result.error_message,
+                        payload={
+                            "tool_name": tool_name,
+                            "source_count": len(result.sources),
+                            "citation_count": len(result.citations),
+                            "evidence_count": evidence_count,
+                        },
+                    )
+                    yield RuntimeSseAdapter.enrich(
+                        AgentEvent.tool_event(
+                            "error" if result.is_error else "end",
+                            tool_name,
+                            call_id=call_id,
+                            loop_index=loop_index,
+                            loop_reason="tool_failure"
+                            if result.is_error
+                            else "evidence_collected",
+                            selected_capability_ids=capability_ids,
+                            confidence=result.confidence,
+                            source_count=len(result.sources),
+                            citation_count=len(result.citations),
+                            evidence_count=evidence_count,
+                            error_kind=result.error_kind.value if result.error_kind else None,
+                            error=result.error_message,
+                        ),
+                        runtime_tool_end,
                     )
                     if result.is_error:
                         response = _tool_failure_response(result, tool_calls, model_loops)
+                        response = _attach_runtime_debug(
+                            response,
+                            context=context,
+                            projection=projection,
+                            model_loops=model_loops,
+                            tool_call_count=len(tool_calls),
+                        )
                         yield AgentEvent.assistant_delta(
                             response.answer,
                             loop_index=loop_index,
@@ -353,6 +557,13 @@ class MnemeAgentRunner:
                     tool_calls=tool_calls,
                     model_loops=model_loops,
                 )
+                response = _attach_runtime_debug(
+                    response,
+                    context=context,
+                    projection=projection,
+                    model_loops=model_loops,
+                    tool_call_count=len(tool_calls),
+                )
                 yield AgentEvent.lifecycle(
                     "end",
                     loop_index=loop_index,
@@ -375,6 +586,13 @@ class MnemeAgentRunner:
             results=tool_results,
             tool_calls=tool_calls,
             model_loops=model_loops,
+        )
+        response = _attach_runtime_debug(
+            response,
+            context=context,
+            projection=projection,
+            model_loops=model_loops,
+            tool_call_count=len(tool_calls),
         )
         yield AgentEvent.lifecycle(
             "end",
@@ -501,6 +719,55 @@ def _content_text(content: Any) -> str:
         elif isinstance(item, dict) and item.get("type") == "text":
             parts.append(str(item.get("text") or ""))
     return "".join(parts)
+
+
+def _message_token_usage(message: AIMessage | None) -> tuple[int | None, int | None]:
+    if message is None:
+        return None, None
+    usage = getattr(message, "usage_metadata", None) or {}
+    response_metadata = getattr(message, "response_metadata", None) or {}
+    token_usage = response_metadata.get("token_usage") or response_metadata.get("usage") or {}
+    input_tokens = usage.get("input_tokens") or token_usage.get("prompt_tokens")
+    output_tokens = usage.get("output_tokens") or token_usage.get("completion_tokens")
+    return _optional_int(input_tokens), _optional_int(output_tokens)
+
+
+def _optional_int(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _attach_runtime_debug(
+    response: AgentResponse,
+    *,
+    context: AgentRunContext,
+    projection: CapabilityProjection,
+    model_loops: int,
+    tool_call_count: int,
+) -> AgentResponse:
+    debug = dict(response.debug or {})
+    agent_runtime = dict(debug.get("agent_runtime") or {})
+    agent_runtime.update(
+        {
+            "trace_id": context.trace_id,
+            "run_id": context.run_id,
+            "model_loops": model_loops,
+            "tool_call_count": tool_call_count,
+            "eligible_capability_ids": projection.eligible_capability_ids,
+            "selected_capability_ids": projection.selected_capability_ids,
+            "excluded_capabilities": [
+                item.model_dump(mode="json") for item in projection.excluded_capabilities
+            ],
+            "exclusion_reason": projection.exclusion_reason,
+            "metrics": context.runtime_events.metrics_snapshot(),
+        }
+    )
+    debug["agent_runtime"] = agent_runtime
+    return response.model_copy(update={"debug": debug})
 
 
 def _tool_failure_response(

@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 
-from app.mneme.agent.contracts import AnswerMode
+from app.mneme.agent.capabilities import CapabilityProjection
 from app.mneme.agent.tools.base import ToolMetadata
-from app.mneme.agent.tools.registry import get_tool_for_answer_mode, get_tool_metadata
+from app.mneme.agent.tools.registry import get_tool_metadata
 
 
 @dataclass(frozen=True)
@@ -13,13 +13,28 @@ class ToolPolicyDecision:
     metadata: ToolMetadata | None = None
 
 
-def evaluate_tool_call(*, answer_mode: AnswerMode, tool_name: str) -> ToolPolicyDecision:
-    expected = get_tool_for_answer_mode(answer_mode)
+def evaluate_tool_call(
+    *,
+    projection: CapabilityProjection,
+    tool_name: str,
+) -> ToolPolicyDecision:
     candidate = get_tool_metadata(tool_name)
-    if expected is None:
-        return ToolPolicyDecision(False, False, "general chat does not expose backend tools")
     if candidate is None:
-        return ToolPolicyDecision(False, True, f"unknown backend tool: {tool_name}", expected)
-    if candidate.name != expected.name:
-        return ToolPolicyDecision(False, True, f"tool {tool_name} is not eligible for {answer_mode}", expected)
-    return ToolPolicyDecision(True, True, "tool matches the user-selected capability", candidate)
+        return ToolPolicyDecision(
+            False,
+            projection.requires_tool,
+            f"unknown backend tool: {tool_name}",
+        )
+    if candidate.capability_id not in projection.selected_capability_ids:
+        return ToolPolicyDecision(
+            False,
+            projection.requires_tool,
+            f"tool {tool_name} is outside the projected capability set",
+            candidate,
+        )
+    return ToolPolicyDecision(
+        True,
+        projection.requires_tool,
+        "tool belongs to the projected capability set",
+        candidate,
+    )

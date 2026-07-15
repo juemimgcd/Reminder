@@ -1,3 +1,4 @@
+from app.mneme.models.agent_runtime_event import AgentRuntimeEvent
 from app.mneme.models.ai_model_config import AiModelConfig
 from app.mneme.models.base import Base
 from app.mneme.models.chat_message import ChatMessage
@@ -14,6 +15,7 @@ from app.mneme.models.user import User
 __all__ = [
     "Base",
     "AiModelConfig",
+    "AgentRuntimeEvent",
     "User",
     "KnowledgeBase",
     "Document",

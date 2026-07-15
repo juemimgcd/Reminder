@@ -1,7 +1,8 @@
+import uuid
 from datetime import datetime, timezone
 from enum import Enum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.mneme.agent.contracts import AnswerMode
 from app.mneme.agent.events import AgentEvent
@@ -25,6 +26,7 @@ TERMINAL_AGENT_RUN_STATUSES = {
 
 class AgentRunRecord(BaseModel):
     run_id: str
+    trace_id: str = Field(default_factory=lambda: f"trace_{uuid.uuid4().hex}")
     session_id: str
     user_id: int
     client_request_id: str = ""
@@ -53,6 +55,7 @@ class AgentRunRecord(BaseModel):
     ) -> "AgentRunRecord":
         return cls(
             run_id=run_id,
+            trace_id=f"trace_{uuid.uuid4().hex}",
             session_id=session_id,
             user_id=user_id,
             client_request_id=client_request_id,

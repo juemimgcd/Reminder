@@ -22,3 +22,11 @@ The old `app.mneme.agent` contracts and compatibility retrieval modules remain
 only for migration-era tests and document-pipeline cleanup; they are not an
 online fallback. Removing those compatibility files is a follow-up after the
 remaining document/resource branches are migrated.
+
+Within that compatibility layer, `agent/capabilities.py` indexes trusted
+backend capabilities and records eligible, selected, and excluded capability
+IDs. `agent/runtime_events.py` provides trace-aware structured logging,
+bounded metrics, and best-effort PostgreSQL audit subscribers without storing
+prompts, answers, tool arguments, or evidence payloads. Public SSE lifecycle
+events carry the same trace and run identifiers while online answers continue
+to use the independent Memory Agent service.

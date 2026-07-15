@@ -2,6 +2,7 @@ from enum import Enum
 
 from pydantic import BaseModel, ConfigDict
 
+from app.mneme.agent.capabilities import CapabilityMetadata
 from app.mneme.agent.contracts import AnswerMode
 
 
@@ -21,12 +22,25 @@ class ToolMetadata(BaseModel):
 
     name: str
     description: str
-    answer_mode: AnswerMode
+    capability_id: str
+    answer_modes: frozenset[AnswerMode]
+    evidence_type: str
     requires_knowledge_base: bool = True
+    can_answer_directly: bool = False
     read_only: bool = True
     must_produce_evidence: bool = True
     scope: ToolScope = ToolScope.TRUSTED_REQUEST
     timeout_seconds: float = 60.0
+
+    def capability_metadata(self) -> CapabilityMetadata:
+        return CapabilityMetadata(
+            capability_id=self.capability_id,
+            tool_name=self.name,
+            answer_modes=self.answer_modes,
+            evidence_type=self.evidence_type,
+            requires_knowledge_base=self.requires_knowledge_base,
+            can_answer_directly=self.can_answer_directly,
+        )
 
     def openai_schema(self) -> dict:
         return {

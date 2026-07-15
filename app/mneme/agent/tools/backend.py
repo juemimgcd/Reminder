@@ -1,17 +1,16 @@
 import asyncio
 from typing import Any
 
-from app.mneme.agent.contracts import AnswerMode
+from app.mneme.agent.capabilities import CapabilityProjection
 from app.mneme.agent.orchestrator import is_retryable_external_error
 from app.mneme.agent.runtime_context import AgentRunContext
 from app.mneme.agent.tools.base import ToolErrorKind
 from app.mneme.agent.tools.contracts import BackendToolResult
 from app.mneme.agent.tools.policy import evaluate_tool_call
 from app.mneme.agent.tools.primitives import analyze_growth, get_profile, search_knowledge_base, search_memory
-from app.mneme.agent.tools.registry import ANSWER_MODE_TOOL_NAMES, get_tool_for_answer_mode, get_tool_metadata
+from app.mneme.agent.tools.registry import TOOL_CATALOG, get_tool_metadata
 from app.mneme.utils.exceptions import BusinessException
 
-BACKEND_TOOL_NAMES = ANSWER_MODE_TOOL_NAMES
 TOOL_EXECUTORS = {
     "kb_search": search_knowledge_base,
     "memory_search": search_memory,
@@ -20,14 +19,17 @@ TOOL_EXECUTORS = {
 }
 
 
-def get_backend_tool_schemas(answer_mode: AnswerMode) -> list[dict[str, Any]]:
-    metadata = get_tool_for_answer_mode(answer_mode)
-    return [metadata.openai_schema()] if metadata else []
+def get_backend_tool_schemas(projection: CapabilityProjection) -> list[dict[str, Any]]:
+    return [
+        TOOL_CATALOG[tool_name].openai_schema()
+        for tool_name in projection.selected_tool_names
+        if tool_name in TOOL_CATALOG
+    ]
 
 
 async def execute_backend_tool(
     *,
-    answer_mode: AnswerMode,
+    projection: CapabilityProjection,
     tool_name: str,
     arguments: dict[str, Any],
     fallback_question: str,
@@ -41,7 +43,7 @@ async def execute_backend_tool(
             kind=ToolErrorKind.UNAVAILABLE,
             message=f"Backend capability is unavailable: {tool_name}",
         )
-    decision = evaluate_tool_call(answer_mode=answer_mode, tool_name=tool_name)
+    decision = evaluate_tool_call(projection=projection, tool_name=tool_name)
     if not decision.allowed:
         return BackendToolResult.error(
             tool_name=tool_name,

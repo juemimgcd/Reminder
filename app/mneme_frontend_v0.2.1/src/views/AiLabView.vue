@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Bot, MessageSquare, Send, Trash2 } from "@lucide/vue";
+import { Bot, ChevronLeft, MessageSquare, Search, Send, Trash2 } from "@lucide/vue";
+import { computed, ref } from "vue";
 import type { MnemeWorkspace } from "../composables/useMnemeWorkspace";
 import UiEmptyState from "../components/ui/UiEmptyState.vue";
 const props = defineProps<{
@@ -15,14 +16,23 @@ const modes = [
 ] as const;
 const modeLabel = (value?: string) =>
   modes.find((m) => m.value === value)?.label ?? "Assistant";
+const historyCollapsed = ref(window.matchMedia("(max-width: 1023px)").matches);
+const modeDescription = computed(() => ({
+  kb_qa: "Answer from indexed documents in the active knowledge base.",
+  memory_query: "Answer from stored memory evidence for the active workspace.",
+  profile_query: "Summarize the profile evidence associated with this workspace.",
+  analysis_query: "Analyze growth signals and evidence-backed patterns.",
+  general_chat: "Use a general conversation without private retrieval.",
+}[props.workspace.chatAnswerMode.value]));
 </script>
 <template>
-  <div data-testid="stitch-ai-laboratory-layout" class="ai-layout">
-    <aside data-testid="ai-history-rail">
+  <div data-testid="stitch-ai-laboratory-layout" class="ai-layout" :class="{ 'ai-layout--collapsed': historyCollapsed }">
+    <aside data-testid="ai-history-rail" class="ai-history-panel" :aria-hidden="historyCollapsed">
       <header>
         <h2>Chats</h2>
         <button @click="workspace.createChatSession">New chat</button>
       </header>
+      <label class="history-search"><Search /><input v-model="workspace.chatSessionFilter.value" placeholder="Search history..." /></label>
       <nav>
         <button
           v-for="s in workspace.filteredChatSessions.value"
@@ -37,7 +47,13 @@ const modeLabel = (value?: string) =>
         </button>
       </nav>
     </aside>
-    <section class="chat">
+    <section data-testid="chat-function-grid" class="chat">
+      <button
+        data-testid="ai-history-rail-toggle"
+        class="rail-toggle"
+        :title="historyCollapsed ? 'Expand chat history' : 'Collapse chat history'"
+        @click="historyCollapsed = !historyCollapsed"
+      ><ChevronLeft :class="{ rotate: historyCollapsed }" /></button>
       <header>
         <div>
           <small>AI Laboratory</small>
@@ -49,7 +65,7 @@ const modeLabel = (value?: string) =>
             }}
           </h1>
         </div>
-        <button class="danger" @click="workspace.deleteActiveChatSession">
+        <button class="danger" aria-label="Delete active chat" @click="workspace.deleteActiveChatSession">
           <Trash2 />Delete
         </button>
       </header>
@@ -130,14 +146,13 @@ const modeLabel = (value?: string) =>
           Retry saved message
         </button>
       </div>
-      <form @submit.prevent="workspace.sendChatMessage()">
+      <form data-testid="workspace-chat-command" @submit.prevent="workspace.sendChatMessage()">
         <div data-testid="answer-mode-selector" class="modes" role="radiogroup" aria-label="Answer mode">
           <button
             v-for="mode in modes"
             :key="mode.value"
             type="button"
-            role="radio"
-            :aria-checked="workspace.chatAnswerMode.value === mode.value"
+            :aria-pressed="workspace.chatAnswerMode.value === mode.value"
             :class="{ active: workspace.chatAnswerMode.value === mode.value }"
             @click="workspace.selectChatAnswerMode(mode.value)"
           >
@@ -149,14 +164,11 @@ const modeLabel = (value?: string) =>
             v-model="workspace.chatQuestion.value"
             :disabled="workspace.chatPending.value"
             placeholder="Ask Mneme…"
-          /><button aria-label="Send" :disabled="workspace.chatPending.value">
+          /><button aria-label="Send message" :disabled="workspace.chatPending.value">
             <Send />
           </button>
         </div>
-        <small data-testid="answer-mode-description"
-          >The selected mode is authoritative; Mneme will not infer another
-          mode.</small
-        >
+        <small data-testid="answer-mode-description">{{ modeDescription }}</small>
       </form>
     </section>
   </div>
@@ -167,6 +179,55 @@ const modeLabel = (value?: string) =>
   height: 100%;
   grid-template-columns: 260px minmax(0, 1fr);
   background: var(--bg-canvas);
+}
+.ai-layout--collapsed {
+  grid-template-columns: 0 minmax(0, 1fr);
+}
+.ai-history-panel[aria-hidden="true"] {
+  visibility: hidden;
+  overflow: hidden;
+  padding: 0;
+  pointer-events: none;
+}
+.chat {
+  position: relative;
+}
+.rail-toggle {
+  position: absolute;
+  top: 50%;
+  left: -1rem;
+  z-index: 20;
+  display: grid;
+  width: 2rem;
+  height: 2.5rem;
+  place-items: center;
+}
+.rail-toggle svg {
+  width: 1rem;
+  transition: transform 140ms ease;
+}
+.rail-toggle svg.rotate {
+  transform: rotate(180deg);
+}
+.history-search {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+  padding: 0.45rem;
+  background: var(--bg-canvas);
+  border: 1px solid var(--border-muted);
+  border-radius: 0.4rem;
+}
+.history-search svg {
+  width: 1rem;
+}
+.history-search input {
+  min-width: 0;
+  flex: 1;
+  background: transparent;
+  border: 0;
+  outline: 0;
 }
 aside {
   padding: 1rem;
@@ -309,12 +370,22 @@ form {
 .composer svg {
   width: 1rem;
 }
-@media (max-width: 760px) {
-  .ai-layout {
+@media (max-width: 1023px) {
+  .ai-layout,
+  .ai-layout--collapsed {
     grid-template-columns: 1fr;
   }
-  aside {
+  .ai-history-panel {
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 10;
+    width: min(84vw, 320px);
+  }
+  .ai-history-panel[aria-hidden="true"] {
     display: none;
+  }
+  .rail-toggle {
+    left: 0.4rem;
   }
 }
 </style>
