@@ -11,7 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Iterable
 
 from services.memory_agent.eval.contracts import EvalCase, EvaluationReport
 from services.memory_agent.eval.metrics import GATE_REQUIREMENTS, check_gates, evaluate_case, summarize_metrics
