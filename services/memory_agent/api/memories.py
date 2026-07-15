@@ -298,7 +298,7 @@ def _validate_confirmation(
     *,
     owner_id: int,
     knowledge_base_id: str | None,
-) -> None:
+) -> str:
     try:
         claims = jwt.decode(
             command.confirmation_token,
@@ -312,6 +312,7 @@ def _validate_confirmation(
                     "aud",
                     "iat",
                     "exp",
+                    "jti",
                     "purpose",
                     "owner_id",
                     "knowledge_base_id",
@@ -338,6 +339,10 @@ def _validate_confirmation(
         or claims.get("selector_value") != selector_value
     ):
         raise AgentAPIError(status_code=403, code="PURGE_CONFIRMATION_INVALID")
+    confirmation_jti = claims.get("jti")
+    if not isinstance(confirmation_jti, str) or not 1 <= len(confirmation_jti) <= 128:
+        raise AgentAPIError(status_code=403, code="PURGE_CONFIRMATION_INVALID")
+    return confirmation_jti
 
 
 @router.post("/memories/purge")
@@ -354,31 +359,40 @@ async def purge_memories(
     elif command.knowledge_base_id is not None:
         if command.knowledge_base_id != token_kb:
             raise AgentAPIError(status_code=403, code="AGENT_SCOPE_MISMATCH")
-    _validate_confirmation(command, owner_id=owner_id, knowledge_base_id=token_kb)
-    async with open_write_session() as db:
-        if command.source_id is not None:
-            counts = await memory_commands.purge_source(
-                db, owner_id=owner_id, knowledge_base_id=token_kb, source_id=command.source_id
+    confirmation_jti = _validate_confirmation(
+        command,
+        owner_id=owner_id,
+        knowledge_base_id=token_kb,
+    )
+    target = command.source_id or command.knowledge_base_id or str(owner_id)
+    try:
+        async with open_write_session() as db:
+            await memory_commands.consume_purge_confirmation(
+                db,
+                owner_id=owner_id,
+                knowledge_base_id=token_kb,
+                target_id=target,
+                actor_id=command.actor_id,
+                reason=command.reason,
+                confirmation_jti=confirmation_jti,
             )
-            target = command.source_id
-        elif command.knowledge_base_id is not None:
-            counts = await memory_commands.purge_knowledge_base(
-                db, owner_id=owner_id, knowledge_base_id=command.knowledge_base_id
-            )
-            target = command.knowledge_base_id
-        else:
-            counts = await memory_commands.purge_owner(db, owner_id=owner_id)
-            target = str(owner_id)
-        memory_commands.audit_purge(
-            db,
-            owner_id=owner_id,
-            knowledge_base_id=token_kb,
-            action="purge",
-            target_type="scope",
-            target_id=target,
-            actor_id=command.actor_id,
-            reason=command.reason,
-        )
+            if command.source_id is not None:
+                counts = await memory_commands.purge_source(
+                    db,
+                    owner_id=owner_id,
+                    knowledge_base_id=token_kb,
+                    source_id=command.source_id,
+                )
+            elif command.knowledge_base_id is not None:
+                counts = await memory_commands.purge_knowledge_base(
+                    db,
+                    owner_id=owner_id,
+                    knowledge_base_id=command.knowledge_base_id,
+                )
+            else:
+                counts = await memory_commands.purge_owner(db, owner_id=owner_id)
+    except memory_commands.PurgeConfirmationReplay:
+        raise AgentAPIError(status_code=403, code="PURGE_CONFIRMATION_INVALID") from None
     return {
         "purged": True,
         "deleted_evidence_count": counts.evidence,

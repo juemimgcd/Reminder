@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.memory_agent.memory.identity import memory_slot_lock_key
@@ -36,6 +37,10 @@ class PurgeCounts:
         )
 
 
+class PurgeConfirmationReplay(ValueError):
+    pass
+
+
 def _scope(column, knowledge_base_id: str | None):
     return column.is_(None) if knowledge_base_id is None else column == knowledge_base_id
 
@@ -50,6 +55,7 @@ def _audit(
     target_id: str,
     actor_id: str,
     reason: str,
+    confirmation_jti: str | None = None,
 ) -> None:
     db.add(
         MemoryActionAudit(
@@ -61,6 +67,7 @@ def _audit(
             target_id=target_id,
             actor_id=actor_id,
             reason=reason,
+            confirmation_jti=confirmation_jti,
         )
     )
 
@@ -348,7 +355,7 @@ async def purge_owner(db: AsyncSession, *, owner_id: int) -> PurgeCounts:
     return counts
 
 
-def audit_purge(
+async def consume_purge_confirmation(
     db: AsyncSession,
     *,
     owner_id: int,
@@ -356,6 +363,7 @@ def audit_purge(
     target_id: str,
     actor_id: str,
     reason: str,
+    confirmation_jti: str,
 ) -> None:
     _audit(
         db,
@@ -366,4 +374,10 @@ def audit_purge(
         target_id=target_id,
         actor_id=actor_id,
         reason=reason,
+        confirmation_jti=confirmation_jti,
     )
+    # Flush before deletion so the unique constraint atomically rejects replay.
+    try:
+        await db.flush()
+    except IntegrityError:
+        raise PurgeConfirmationReplay("purge confirmation was already consumed") from None
