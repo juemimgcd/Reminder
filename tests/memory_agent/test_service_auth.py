@@ -5,8 +5,10 @@ import jwt
 import pytest
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
+from fastapi.testclient import TestClient
 
 from app.mneme.utils.security import create_access_token
+from services.memory_agent.app import create_memory_agent_app
 from services.memory_agent.api.dependencies import require_event_service_token
 from services.memory_agent.config import settings
 from services.memory_agent.security.service_tokens import SERVICE_TOKEN_ISSUER
@@ -60,3 +62,28 @@ def test_mneme_user_access_token_cannot_access_internal_events():
         authorize(user_token)
 
     assert raised.value.status_code == 401
+
+
+def test_internal_events_route_rejects_missing_and_mneme_user_tokens():
+    app = create_memory_agent_app()
+    payload = {
+        "event_id": "route-auth-event",
+        "event_type": "conversation.completed",
+        "schema_version": "1",
+        "occurred_at": "2026-07-15T00:00:00Z",
+        "owner_id": 7,
+        "knowledge_base_id": None,
+        "payload": {"session_id": "session-1"},
+    }
+    user_token = asyncio.run(create_access_token(subject="7"))
+
+    with TestClient(app) as client:
+        missing = client.post("/internal/v1/events", json=payload)
+        user = client.post(
+            "/internal/v1/events",
+            json=payload,
+            headers={"Authorization": f"Bearer {user_token}"},
+        )
+
+    assert missing.status_code == 401
+    assert user.status_code == 401

@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from threading import Lock
 from types import SimpleNamespace
 
@@ -72,3 +73,13 @@ def test_inbox_repository_uses_database_conflict_handling():
     assert InboxEvent.__table__.c.event_id.unique is True
     assert ".on_conflict_do_nothing(" in repository_source
     assert "InboxEvent.event_id" in repository_source
+
+
+def test_inbox_migration_declares_event_id_unique_constraint():
+    migration = Path(__file__).parents[2] / "services" / "memory_agent" / "alembic" / "versions" / (
+        "20260714_01_create_memory_agent_core.py"
+    )
+
+    source = migration.read_text(encoding="utf-8")
+
+    assert 'sa.UniqueConstraint("event_id")' in source
