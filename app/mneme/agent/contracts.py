@@ -6,13 +6,27 @@ AnswerMode = Literal["kb_qa", "memory_query", "profile_query", "analysis_query",
 RetrievalScope = Literal["hybrid", "memory_only"]
 
 
+class AgentHistoryMessage(BaseModel):
+    message_id: str | None = None
+    role: Literal["user", "assistant"]
+    content: str
+    tool_calls: list[dict[str, Any]] = Field(default_factory=list)
+    sources: list[dict[str, Any]] = Field(default_factory=list)
+    citations: list[dict[str, Any]] = Field(default_factory=list)
+
+
 class AgentRequest(BaseModel):
     question: str
-    knowledge_base_id: str = Field(..., min_length=1)
+    knowledge_base_id: str | None = Field(default=None, min_length=1)
     user_id: int
+    session_id: str | None = None
     top_k: int = Field(default=4, ge=1, le=10)
     answer_mode: AnswerMode = "kb_qa"
     llm_config: dict[str, Any] | None = None
+    history: list[AgentHistoryMessage] = Field(default_factory=list)
+    history_summary: str = ""
+    history_compaction: dict[str, Any] | None = None
+    history_prepared: bool = False
 
 
 class AgentResponse(BaseModel):
@@ -23,6 +37,7 @@ class AgentResponse(BaseModel):
     uncertainty: str | None = None
     route: dict[str, Any] | None = None
     debug: dict[str, Any] | None = None
+    tool_calls: list[dict[str, Any]] = Field(default_factory=list)
 
     def to_legacy_result(self) -> dict[str, Any]:
         return self.model_dump()

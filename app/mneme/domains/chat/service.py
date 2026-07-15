@@ -1,14 +1,24 @@
+import asyncio
 import uuid
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mneme.agent.contracts import AnswerMode
+from app.mneme.agent.events import AgentEvent
 from app.mneme.agent.router import route_answer_mode
 from app.mneme.clients.memory_agent_client import MemoryAgentClient, MemoryAgentRejected, MemoryAgentUnavailable
+from app.mneme.conf.config import settings
 from app.mneme.crud.ai_model_config import get_ai_model_config, get_default_ai_model_config
-from app.mneme.crud.chat_message import create_chat_message, delete_chat_messages, list_chat_messages
+from app.mneme.crud.chat_message import (
+    create_chat_message,
+    delete_chat_messages,
+    list_chat_messages,
+    list_chat_messages_by_agent_run_id,
+)
 from app.mneme.crud.chat_session import (
     create_chat_session as insert_chat_session,
 )
@@ -28,6 +38,7 @@ from app.mneme.domains.tasks.outbox import (
     enqueue_conversation_deleted,
     enqueue_user_memory_requested,
 )
+from app.mneme.infra.agent_runs import agent_run_store
 from app.mneme.models.chat_message import ChatMessage
 from app.mneme.models.chat_session import ChatSession
 from app.mneme.models.knowledge_base import KnowledgeBase
@@ -199,11 +210,13 @@ def message_to_data(message: ChatMessage) -> ChatMessageData:
         knowledge_base_id=message.knowledge_base_id,
         role=message.role,
         content=message.content,
+        agent_run_id=message.agent_run_id,
+        sequence_no=message.sequence_no,
         sources=sources,
         citations=citations,
+        tool_calls=message.tool_calls_json or [],
         route=route,
         model_config_id=message.model_config_id,
-        agent_run_id=message.agent_run_id,
         confidence=metadata.get("confidence"),
         uncertainty=metadata.get("uncertainty"),
         insufficient_evidence=bool(metadata.get("insufficient_evidence", False)),
@@ -330,6 +343,7 @@ async def ask_in_chat_session(
     model_config_id: str | None = None,
     retry_message_id: str | None = None,
     regenerate_message_id: str | None = None,
+    agent_run_id: str | None = None,
 ) -> tuple[ChatSession, list[ChatMessage]]:
     session = await require_owned_chat_session(db, current_user=current_user, session_id=session_id)
     if (
@@ -344,11 +358,23 @@ async def ask_in_chat_session(
     if session.archived_at is not None:
         raise BusinessException(message="chat session is archived", code=4049, status_code=400)
 
+    existing_user_message: ChatMessage | None = None
+    if agent_run_id:
+        existing = await list_chat_messages_by_agent_run_id(
+            db,
+            agent_run_id=agent_run_id,
+            user_id=current_user.id,
+        )
+        if any(message.role == "assistant" for message in existing):
+            return session, existing
+        existing_user_message = next((message for message in existing if message.role == "user"), None)
+
     selected_mode: AnswerMode = answer_mode or session.answer_mode
     if selected_mode != "general_chat" and session.knowledge_base_id is None:
         raise BusinessException(message="knowledge base is required for this answer mode", code=4053)
 
     model_config = await _resolve_model_config(db, user_id=current_user.id, config_id=model_config_id)
+    next_sequence = (session.message_count or 0) + 1
 
     if retry_message_id is not None:
         user_message = await db.scalar(
@@ -405,24 +431,31 @@ async def ask_in_chat_session(
             knowledge_base_pk=session.knowledge_base_pk,
             role="user",
             content=question,
+            agent_run_id=agent_run_id,
+            sequence_no=next_sequence,
         )
         session.message_count = (session.message_count or 0) + 1
         session.last_message_at = datetime.now(timezone.utc)
     else:
-        user_message = await create_chat_message(
-            db,
-            message_id=build_chat_message_id(),
-            session_id=session.id,
-            user_id=current_user.id,
-            knowledge_base_id=session.knowledge_base_id,
-            knowledge_base_pk=session.knowledge_base_pk,
-            role="user",
-            content=question,
-        )
-        if not session.title:
-            session.title = question[:80]
-        session.message_count = (session.message_count or 0) + 1
-        session.last_message_at = datetime.now(timezone.utc)
+        if existing_user_message is not None:
+            user_message = existing_user_message
+        else:
+            user_message = await create_chat_message(
+                db,
+                message_id=build_chat_message_id(),
+                session_id=session.id,
+                user_id=current_user.id,
+                knowledge_base_id=session.knowledge_base_id,
+                knowledge_base_pk=session.knowledge_base_pk,
+                role="user",
+                content=question,
+                agent_run_id=agent_run_id,
+                sequence_no=next_sequence,
+            )
+            if not session.title:
+                session.title = question[:80]
+            session.message_count = (session.message_count or 0) + 1
+            session.last_message_at = datetime.now(timezone.utc)
     if answer_mode is not None:
         session.answer_mode = answer_mode
     await db.commit()
@@ -467,7 +500,8 @@ async def ask_in_chat_session(
         citations_json=result["citations"],
         route_json=result["route"],
         model_config_id=model_config.id if model_config else None,
-        agent_run_id=agent_response.run_id,
+        agent_run_id=agent_run_id or agent_response.run_id,
+        sequence_no=(user_message.sequence_no or next_sequence) + 1,
         answer_metadata_json={
             "confidence": result["confidence_numeric"],
             "uncertainty": result["uncertainty"],
@@ -493,6 +527,120 @@ async def ask_in_chat_session(
     return session, [user_message, assistant_message]
 
 
+async def stream_in_chat_session(
+    db: AsyncSession,
+    *,
+    current_user: User,
+    session_id: str,
+    question: str,
+    top_k: int,
+    answer_mode: AnswerMode | None = None,
+    abort_signal: asyncio.Event | None = None,
+    agent_run_id: str | None = None,
+    session_turn_claimed: bool = False,
+) -> AsyncIterator[AgentEvent]:
+    if abort_signal is not None and abort_signal.is_set():
+        yield AgentEvent.lifecycle("aborted", reason="abort_before_start")
+        return
+    yield AgentEvent.lifecycle("start")
+    async with _chat_session_turn(
+        session_id,
+        abort_signal=abort_signal,
+        already_claimed=session_turn_claimed,
+    ):
+        _session, messages = await ask_in_chat_session(
+            db,
+            current_user=current_user,
+            session_id=session_id,
+            question=question,
+            top_k=top_k,
+            answer_mode=answer_mode,
+            agent_run_id=agent_run_id,
+        )
+    if abort_signal is not None and abort_signal.is_set():
+        yield AgentEvent.lifecycle("aborted", reason="abort_after_answer")
+        return
+    yield AgentEvent.assistant_delta(messages[-1].content)
+    yield AgentEvent.lifecycle("end")
+
+
+@asynccontextmanager
+async def _chat_session_turn(
+    session_id: str,
+    *,
+    abort_signal: asyncio.Event | None = None,
+    already_claimed: bool = False,
+) -> AsyncIterator[None]:
+    if already_claimed:
+        yield
+        return
+
+    ticket_id = f"direct_{uuid.uuid4().hex}"
+    lease_token = f"lease_{uuid.uuid4().hex}"
+    await agent_run_store.enqueue_session_turn(session_id=session_id, ticket_id=ticket_id)
+    claimed = False
+    try:
+        while not claimed:
+            if abort_signal and abort_signal.is_set():
+                raise asyncio.CancelledError
+            claimed = await agent_run_store.claim_session_turn(
+                session_id=session_id,
+                run_id=ticket_id,
+                lease_token=lease_token,
+            )
+            if not claimed:
+                await asyncio.sleep(settings.AGENT_RUN_POLL_INTERVAL_SECONDS)
+    except BaseException:
+        if not claimed:
+            await agent_run_store.remove_from_session_queue(
+                session_id=session_id,
+                run_id=ticket_id,
+            )
+        raise
+
+    owner_task = asyncio.current_task()
+    if owner_task is None:
+        raise RuntimeError("chat request has no owning asyncio task")
+    lease_monitor = asyncio.create_task(
+        _renew_chat_session_lease(
+            session_id,
+            lease_token,
+            abort_signal,
+            owner_task,
+        )
+    )
+    try:
+        yield
+    finally:
+        lease_monitor.cancel()
+        await asyncio.gather(lease_monitor, return_exceptions=True)
+        await agent_run_store.release_session_turn(
+            session_id=session_id,
+            run_id=ticket_id,
+            lease_token=lease_token,
+        )
+
+
+async def _renew_chat_session_lease(
+    session_id: str,
+    lease_token: str,
+    abort_signal: asyncio.Event | None,
+    owner_task: asyncio.Task,
+) -> None:
+    while True:
+        await asyncio.sleep(settings.AGENT_SESSION_LEASE_RENEW_SECONDS)
+        try:
+            renewed = await agent_run_store.renew_session_lease(
+                session_id=session_id,
+                lease_token=lease_token,
+            )
+        except Exception:
+            renewed = False
+        if not renewed:
+            if abort_signal:
+                abort_signal.set()
+            owner_task.cancel()
+            return
 async def remember_chat_message(
     db: AsyncSession,
     *,

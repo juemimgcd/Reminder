@@ -8,6 +8,7 @@ import { safeStorageGet, safeStorageRemove, safeStorageSet } from "../lib/safeSt
 import type {
   AiModelConfigData,
   AiModelProviderPreset,
+  AgentStreamEvent,
   AnswerMode,
   AuthMode,
   ChatQueryData,
@@ -560,6 +561,57 @@ export function useMnemeWorkspace() {
     chatPending.value = true;
     chatError.value = null;
     try {
+      if (!options.retryMessageId && !options.regenerateMessageId && !IS_PREVIEW_MODE) {
+        const sessionId = activeChatSessionId.value;
+        const session = chatSessions.value.find((item) => item.id === sessionId);
+        const now = new Date().toISOString();
+        const pendingUserId = `pending-user-${Date.now()}`;
+        const pendingAssistantId = `pending-assistant-${Date.now()}`;
+        const pendingBase = {
+          session_id: sessionId,
+          user_id: user.value?.id ?? 0,
+          knowledge_base_id: session?.knowledge_base_id ?? null,
+          sources: [],
+          citations: [],
+          route: null,
+          model_config_id: null,
+          agent_run_id: null,
+          confidence: null,
+          uncertainty: null,
+          insufficient_evidence: false,
+          created_at: now,
+        };
+        chatMessages.value = [
+          ...chatMessages.value,
+          { ...pendingBase, id: pendingUserId, role: "user", content: question },
+          { ...pendingBase, id: pendingAssistantId, role: "assistant", content: "" },
+        ];
+        const handleEvent = (event: AgentStreamEvent) => {
+          if (event.type === "assistant" && event.content) {
+            chatMessages.value = chatMessages.value.map((message) =>
+              message.id === pendingAssistantId ? { ...message, content: message.content + event.content } : message,
+            );
+          } else if (event.type === "tool" && event.tool) {
+            banner.value = event.phase === "start" ? `Running ${event.tool}...` : `${event.tool} completed`;
+          } else if (event.type === "error" && event.error) {
+            banner.value = event.error;
+          }
+        };
+        const run = await api.createAgentRun(token.value, sessionId, {
+          question,
+          answer_mode: options.mode ?? chatAnswerMode.value,
+          top_k: 4,
+          client_request_id:
+            globalThis.crypto?.randomUUID?.() ?? `request-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        });
+        await api.streamAgentRun(token.value, run.run_id, handleEvent);
+        const detail = await api.getChatSession(token.value, sessionId);
+        chatMessages.value = detail.messages;
+        chatAnswerMode.value = detail.session.answer_mode;
+        const sessions = await api.listChatSessions(token.value, activeKnowledgeBaseId.value || null);
+        chatSessions.value = sessions.items;
+        return;
+      }
       const detail = await api.sendChatSessionMessage(token.value, activeChatSessionId.value, {
         question,
         answer_mode: options.mode ?? chatAnswerMode.value,

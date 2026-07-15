@@ -15,11 +15,13 @@ class ChatMessageData(BaseModel):
     knowledge_base_id: str | None
     role: str
     content: str
+    agent_run_id: str | None = None
+    sequence_no: int | None = None
     sources: list[ChatSourceItem] = Field(default_factory=list)
     citations: list[ChatCitationItem] = Field(default_factory=list)
+    tool_calls: list[dict] = Field(default_factory=list)
     route: QueryRouteDecision | None = None
     model_config_id: str | None = None
-    agent_run_id: str | None = None
     confidence: float | None = None
     uncertainty: str | None = None
     insufficient_evidence: bool = False
@@ -76,6 +78,7 @@ class ChatSessionMessageRequest(BaseModel):
     model_config_id: str | None = None
     retry_message_id: str | None = None
     regenerate_message_id: str | None = None
+    client_request_id: str | None = Field(default=None, min_length=1, max_length=128)
 
     @model_validator(mode="after")
     def mutually_exclusive_replay(self):

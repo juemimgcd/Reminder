@@ -1,6 +1,8 @@
 ﻿import type {
   AiModelConfigData,
   AiModelConfigListData,
+  AgentRunData,
+  AgentStreamEvent,
   AnswerMode,
   AuthTokenData,
   ChatMessageData,
@@ -74,6 +76,11 @@ let knowledgeBases: KnowledgeBaseData[] = [
     created_at: "2026-06-22T11:30:00.000Z",
   },
 ];
+
+const previewAgentRuns = new Map<
+  string,
+  AgentRunData & { payload: { question: string; answer_mode: AnswerMode; top_k?: number; client_request_id: string } }
+>();
 
 let documents: DocumentListItem[] = [
   {
@@ -711,6 +718,69 @@ const previewApi = {
     session.last_message_at = createdAt;
     return delay({ session, messages: nextMessages });
   },
+  async streamChatSessionMessage(
+    token: string,
+    sessionId: string,
+    payload: { question: string; answer_mode: AnswerMode; top_k?: number },
+    onEvent: (event: import("../types").AgentStreamEvent) => void,
+  ): Promise<void> {
+    onEvent({ type: "lifecycle", phase: "start" });
+    const detail = await this.sendChatSessionMessage(token, sessionId, payload);
+    const answer = detail.messages.find((item) => item.role === "assistant")?.content ?? "";
+    if (answer) onEvent({ type: "assistant", content: answer });
+      onEvent({ type: "lifecycle", phase: "end" });
+    },
+    createAgentRun(
+      _token: string,
+      sessionId: string,
+      payload: { question: string; answer_mode: AnswerMode; top_k?: number; client_request_id: string },
+    ): Promise<AgentRunData> {
+      const existing = [...previewAgentRuns.values()].find(
+        (item) => item.session_id === sessionId && item.client_request_id === payload.client_request_id,
+      );
+      if (existing) return delay(existing);
+      const createdAt = new Date().toISOString();
+      const run = {
+        run_id: `run-preview-${Date.now()}`,
+        session_id: sessionId,
+        user_id: previewUser.id,
+        client_request_id: payload.client_request_id,
+        question: payload.question,
+        top_k: payload.top_k ?? 4,
+        answer_mode: payload.answer_mode,
+        status: "queued" as const,
+        created_at: createdAt,
+        started_at: null,
+        completed_at: null,
+        error: null,
+        last_event_id: null,
+        queue_wait_ms: null,
+        payload,
+      };
+      previewAgentRuns.set(run.run_id, run);
+      return delay(run);
+    },
+    async streamAgentRun(
+      token: string,
+      runId: string,
+      onEvent: (event: AgentStreamEvent) => void,
+    ): Promise<void> {
+      const run = previewAgentRuns.get(runId);
+      if (!run) return;
+      run.status = "running";
+      await this.streamChatSessionMessage(token, run.session_id, run.payload, onEvent);
+      run.status = "completed";
+      run.completed_at = new Date().toISOString();
+    },
+    getAgentRun(_token: string, runId: string): Promise<AgentRunData> {
+      return delay(previewAgentRuns.get(runId) ?? [...previewAgentRuns.values()][0]);
+    },
+    abortAgentRun(_token: string, runId: string): Promise<AgentRunData> {
+      const run = previewAgentRuns.get(runId) ?? [...previewAgentRuns.values()][0];
+      run.status = "aborted";
+      run.completed_at = new Date().toISOString();
+      return delay(run);
+    },
   listMemories(_token: string, knowledgeBaseId: string | null): Promise<MemoryPage<CanonicalMemory>> { const items = previewMemories.filter((m) => m.knowledge_base_id === knowledgeBaseId && m.status === "active"); return delay({ items, total: items.length, next_cursor: null }); },
   listMemoryCandidates(_token: string, knowledgeBaseId: string | null): Promise<MemoryPage<MemoryCandidate>> { const items=previewCandidates.filter(item=>item.knowledge_base_id===knowledgeBaseId&&item.status==="pending"); return delay({ items, total: items.length, pending_count: items.length, next_cursor: null }); },
   getMemoryDetail(_token: string, memoryId: string): Promise<MemoryDetail> { const memory = previewMemories.find((m) => m.memory_id === memoryId) ?? previewMemories[0]; return delay({ memory, revisions: [{ revision_id: memory.active_revision_id, subject: memory.subject, predicate: memory.predicate, value: memory.value, valid_from: memory.created_at, valid_to: null, reason: "preview" }], evidence: [{ evidence_id: "ev-preview", revision_id: memory.active_revision_id, source_type: "document", source_id: "doc-zettelkasten", source_document_id: "doc-zettelkasten", excerpt: "Atomic notes are easier to reuse.", source_time: memory.created_at }] }); },

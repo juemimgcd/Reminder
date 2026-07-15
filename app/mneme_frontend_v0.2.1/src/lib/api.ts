@@ -2,6 +2,8 @@ import previewApi, { isPreviewMode, PREVIEW_API_BASE_URL, PREVIEW_TOKEN } from "
 import type {
   AiModelConfigData,
   AiModelConfigListData,
+  AgentStreamEvent,
+  AgentRunData,
   AnswerMode,
   ApiResponse,
   AuthTokenData,
@@ -216,6 +218,53 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     return await nextRequest;
   } finally {
     inflightRequests.delete(requestKey);
+  }
+}
+
+async function streamAgentEvents(
+  path: string,
+  token: string,
+  body: Record<string, unknown>,
+  onEvent: (event: AgentStreamEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!response.ok) throw await responseError(response);
+  await consumeAgentEventStream(response, onEvent);
+}
+
+async function consumeAgentEventStream(
+  response: Response,
+  onEvent: (event: AgentStreamEvent) => void,
+): Promise<void> {
+  if (!response.body) throw new ApiError("Streaming response has no body.", response.status);
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value, { stream: !done }).replace(/\r\n/g, "\n");
+    const frames = buffer.split("\n\n");
+    buffer = frames.pop() ?? "";
+    for (const frame of frames) {
+      const data = frame
+        .split("\n")
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice(5).trimStart())
+        .join("\n");
+      if (data) onEvent(JSON.parse(data) as AgentStreamEvent);
+    }
+    if (done) break;
   }
 }
 
@@ -439,6 +488,65 @@ const realApi = {
         regenerate_message_id: payload.regenerate_message_id ?? null,
       },
     });
+  },
+  streamChatSessionMessage(
+    token: string,
+    sessionId: string,
+    payload: { question: string; answer_mode: AnswerMode; top_k?: number },
+    onEvent: (event: AgentStreamEvent) => void,
+    options: { signal?: AbortSignal } = {},
+  ) {
+    return streamAgentEvents(
+      `/kb/chat/sessions/${sessionId}/messages/stream`,
+      token,
+      {
+        question: payload.question,
+        answer_mode: payload.answer_mode,
+        top_k: payload.top_k ?? 4,
+      },
+      onEvent,
+      options.signal,
+    );
+  },
+  createAgentRun(
+    token: string,
+    sessionId: string,
+    payload: { question: string; answer_mode: AnswerMode; top_k?: number; client_request_id: string },
+  ) {
+    return request<AgentRunData>(`/kb/chat/sessions/${sessionId}/runs`, {
+      method: "POST",
+      token,
+      body: {
+        question: payload.question,
+        answer_mode: payload.answer_mode,
+        top_k: payload.top_k ?? 4,
+        client_request_id: payload.client_request_id,
+      },
+    });
+  },
+  async streamAgentRun(
+    token: string,
+    runId: string,
+    onEvent: (event: AgentStreamEvent) => void,
+    options: { signal?: AbortSignal; cursor?: string } = {},
+  ) {
+    const response = await fetch(`${API_BASE_URL}/kb/chat/runs/${runId}/stream`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "text/event-stream",
+        ...(options.cursor ? { "Last-Event-ID": options.cursor } : {}),
+      },
+      signal: options.signal,
+    });
+    if (!response.ok) throw await responseError(response);
+    await consumeAgentEventStream(response, onEvent);
+  },
+  getAgentRun(token: string, runId: string) {
+    return request<AgentRunData>(`/kb/chat/runs/${runId}`, { token });
+  },
+  abortAgentRun(token: string, runId: string) {
+    return request<AgentRunData>(`/kb/chat/runs/${runId}/abort`, { method: "POST", token });
   },
   listMemories(token: string, knowledgeBaseId: string | null, cursor?: string | null) {
     return request<MemoryPage<CanonicalMemory>>(`/api/v1/memory-agent/memories${buildQuery({ knowledge_base_id: knowledgeBaseId, cursor })}`, { token });

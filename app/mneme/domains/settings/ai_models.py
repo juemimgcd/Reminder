@@ -9,9 +9,11 @@ from app.mneme.clients.llm_client import LLM_PROVIDER_DEFAULTS
 from app.mneme.conf.config import settings
 from app.mneme.crud.ai_model_config import (
     clear_default_ai_model_configs,
-    create_ai_model_config as insert_ai_model_config,
     get_ai_model_config,
     list_ai_model_configs,
+)
+from app.mneme.crud.ai_model_config import (
+    create_ai_model_config as insert_ai_model_config,
 )
 from app.mneme.models.ai_model_config import AiModelConfig
 from app.mneme.models.user import User
@@ -169,4 +171,5 @@ def ai_model_config_runtime_kwargs(config: AiModelConfig) -> dict:
         "model": config.model_name,
         "api_key": decrypt_api_key(config.api_key_ciphertext),
         "temperature": config.temperature,
+        "context_window": config.context_window,
     }

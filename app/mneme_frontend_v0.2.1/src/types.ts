@@ -286,8 +286,10 @@ export interface ChatMessageData {
   knowledge_base_id: string | null;
   role: "user" | "assistant" | string;
   content: string;
+  sequence_no?: number | null;
   sources: ChatSourceItem[];
   citations: ChatCitationItem[];
+  tool_calls?: Record<string, unknown>[];
   route: QueryRouteDecision | null;
   model_config_id: string | null;
   agent_run_id: string | null;
@@ -334,6 +336,34 @@ export interface ChatSessionListData {
 export interface ChatSessionDetailData {
   session: ChatSessionData;
   messages: ChatMessageData[];
+}
+
+export interface AgentStreamEvent {
+  type: "lifecycle" | "assistant" | "tool" | "compaction" | "error";
+  phase?: string;
+  content?: string;
+  tool?: string;
+  error?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export type AgentRunStatus = "queued" | "running" | "completed" | "failed" | "aborting" | "aborted";
+
+export interface AgentRunData {
+  run_id: string;
+  session_id: string;
+  user_id: number;
+  client_request_id: string;
+  question: string;
+  top_k: number;
+  answer_mode: AnswerMode;
+  status: AgentRunStatus;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  error: string | null;
+  last_event_id: string | null;
+  queue_wait_ms: number | null;
 }
 
 export interface GraphNodeData {
