@@ -1,6 +1,6 @@
 """Map a user-selected answer mode to an Agent pipeline."""
 
-from app.mneme.agent.contracts import AnswerMode
+from app.mneme.agent.contracts import AnswerMode, RetrievalScope
 from app.mneme.schemas.chat import QueryRouteDecision
 
 ANSWER_MODE_ROUTES: dict[AnswerMode, tuple[bool, str]] = {
@@ -21,3 +21,9 @@ def route_answer_mode(answer_mode: AnswerMode) -> QueryRouteDecision:
         confidence="high",
         reason="answer mode explicitly selected by the user",
     )
+
+
+def retrieval_scope_for_answer_mode(answer_mode: AnswerMode) -> RetrievalScope:
+    if answer_mode == "memory_query":
+        return "memory_only"
+    return "hybrid"

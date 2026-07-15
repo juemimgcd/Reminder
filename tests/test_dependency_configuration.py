@@ -1,7 +1,6 @@
 import ast
-from pathlib import Path
 import re
-
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -127,3 +126,12 @@ def test_linux_image_uses_cpu_only_pytorch_wheel():
         "torch @ https://download.pytorch.org/whl/cpu/"
         "torch-2.11.0%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl"
     ) in ai_requirements
+
+
+def test_memory_agent_foundation_dependencies_are_in_the_lightweight_group():
+    packages = {
+        re.split(r"[<>=!~\[]", entry, maxsplit=1)[0].lower()
+        for entry in requirement_entries("requirements/base.txt")
+    }
+
+    assert {"fastapi", "httpx", "pyjwt", "asyncpg", "alembic", "celery", "pgvector"} <= packages

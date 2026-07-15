@@ -4,7 +4,7 @@ from langchain_core.output_parsers import PydanticOutputParser, StrOutputParser
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mneme.agent.contracts import AnswerMode
-from app.mneme.agent.router import route_answer_mode
+from app.mneme.agent.router import retrieval_scope_for_answer_mode, route_answer_mode
 from app.mneme.clients.llm_client import get_llm, get_llm_for_user_config
 from app.mneme.conf.config import settings
 from app.mneme.conf.logging import app_logger, log_event
@@ -15,7 +15,7 @@ from app.mneme.domains.retrieval.debug import build_answer_debug, build_non_retr
 from app.mneme.infra.circuit_breaker import before_call, record_failure, record_success
 from app.mneme.infra.retry import retry_async
 from app.mneme.schemas.chat import EvidenceAnswerDraft, EvidenceCitationDraft, QueryRouteDecision
-from app.mneme.utils.prompt_builder import get_evidence_rag_prompt, get_general_chat_prompt
+from app.mneme.utils.prompt_builder import get_evidence_rag_prompt, get_general_chat_prompt, get_memory_rag_prompt
 
 EMPTY_EVIDENCE_ANSWER = (
     "I could not retrieve enough relevant evidence from the current knowledge base. "
@@ -280,6 +280,7 @@ async def generate_rag_answer(
         top_k=top_k,
         user_id=user_id,
         knowledge_base_id=knowledge_base_id,
+        retrieval_scope=retrieval_scope_for_answer_mode(answer_mode),
     )
     log_event(
         "query_service",
@@ -328,6 +329,7 @@ async def generate_rag_answer(
         question=question,
         context_text=context_packet["context_text"],
         sources=context_packet["sources"],
+        answer_mode=answer_mode,
         knowledge_base_id=knowledge_base_id,
         user_id=user_id,
         llm_config=llm_config,
@@ -369,17 +371,24 @@ def resolve_citations(citation_drafts: list[EvidenceCitationDraft], sources: lis
     return validate_citation_drafts(citation_drafts, sources)
 
 
+def get_evidence_prompt_for_mode(answer_mode: AnswerMode, format_instructions: str):
+    if answer_mode == "memory_query":
+        return get_memory_rag_prompt(format_instructions)
+    return get_evidence_rag_prompt(format_instructions)
+
+
 async def invoke_evidence_answer(
     *,
     question: str,
     context_text: str,
     sources: list[dict[str, Any]],
+    answer_mode: AnswerMode = "kb_qa",
     knowledge_base_id: str | None = None,
     user_id: int | None = None,
     llm_config: dict | None = None,
 ) -> dict[str, Any]:
     parser = PydanticOutputParser(pydantic_object=EvidenceAnswerDraft)
-    prompt = get_evidence_rag_prompt(parser.get_format_instructions())
+    prompt = get_evidence_prompt_for_mode(answer_mode, parser.get_format_instructions())
     llm = get_llm_for_user_config(llm_config) if llm_config else get_llm()
     chain = prompt | llm | parser
 

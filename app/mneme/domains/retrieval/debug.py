@@ -77,7 +77,7 @@ def build_non_retrieval_debug(
 def build_retrieval_debug_packet(
     *,
     query_terms: list[str],
-    lexical_backend: str,
+    lexical_backend: str | None,
     counts: dict[str, int],
     vector_items: list[ContextItem],
     lexical_items: list[ContextItem],

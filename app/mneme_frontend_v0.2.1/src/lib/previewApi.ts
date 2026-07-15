@@ -29,6 +29,7 @@
   MemoryGovernanceData,
   MemoryLibraryData,
   MemoryRebuildData,
+  CanonicalMemory, MemoryCandidate, MemoryDetail, MemoryPage, MemorySettings, MemoryConfirmation, MemoryPurgeResult,
   Neo4jHealthData,
   PersonalProfileResult,
   PlannedSupportData,
@@ -140,12 +141,17 @@ let previewDocumentSequence = 0;
 
 let tasks: Record<string, TaskRecordData> = {};
 
+let previewMemories: CanonicalMemory[] = [{ memory_id: "mem-preview", knowledge_base_id: "kb-demo-research", memory_type: "preference", subject: "user", predicate: "prefers", value: "Atomic, source-backed notes", confidence: 0.86, status: "active", active_revision_id: "rev-preview", created_at: "2026-07-01T08:00:00Z", updated_at: "2026-07-10T08:00:00Z" }];
+let previewCandidates: MemoryCandidate[] = [{ candidate_id: "candidate-preview", knowledge_base_id: "kb-demo-research", memory_type: "goal", subject: "user", predicate: "is_exploring", value: "Memory-centered RAG", confidence: 0.71, status: "pending", created_at: "2026-07-12T08:00:00Z", decided_at: null }];
+let previewAutomaticConversationMemory = true;
+
 let chatSessions: ChatSessionData[] = [
   {
     id: "chat-preview-vault-review",
     user_id: previewUser.id,
     knowledge_base_id: "kb-demo-research",
     title: "Preview Vault Review",
+    answer_mode: "kb_qa",
     message_count: 2,
     last_message_at: now,
     archived_at: null,
@@ -167,6 +173,7 @@ let chatMessages: Record<string, ChatMessageData[]> = {
       citations: [],
       route: null,
       model_config_id: "model-preview-deepseek",
+      agent_run_id: null, confidence: null, uncertainty: null, insufficient_evidence: false,
       created_at: "2026-06-24T08:01:00.000Z",
     },
     {
@@ -180,6 +187,7 @@ let chatMessages: Record<string, ChatMessageData[]> = {
       citations: [],
       route: null,
       model_config_id: "model-preview-deepseek",
+      agent_run_id: "run-preview-existing", confidence: 0.82, uncertainty: null, insufficient_evidence: false,
       created_at: "2026-06-24T08:01:10.000Z",
     },
   ],
@@ -637,15 +645,16 @@ const previewApi = {
   chatQuery(_token: string, payload: { question: string; knowledge_base_id: string; top_k?: number; session_id?: string | null }): Promise<ChatQueryData> {
     return delay({ answer: `Preview answer for: ${payload.question}`, confidence: "medium", uncertainty: "This is local demo data, not a backend answer.", route: { query_type: "preview", requires_retrieval: true, target_pipeline: "mock", confidence: "medium", reason: "Preview mode returns deterministic fixture content." }, sources: [{ source_id: "source-preview-1", knowledge_base_id: payload.knowledge_base_id, document_id: "doc-zettelkasten", chunk_id: "chunk-zettel-1", page_no: null, text: "Atomic notes are easier to recombine across contexts." }], citations: [{ source_id: "source-preview-1", document_id: "doc-zettelkasten", chunk_id: "chunk-zettel-1", page_no: null, quote: "Atomic notes are easier to recombine", reason: "Matches the preview question theme.", validation_status: "preview", quote_found: true, validation_reason: "Fixture quote." }], debug: null });
   },
-  listChatSessions(_token: string, knowledgeBaseId: string): Promise<{ items: ChatSessionData[]; total: number }> {
+  listChatSessions(_token: string, knowledgeBaseId: string | null): Promise<{ items: ChatSessionData[]; total: number }> {
     const items = chatSessions.filter((session) => session.knowledge_base_id === knowledgeBaseId && !session.archived_at);
     return delay({ items, total: items.length });
   },
-  createChatSession(_token: string, payload: { knowledge_base_id: string; title?: string | null }): Promise<ChatSessionData> {
+  createChatSession(_token: string, payload: { knowledge_base_id: string | null; title?: string | null; answer_mode: AnswerMode }): Promise<ChatSessionData> {
     const session: ChatSessionData = {
       id: `chat-preview-${Date.now()}`,
       user_id: previewUser.id,
       knowledge_base_id: payload.knowledge_base_id,
+      answer_mode: payload.answer_mode,
       title: payload.title || "New Chat",
       message_count: 0,
       last_message_at: null,
@@ -661,12 +670,17 @@ const previewApi = {
     const session = chatSessions.find((item) => item.id === sessionId) ?? chatSessions[0];
     return delay({ session, messages: chatMessages[session.id] ?? [] });
   },
+  updateChatSession(_token: string, sessionId: string, answerMode: AnswerMode): Promise<ChatSessionData> {
+    const session = chatSessions.find((item) => item.id === sessionId) ?? chatSessions[0];
+    session.answer_mode = answerMode;
+    return delay(session);
+  },
   deleteChatSession(_token: string, sessionId: string): Promise<{ session_id: string; deleted_count: number }> {
     chatSessions = chatSessions.filter((item) => item.id !== sessionId);
     delete chatMessages[sessionId];
     return delay({ session_id: sessionId, deleted_count: 1 });
   },
-  sendChatSessionMessage(_token: string, sessionId: string, payload: { question: string; answer_mode: AnswerMode; top_k?: number }): Promise<ChatSessionDetailData> {
+  sendChatSessionMessage(_token: string, sessionId: string, payload: { question: string; answer_mode: AnswerMode; top_k?: number; retry_message_id?: string; regenerate_message_id?: string }): Promise<ChatSessionDetailData> {
     const session = chatSessions.find((item) => item.id === sessionId) ?? chatSessions[0];
     const createdAt = new Date().toISOString();
     const nextMessages: ChatMessageData[] = [
@@ -681,6 +695,7 @@ const previewApi = {
         citations: [],
         route: null,
         model_config_id: "model-preview-deepseek",
+        agent_run_id: null, confidence: null, uncertainty: null, insufficient_evidence: false,
         created_at: createdAt,
       },
       {
@@ -692,8 +707,9 @@ const previewApi = {
         content: `Preview answer for: ${payload.question}`,
         sources: [],
         citations: [],
-        route: { query_type: "preview", requires_retrieval: true, target_pipeline: "mock", confidence: "medium", reason: "Preview session message." },
+        route: { query_type: payload.answer_mode, requires_retrieval: payload.answer_mode !== "general_chat", target_pipeline: "mock", confidence: "medium", reason: "Preview session message." },
         model_config_id: "model-preview-deepseek",
+        agent_run_id: `run-preview-${Date.now()}`, confidence: 0.72, uncertainty: "Preview evidence only.", insufficient_evidence: false,
         created_at: createdAt,
       },
     ];
@@ -759,6 +775,17 @@ const previewApi = {
       run.completed_at = new Date().toISOString();
       return delay(run);
     },
+  listMemories(_token: string, knowledgeBaseId: string | null): Promise<MemoryPage<CanonicalMemory>> { const items = previewMemories.filter((m) => m.knowledge_base_id === knowledgeBaseId && m.status === "active"); return delay({ items, total: items.length, next_cursor: null }); },
+  listMemoryCandidates(_token: string, knowledgeBaseId: string | null): Promise<MemoryPage<MemoryCandidate>> { const items=previewCandidates.filter(item=>item.knowledge_base_id===knowledgeBaseId&&item.status==="pending"); return delay({ items, total: items.length, pending_count: items.length, next_cursor: null }); },
+  getMemoryDetail(_token: string, memoryId: string): Promise<MemoryDetail> { const memory = previewMemories.find((m) => m.memory_id === memoryId) ?? previewMemories[0]; return delay({ memory, revisions: [{ revision_id: memory.active_revision_id, subject: memory.subject, predicate: memory.predicate, value: memory.value, valid_from: memory.created_at, valid_to: null, reason: "preview" }], evidence: [{ evidence_id: "ev-preview", revision_id: memory.active_revision_id, source_type: "document", source_id: "doc-zettelkasten", source_document_id: "doc-zettelkasten", excerpt: "Atomic notes are easier to reuse.", source_time: memory.created_at }] }); },
+  getMemorySettings(): Promise<MemorySettings> { return delay({ automatic_conversation_memory: previewAutomaticConversationMemory, applied: true }); },
+  updateMemorySettings(_token: string, enabled: boolean): Promise<MemorySettings> { previewAutomaticConversationMemory=enabled; return delay({ automatic_conversation_memory: enabled, applied: true }); },
+  issueMemoryConfirmation(_token: string, payload: { action: string; target_id?: string | null }): Promise<MemoryConfirmation> { return delay({ action: payload.action, target_id: payload.target_id ?? "preview-user", expires_at: new Date(Date.now() + 300000).toISOString(), confirmation_token: "preview-confirmation" }); },
+  candidateCommand(_token: string, id: string, action: "confirm" | "reject"): Promise<CanonicalMemory | MemoryCandidate> { const candidate = previewCandidates.find((c) => c.candidate_id === id) ?? previewCandidates[0]; const decided={...candidate,status:action==="confirm"?"confirmed":"rejected",decided_at:new Date().toISOString()}; previewCandidates=previewCandidates.filter(item=>item.candidate_id!==id); if(action==="reject") return delay(decided); const memory:CanonicalMemory={memory_id:`mem-${id}`,knowledge_base_id:candidate.knowledge_base_id,memory_type:candidate.memory_type,subject:candidate.subject,predicate:candidate.predicate,value:candidate.value,confidence:candidate.confidence,status:"active",active_revision_id:`rev-${id}`,created_at:candidate.created_at,updated_at:new Date().toISOString()}; previewMemories=[memory,...previewMemories]; return delay(memory); },
+  reviseMemory(_token: string, memory: CanonicalMemory, value: string): Promise<CanonicalMemory> { const updated={...memory,value,active_revision_id:`rev-preview-${Date.now()}`,updated_at:new Date().toISOString()}; previewMemories=previewMemories.map(item=>item.memory_id===memory.memory_id?updated:item); return delay(updated); },
+  memoryCommand(_token: string, memory: CanonicalMemory): Promise<CanonicalMemory> { const updated={...memory,status:"invalidated"}; previewMemories=previewMemories.map(item=>item.memory_id===memory.memory_id?updated:item); return delay(updated); },
+  deleteMemory(_token:string,memory:CanonicalMemory): Promise<{ deleted: boolean }> { previewMemories=previewMemories.filter(item=>item.memory_id!==memory.memory_id); return delay({ deleted: true }); },
+  purgeMemory(_token:string,payload:Record<string,unknown>): Promise<MemoryPurgeResult> { const before=previewMemories.length; const candidateBefore=previewCandidates.length; if(payload.purge_account===true){previewMemories=[];previewCandidates=[];} else if(typeof payload.knowledge_base_id==="string"){previewMemories=previewMemories.filter(item=>item.knowledge_base_id!==payload.knowledge_base_id);previewCandidates=previewCandidates.filter(item=>item.knowledge_base_id!==payload.knowledge_base_id);} else if(payload.source_id) previewMemories=previewMemories.filter(item=>item.memory_id!=="mem-preview"); const deleted=before-previewMemories.length; return delay({ purged: true, deleted_evidence_count: deleted, deleted_candidate_count: candidateBefore-previewCandidates.length, deleted_revision_count: deleted, deleted_memory_count: deleted }); },
   listAiModelConfigs(): Promise<AiModelConfigListData> {
     return delay({
       provider_presets: [

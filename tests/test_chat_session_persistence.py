@@ -13,6 +13,13 @@ class ChatSessionPersistenceContractTest(unittest.TestCase):
         self.assertTrue(hasattr(models, "ChatSession"))
         self.assertTrue(hasattr(models, "ChatMessage"))
 
+    def test_chat_mode_and_agent_run_are_persisted_fields(self):
+        from app.mneme.models.chat_message import ChatMessage
+        from app.mneme.models.chat_session import ChatSession
+
+        self.assertIn("answer_mode", ChatSession.__table__.columns)
+        self.assertIn("agent_run_id", ChatMessage.__table__.columns)
+
 
 if __name__ == "__main__":
     unittest.main()

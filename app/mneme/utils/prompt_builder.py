@@ -20,6 +20,25 @@ def get_evidence_rag_prompt(format_instructions: str):
     )
 
 
+def get_memory_rag_prompt(format_instructions: str) -> ChatPromptTemplate:
+    return ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                "You answer only from the user's retrieved long-term memory evidence. "
+                "Separate stable facts from uncertain recollections and treat dated evidence as historical. "
+                "Every citation must use a source_id present in the supplied context. "
+                "If evidence is insufficient, explain the gap in uncertainty. "
+                f"Return exactly this structure:\n{format_instructions}",
+            ),
+            (
+                "human",
+                "Long-term memory evidence:\n{context}\n\nUser question:\n{question}",
+            ),
+        ]
+    )
+
+
 def get_general_chat_prompt() -> ChatPromptTemplate:
     return ChatPromptTemplate.from_messages(
         [
