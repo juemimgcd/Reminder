@@ -1,17 +1,23 @@
 from pathlib import Path
 
 CHAT_SERVICE = Path(__file__).parents[1] / "app" / "mneme" / "domains" / "chat" / "service.py"
+ONLINE_ROUTER_FILES = (
+    CHAT_SERVICE,
+    CHAT_SERVICE.parents[1] / "retrieval" / "router.py",
+    CHAT_SERVICE.parents[1] / "companion" / "router.py",
+)
 
 
-def test_cutover_flag_has_exclusive_legacy_and_agent_branches():
+def test_chat_answers_use_the_memory_agent_as_the_sole_runtime():
+    for path in ONLINE_ROUTER_FILES:
+        source = path.read_text(encoding="utf-8")
+        assert "answer_via_memory_agent(" in source, path.name
+        assert "build_mneme_agent" not in source, path.name
+        assert "AgentRequest" not in source, path.name
+        assert "MEMORY_AGENT_ENABLED" not in source, path.name
+
     source = CHAT_SERVICE.read_text(encoding="utf-8")
-
-    assert "if not settings.MEMORY_AGENT_ENABLED:" in source
-    assert "build_mneme_agent(db).run(" in source
-    assert "answer_via_memory_agent(" in source
-    flag_index = source.index("if not settings.MEMORY_AGENT_ENABLED:")
-    agent_branch = source[flag_index : source.index("    model_config = await _resolve_model_config", flag_index)]
-    assert "answer_via_memory_agent" not in agent_branch
+    assert "_persist_legacy_answer" not in source
 
 
 def test_agent_failure_is_mapped_to_retryable_saved_message_without_legacy_fallback():

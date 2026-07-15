@@ -1,9 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.mneme.agent.adapters import build_mneme_agent
-from app.mneme.agent.contracts import AgentRequest
-from app.mneme.conf.config import settings
 from app.mneme.conf.database import get_database
 from app.mneme.conf.logging import app_logger
 from app.mneme.crud.knowledge_base import get_knowledge_base_by_id
@@ -13,8 +10,6 @@ from app.mneme.domains.chat.service import (
     build_chat_message_id,
     memory_agent_answer_to_chat_result,
 )
-from app.mneme.domains.companion.service import build_companion_response
-from app.mneme.domains.profile.insight import build_growth_for_knowledge_base
 from app.mneme.models.user import User
 from app.mneme.schemas.companion import CompanionAnswerResult, CompanionQueryRequest
 from app.mneme.utils.auth import get_current_user
@@ -43,72 +38,38 @@ async def get_companion_reply(
     if knowledge_base.user_id != current_user.id:
         raise BusinessException(message="知识库不属于当前用户", code=4007)
 
-    if settings.MEMORY_AGENT_ENABLED:
-        model_config = await _resolve_model_config(db, user_id=current_user.id, config_id=None)
-        await db.rollback()
-        agent_response = await answer_via_memory_agent(
-            owner_id=current_user.id,
-            question=payload.question,
-            answer_mode="analysis_query",
-            top_k=payload.top_k,
-            knowledge_base_id=knowledge_base_id,
-            session_id=None,
-            message_id=build_chat_message_id(),
-            model_config=model_config,
-        )
-        result = memory_agent_answer_to_chat_result(agent_response)
-        citations = [
-            {
-                "document_id": item.get("document_id") or item["source_id"],
-                "chunk_id": item.get("chunk_id") or item["source_id"],
-                "page_no": item.get("page_no"),
-                "text": item.get("quote", ""),
-                "reason": item.get("reason", "memory agent evidence"),
-            }
-            for item in result["citations"]
-        ]
-        data = CompanionAnswerResult(
-            knowledge_base_id=knowledge_base_id,
-            question=payload.question,
-            direct_answer=result["answer"],
-            citations=citations,
-            profile_snapshot="",
-            growth_snapshot="",
-            next_step_hint="",
-            follow_up_questions=[],
-            companion_message=result["answer"],
-        )
-        return success_response(data=data)
-
-    agent_response = await build_mneme_agent(db).run(
-        AgentRequest(
-            question=payload.question,
-            knowledge_base_id=knowledge_base_id,
-            user_id=current_user.id,
-            top_k=payload.top_k,
-        )
-    )
-    result = agent_response.to_legacy_result()
-
-    entries, profile, report = await build_growth_for_knowledge_base(
-        db,
-        user_id=current_user.id,
+    model_config = await _resolve_model_config(db, user_id=current_user.id, config_id=None)
+    await db.rollback()
+    agent_response = await answer_via_memory_agent(
+        owner_id=current_user.id,
+        question=payload.question,
+        answer_mode="analysis_query",
+        top_k=payload.top_k,
         knowledge_base_id=knowledge_base_id,
-        recent_days=30,
+        session_id=None,
+        message_id=build_chat_message_id(),
+        model_config=model_config,
     )
-
-    companion = await build_companion_response(
-        user_id=current_user.id,
+    result = memory_agent_answer_to_chat_result(agent_response)
+    citations = [
+        {
+            "document_id": item.get("document_id") or item["source_id"],
+            "chunk_id": item.get("chunk_id") or item["source_id"],
+            "page_no": item.get("page_no"),
+            "text": item.get("quote", ""),
+            "reason": item.get("reason", "memory agent evidence"),
+        }
+        for item in result["citations"]
+    ]
+    data = CompanionAnswerResult(
         knowledge_base_id=knowledge_base_id,
         question=payload.question,
-        rag_result=result,
-        profile=profile,
-        growth_report=report,
-    )
-
-    data = CompanionAnswerResult(**companion)
-    app_logger.bind(module="companion_router").info(
-        f"companion success knowledge_base_id={knowledge_base_id} current_user_id={current_user.id} "
-        f"entry_count={len(entries)} source_count={len(result['sources'])}"
+        direct_answer=result["answer"],
+        citations=citations,
+        profile_snapshot="",
+        growth_snapshot="",
+        next_step_hint="",
+        follow_up_questions=[],
+        companion_message=result["answer"],
     )
     return success_response(data=data)

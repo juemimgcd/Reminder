@@ -4,11 +4,9 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.mneme.agent.adapters import build_mneme_agent
-from app.mneme.agent.contracts import AgentRequest, AnswerMode
+from app.mneme.agent.contracts import AnswerMode
 from app.mneme.agent.router import route_answer_mode
 from app.mneme.clients.memory_agent_client import MemoryAgentClient, MemoryAgentRejected, MemoryAgentUnavailable
-from app.mneme.conf.config import settings
 from app.mneme.crud.ai_model_config import get_ai_model_config, get_default_ai_model_config
 from app.mneme.crud.chat_message import create_chat_message, delete_chat_messages, list_chat_messages
 from app.mneme.crud.chat_session import (
@@ -24,7 +22,7 @@ from app.mneme.crud.chat_session import (
     list_chat_sessions as list_chat_session_rows,
 )
 from app.mneme.crud.knowledge_base import get_knowledge_base_by_id
-from app.mneme.domains.settings.ai_models import ai_model_config_runtime_kwargs, decrypt_api_key
+from app.mneme.domains.settings.ai_models import decrypt_api_key
 from app.mneme.domains.tasks.outbox import (
     enqueue_conversation_completed,
     enqueue_conversation_deleted,
@@ -95,8 +93,6 @@ async def create_chat_session(
 ) -> ChatSession:
     if answer_mode != "general_chat" and knowledge_base_id is None:
         raise BusinessException(message="knowledge base is required for this answer mode", code=4053)
-    if knowledge_base_id is None and not settings.MEMORY_AGENT_ENABLED:
-        raise BusinessException(message="general chat requires memory agent", code=5034, status_code=503)
     knowledge_base = (
         await require_owned_knowledge_base(db, current_user=current_user, knowledge_base_id=knowledge_base_id)
         if knowledge_base_id is not None
@@ -169,25 +165,24 @@ async def delete_chat_session(
     session_id: str,
 ) -> int:
     session = await require_owned_chat_session(db, current_user=current_user, session_id=session_id)
-    if settings.MEMORY_AGENT_ENABLED:
-        message_ids = list(
-            await db.scalars(
-                select(ChatMessage.id)
-                .where(
-                    ChatMessage.session_id == session.id,
-                    ChatMessage.user_id == current_user.id,
-                )
-                .order_by(ChatMessage.id)
+    message_ids = list(
+        await db.scalars(
+            select(ChatMessage.id)
+            .where(
+                ChatMessage.session_id == session.id,
+                ChatMessage.user_id == current_user.id,
             )
+            .order_by(ChatMessage.id)
         )
-        await enqueue_conversation_deleted(
-            db,
-            owner_id=current_user.id,
-            knowledge_base_id=session.knowledge_base_id,
-            session_id=session.id,
-            message_ids=message_ids,
-            source_version=datetime.now(timezone.utc),
-        )
+    )
+    await enqueue_conversation_deleted(
+        db,
+        owner_id=current_user.id,
+        knowledge_base_id=session.knowledge_base_id,
+        session_id=session.id,
+        message_ids=message_ids,
+        source_version=datetime.now(timezone.utc),
+    )
     await delete_chat_messages(db, session_id=session_id, user_id=current_user.id)
     return await delete_chat_session_row(db, session_id=session_id, user_id=current_user.id)
 
@@ -353,31 +348,6 @@ async def ask_in_chat_session(
     if selected_mode != "general_chat" and session.knowledge_base_id is None:
         raise BusinessException(message="knowledge base is required for this answer mode", code=4053)
 
-    if not settings.MEMORY_AGENT_ENABLED:
-        model_config = await _resolve_model_config(db, user_id=current_user.id, config_id=model_config_id)
-        llm_config = ai_model_config_runtime_kwargs(model_config) if model_config else None
-        agent_response = await build_mneme_agent(db).run(
-            AgentRequest(
-                question=question,
-                knowledge_base_id=session.knowledge_base_id,
-                user_id=current_user.id,
-                top_k=top_k,
-                answer_mode=selected_mode,
-                llm_config=llm_config,
-            )
-        )
-        result = agent_response.to_legacy_result()
-        if answer_mode is not None:
-            session.answer_mode = answer_mode
-        return await _persist_legacy_answer(
-            db,
-            session=session,
-            current_user=current_user,
-            question=question,
-            result=result,
-            model_config=model_config,
-        )
-
     model_config = await _resolve_model_config(db, user_id=current_user.id, config_id=model_config_id)
 
     if retry_message_id is not None:
@@ -523,49 +493,6 @@ async def ask_in_chat_session(
     return session, [user_message, assistant_message]
 
 
-async def _persist_legacy_answer(
-    db: AsyncSession,
-    *,
-    session: ChatSession,
-    current_user: User,
-    question: str,
-    result: dict,
-    model_config,
-) -> tuple[ChatSession, list[ChatMessage]]:
-    now = datetime.now(timezone.utc)
-    user_message = await create_chat_message(
-        db,
-        message_id=build_chat_message_id(),
-        session_id=session.id,
-        user_id=current_user.id,
-        knowledge_base_id=session.knowledge_base_id,
-        knowledge_base_pk=session.knowledge_base_pk,
-        role="user",
-        content=question,
-    )
-    assistant_message = await create_chat_message(
-        db,
-        message_id=build_chat_message_id(),
-        session_id=session.id,
-        user_id=current_user.id,
-        knowledge_base_id=session.knowledge_base_id,
-        knowledge_base_pk=session.knowledge_base_pk,
-        role="assistant",
-        content=result["answer"],
-        sources_json=result.get("sources") or [],
-        citations_json=result.get("citations") or [],
-        route_json=result.get("route"),
-        model_config_id=model_config.id if model_config else None,
-    )
-    if not session.title:
-        session.title = question[:80]
-    session.message_count = (session.message_count or 0) + 2
-    session.last_message_at = now
-    await db.flush()
-    await db.refresh(session)
-    return session, [user_message, assistant_message]
-
-
 async def remember_chat_message(
     db: AsyncSession,
     *,
@@ -573,12 +500,6 @@ async def remember_chat_message(
     session_id: str,
     message_id: str,
 ) -> tuple[ChatMessage, bool]:
-    if not settings.MEMORY_AGENT_ENABLED:
-        raise BusinessException(
-            message="memory agent is disabled",
-            code=5034,
-            status_code=503,
-        )
     session = await require_owned_chat_session(
         db,
         current_user=current_user,

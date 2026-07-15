@@ -96,7 +96,6 @@ class Settings(BaseSettings):
     MEMORY_AGENT_BASE_URL: str = "http://127.0.0.1:8010"
     MEMORY_AGENT_SERVICE_JWT_SECRET: SecretStr = SecretStr("")
     MEMORY_AGENT_TIMEOUT_SECONDS: int = 30
-    MEMORY_AGENT_ENABLED: bool = False
     MEMORY_AGENT_OUTBOX_TARGET: str = "memory_agent_http"
 
     LLM_PROVIDER: str = "deepseek"

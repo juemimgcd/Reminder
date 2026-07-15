@@ -1,8 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.mneme.agent.adapters import build_mneme_agent
-from app.mneme.agent.contracts import AgentRequest
 from app.mneme.conf.config import settings
 from app.mneme.conf.database import get_write_database
 from app.mneme.conf.logging import app_logger
@@ -79,35 +77,21 @@ async def query_chat(
         )
         return success_response(data=data)
 
-    if settings.MEMORY_AGENT_ENABLED:
-        model_config = await _resolve_model_config(
-            db, user_id=current_user.id, config_id=payload.model_config_id
-        )
-        await db.rollback()
-        agent_response = await answer_via_memory_agent(
-            owner_id=current_user.id,
-            question=payload.question,
-            answer_mode=payload.answer_mode,
-            top_k=payload.top_k,
-            knowledge_base_id=payload.knowledge_base_id,
-            session_id=None,
-            message_id=build_chat_message_id(),
-            model_config=model_config,
-        )
-        result = memory_agent_answer_to_chat_result(agent_response)
-    else:
-        if payload.knowledge_base_id is None:
-            raise BusinessException(message="general chat requires memory agent", code=5034, status_code=503)
-        agent_response = await build_mneme_agent(db).run(
-            AgentRequest(
-                question=payload.question,
-                knowledge_base_id=payload.knowledge_base_id,
-                user_id=current_user.id,
-                top_k=payload.top_k,
-                answer_mode=payload.answer_mode,
-            )
-        )
-        result = agent_response.to_legacy_result()
+    model_config = await _resolve_model_config(
+        db, user_id=current_user.id, config_id=payload.model_config_id
+    )
+    await db.rollback()
+    agent_response = await answer_via_memory_agent(
+        owner_id=current_user.id,
+        question=payload.question,
+        answer_mode=payload.answer_mode,
+        top_k=payload.top_k,
+        knowledge_base_id=payload.knowledge_base_id,
+        session_id=None,
+        message_id=build_chat_message_id(),
+        model_config=model_config,
+    )
+    result = memory_agent_answer_to_chat_result(agent_response)
     app_logger.bind(module="chat_router").info(
         f"chat query success user_id={current_user.id} knowledge_base_id={payload.knowledge_base_id} "
         f"source_count={len(result['sources'])} citation_count={len(result['citations'])} "
