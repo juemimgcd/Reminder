@@ -1,7 +1,7 @@
 """add durable agent runtime events
 
-Revision ID: 20260715_03
-Revises: 20260715_02
+Revision ID: 20260715_06
+Revises: 20260715_05
 Create Date: 2026-07-15 00:00:02.000000
 
 """
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision = "20260715_03"
-down_revision = "20260715_02"
+revision = "20260715_06"
+down_revision = "20260715_05"
 branch_labels = None
 depends_on = None
 

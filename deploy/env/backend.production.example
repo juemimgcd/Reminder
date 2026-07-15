@@ -31,6 +31,25 @@ CORS_ALLOW_HEADERS=["*"]
 
 DATABASE_URL=postgresql+asyncpg://postgres:change-this-password@localhost:5432/agentic
 
+# Memory Agent remains deployed without receiving user answer traffic during this phase.
+MEMORY_AGENT_ENABLED=false
+MEMORY_AGENT_BASE_URL=http://memory-agent-api:8010
+MEMORY_AGENT_POSTGRES_DB=memory_agent
+MEMORY_AGENT_SERVICE_JWT_SECRET=replace-with-a-separate-long-random-secret
+MEMORY_AGENT_SERVICE_JWT_AUDIENCE=memory-agent
+MEMORY_AGENT_CELERY_BROKER_URL=redis://redis:6379/2
+MEMORY_AGENT_CELERY_RESULT_BACKEND=redis://redis:6379/3
+MEMORY_AGENT_CELERY_QUEUE=memory_agent
+MEMORY_AGENT_UVICORN_WORKERS=2
+MEMORY_AGENT_WORKER_CONCURRENCY=2
+# Optional service default. If model/key are empty, each answer request must supply an
+# ephemeral model configuration; readiness reports this as request_required.
+MEMORY_AGENT_ANSWER_LLM_PROVIDER=openai
+MEMORY_AGENT_ANSWER_LLM_BASE_URL=
+MEMORY_AGENT_ANSWER_LLM_API_KEY=
+MEMORY_AGENT_ANSWER_LLM_MODEL=
+MEMORY_AGENT_ANSWER_LLM_TEMPERATURE=0.0
+
 STORAGE_DIR=./storage
 RAW_FILE_DIR=./storage/raw
 ALLOWED_EXTENSIONS=[".pdf",".txt",".md",".docx",".pptx",".xlsx",".xls",".csv",".json",".xml",".html",".htm",".epub"]

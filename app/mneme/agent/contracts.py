@@ -4,6 +4,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 AnswerMode = Literal["kb_qa", "memory_query", "profile_query", "analysis_query", "general_chat"]
+RetrievalScope = Literal["hybrid", "memory_only"]
 
 
 class AgentHistoryMessage(BaseModel):
@@ -17,7 +18,7 @@ class AgentHistoryMessage(BaseModel):
 
 class AgentRequest(BaseModel):
     question: str
-    knowledge_base_id: str = Field(..., min_length=1)
+    knowledge_base_id: str | None = Field(default=None, min_length=1)
     user_id: int
     session_id: str | None = None
     run_id: str | None = None

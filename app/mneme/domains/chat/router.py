@@ -15,10 +15,12 @@ from app.mneme.domains.chat.service import (
     message_to_data,
     require_owned_chat_session,
     stream_in_chat_session,
+    remember_chat_message,
     update_chat_session,
 )
 from app.mneme.models.user import User
 from app.mneme.schemas.chat_session import (
+    ChatMessageRememberData,
     ChatSessionCreateRequest,
     ChatSessionData,
     ChatSessionDetailData,
@@ -55,6 +57,7 @@ async def create_chat_session_api(
         current_user=current_user,
         knowledge_base_id=payload.knowledge_base_id,
         title=payload.title,
+        answer_mode=payload.answer_mode,
     )
     return success_response(data=ChatSessionData.model_validate(session), message="chat session created")
 
@@ -87,6 +90,7 @@ async def update_chat_session_api(
         session_id=session_id,
         title=payload.title,
         archived=payload.archived,
+        answer_mode=payload.answer_mode,
     )
     return success_response(data=ChatSessionData.model_validate(session), message="chat session updated")
 
@@ -118,7 +122,9 @@ async def create_chat_message_api(
         question=payload.question,
         top_k=payload.top_k,
         answer_mode=payload.answer_mode,
-        expected_knowledge_base_id=None,
+        model_config_id=payload.model_config_id,
+        retry_message_id=payload.retry_message_id,
+        regenerate_message_id=payload.regenerate_message_id,
     )
     return success_response(
         data=ChatSessionDetailData(
@@ -168,4 +174,23 @@ async def stream_chat_message_api(
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
         },
+    )
+
+
+@router.post("/{session_id}/messages/{message_id}/remember")
+async def remember_chat_message_api(
+    session_id: str,
+    message_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_write_database),
+):
+    message, requested = await remember_chat_message(
+        db,
+        current_user=current_user,
+        session_id=session_id,
+        message_id=message_id,
+    )
+    return success_response(
+        data=ChatMessageRememberData(message_id=message.id, requested=requested),
+        message="memory requested",
     )

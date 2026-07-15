@@ -19,7 +19,7 @@ export interface GraphLink {
   target: string;
 }
 
-export type WorkspaceView = "dashboard" | "notes" | "graph" | "ai" | "settings";
+export type WorkspaceView = "dashboard" | "notes" | "graph" | "ai" | "memory" | "settings";
 
 export type AuthMode = "login" | "register";
 
@@ -230,18 +230,24 @@ export interface QueryRouteDecision {
 export type AnswerMode = "kb_qa" | "memory_query" | "profile_query" | "analysis_query" | "general_chat";
 
 export interface ChatSourceItem {
-  source_id: string;
+  source_id: string | null;
   knowledge_base_id: string | null;
-  document_id: string;
-  chunk_id: string;
+  document_id: string | null;
+  chunk_id: string | null;
+  source_type?: string | null;
+  evidence_id?: string | null;
+  source_time?: string | null;
   page_no: number | null;
   text: string;
 }
 
 export interface ChatCitationItem {
-  source_id: string;
-  document_id: string;
-  chunk_id: string;
+  source_id: string | null;
+  document_id: string | null;
+  chunk_id: string | null;
+  source_type?: string | null;
+  evidence_id?: string | null;
+  source_time?: string | null;
   page_no: number | null;
   quote: string;
   reason: string;
@@ -277,23 +283,27 @@ export interface ChatMessageData {
   id: string;
   session_id: string;
   user_id: number;
-  knowledge_base_id: string;
+  knowledge_base_id: string | null;
   role: "user" | "assistant" | string;
   content: string;
-  agent_run_id?: string | null;
   sequence_no?: number | null;
   sources: ChatSourceItem[];
   citations: ChatCitationItem[];
   tool_calls?: Record<string, unknown>[];
   route: QueryRouteDecision | null;
   model_config_id: string | null;
+  agent_run_id: string | null;
+  confidence: number | null;
+  uncertainty: string | null;
+  insufficient_evidence: boolean;
   created_at: string;
 }
 
 export interface ChatSessionData {
   id: string;
   user_id: number;
-  knowledge_base_id: string;
+  knowledge_base_id: string | null;
+  answer_mode: AnswerMode;
   title: string | null;
   message_count: number;
   last_message_at: string | null;
@@ -301,6 +311,22 @@ export interface ChatSessionData {
   created_at: string;
   updated_at: string;
 }
+
+export interface CanonicalMemory {
+  memory_id: string; knowledge_base_id: string | null; memory_type: string; subject: string; predicate: string;
+  value: string; confidence: number; status: string; active_revision_id: string; created_at: string; updated_at: string;
+}
+export interface MemoryCandidate {
+  candidate_id: string; knowledge_base_id: string | null; memory_type: string; subject: string; predicate: string;
+  value: string; confidence: number; status: string; created_at: string; decided_at: string | null;
+}
+export interface MemoryRevision { revision_id: string; subject: string; predicate: string; value: string; valid_from: string; valid_to: string | null; reason: string }
+export interface MemoryEvidence { evidence_id: string; revision_id: string; source_type: string; source_id: string; source_document_id: string | null; excerpt: string; source_time: string }
+export interface MemoryDetail { memory: CanonicalMemory; revisions: MemoryRevision[]; evidence: MemoryEvidence[] }
+export interface MemoryPage<T> { items: T[]; next_cursor: string | null; total: number; pending_count?: number }
+export interface MemorySettings { automatic_conversation_memory: boolean; applied: boolean }
+export interface MemoryConfirmation { action: string; target_id: string; expires_at: string; confirmation_token: string }
+export interface MemoryPurgeResult { purged: boolean; deleted_evidence_count: number; deleted_candidate_count: number; deleted_revision_count: number; deleted_memory_count: number }
 
 export interface ChatSessionListData {
   items: ChatSessionData[];

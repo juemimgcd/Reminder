@@ -1,8 +1,7 @@
-from pathlib import Path
 import unittest
+from pathlib import Path
 
 import yaml
-
 
 COMPOSE_FILE = Path(__file__).resolve().parents[1] / "docker-compose.yml"
 NGINX_FILE = Path(__file__).resolve().parents[1] / "nginx" / "reminder.conf"
@@ -60,6 +59,29 @@ class DockerComposeContractTest(unittest.TestCase):
         self.assertIn("!scripts/", patterns)
         self.assertIn("scripts/*", patterns)
         self.assertIn("!scripts/backfill_document_hashes.py", patterns)
+
+    def test_memory_agent_uses_independent_database_redis_and_queue(self):
+        mneme = self.compose["x-app-base"]["environment"]
+        agent = self.compose["x-memory-agent-base"]["environment"]
+
+        self.assertIn("/${POSTGRES_DB:-agentic}", mneme["DATABASE_URL"])
+        self.assertIn("/${MEMORY_AGENT_POSTGRES_DB:-memory_agent}", agent["MEMORY_AGENT_DATABASE_URL"])
+        self.assertEqual(agent["MEMORY_AGENT_CELERY_BROKER_URL"], "redis://redis:6379/2")
+        self.assertEqual(agent["MEMORY_AGENT_CELERY_RESULT_BACKEND"], "redis://redis:6379/3")
+        self.assertEqual(agent["MEMORY_AGENT_CELERY_QUEUE"], "${MEMORY_AGENT_CELERY_QUEUE:-memory_agent}")
+        self.assertEqual(mneme["MEMORY_AGENT_ENABLED"], "${MEMORY_AGENT_ENABLED:-false}")
+
+    def test_memory_agent_migration_and_health_contract(self):
+        migrate = self.services["memory-agent-migrate"]
+        api = self.services["memory-agent-api"]
+
+        self.assertEqual(
+            migrate["command"],
+            ["alembic", "-c", "/app/services/memory_agent/alembic.ini", "upgrade", "head"],
+        )
+        self.assertEqual(api["depends_on"]["memory-agent-migrate"]["condition"], "service_completed_successfully")
+        self.assertIn("/health/readiness", " ".join(api["healthcheck"]["test"]))
+
 
 
 if __name__ == "__main__":

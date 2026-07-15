@@ -11,6 +11,9 @@ const previewApiSource = readFileSync(path.join(root, 'src', 'lib', 'previewApi.
 const workspaceSource = readFileSync(path.join(root, 'src', 'composables', 'useMnemeWorkspace.ts'), 'utf8');
 const graphInteractionSource = readFileSync(path.join(root, 'src', 'composables', 'useGraphInteraction.ts'), 'utf8');
 const messagesSource = readFileSync(path.join(root, 'src', 'i18n', 'messages.ts'), 'utf8');
+const memoryCenterSource = readFileSync(path.join(root, 'src', 'composables', 'useMemoryCenter.ts'), 'utf8');
+const memoryViewSource = readFileSync(path.join(root, 'src', 'views', 'MemoryCenterView.vue'), 'utf8');
+const aiLabSource = readFileSync(path.join(root, 'src', 'views', 'AiLabView.vue'), 'utf8');
 
 function collectVueSources(directory) {
   return readdirSync(directory).flatMap((entry) => {
@@ -37,6 +40,8 @@ for (const testId of [
   'data-testid="ai-history-rail"',
   'data-testid="workspace-chat-command"',
   'data-testid="answer-mode-selector"',
+  'data-testid="answer-mode-description"',
+  'data-testid="answer-mode-badge"',
 ]) {
   assert.ok(vueSource.includes(testId), `Expected the composed Vue workspace to expose ${testId}`);
 }
@@ -77,6 +82,24 @@ assert.ok(workspaceSource.includes('ref<WorkspaceView>(IS_PREVIEW_MODE ? "graph"
 assert.ok(previewApiSource.includes('import.meta.env.MODE === "preview"'), 'Expected explicit preview mode');
 assert.ok(previewApiSource.includes('window.location.hash'), 'Expected hash preview detection');
 assert.ok(workspaceSource.includes('answer_mode: chatAnswerMode.value'), 'Expected chat requests to send the user-selected answer mode');
+assert.ok(workspaceSource.includes('chatAnswerMode.value = detail.session.answer_mode'), 'Expected selecting a session to restore its persisted answer mode');
+assert.ok(workspaceSource.includes('regenerate_message_id: options.regenerateMessageId'), 'Expected regeneration to identify the original message');
+assert.ok(workspaceSource.includes('retry_message_id: options.retryMessageId'), 'Expected retry to retain the saved failed message identity');
+assert.ok(aiLabSource.includes('message.agent_run_id'), 'Expected chat answers to display their Agent run ID');
+assert.ok(aiLabSource.includes('source.source_time'), 'Expected chat sources to display memory/source time');
+assert.ok(aiLabSource.includes('Regenerate in selected mode'), 'Expected an explicit regenerate control');
+assert.ok(aiLabSource.includes('Retry saved message'), 'Expected an explicit failed-message retry control');
+
+for (const operation of ['listMemories', 'listMemoryCandidates', 'getMemorySettings', 'candidateCommand', 'reviseMemory', 'memoryCommand', 'deleteMemory', 'purgeMemory']) {
+  assert.ok(memoryCenterSource.includes(`api.${operation}`), `Expected Memory Center to call ${operation}`);
+}
+for (const confirmation of ['confirm_candidate', 'reject_candidate', 'revise_memory', 'invalidate_memory', 'hard_delete_memory', 'purge_source', 'purge_knowledge_base', 'purge_account']) {
+  assert.ok(memoryCenterSource.includes(confirmation) || memoryCenterSource.includes('`${action}_candidate`') || memoryCenterSource.includes('`purge_${kind}`'), `Expected governed confirmation path for ${confirmation}`);
+}
+assert.ok(!memoryCenterSource.includes('owner_id'), 'Expected account purge never to accept a browser-supplied owner ID');
+for (const state of ['center.error.value', 'center.loading.value', 'No active memories', 'center.candidates.value', 'center.detail.value']) {
+  assert.ok(memoryViewSource.includes(state), `Expected Memory Center state: ${state}`);
+}
 
 for (const apiMethod of ['uploadDocument', 'indexDocument', 'deleteDocument', 'testAiModelConfig', 'setDefaultAiModelConfig', 'updateAiModelConfig', 'deleteChatSession', 'graphRag']) {
   assert.ok(apiSource.includes(apiMethod) || previewApiSource.includes(apiMethod), `Expected client API method ${apiMethod}`);

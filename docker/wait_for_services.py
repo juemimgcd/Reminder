@@ -37,9 +37,12 @@ def wait_for_url(url: str, timeout_seconds: int) -> None:
 
 
 def main() -> int:
+    service_name = os.getenv("WAIT_FOR_SERVICE_NAME", "service").strip() or "service"
     raw_hosts = os.getenv("WAIT_FOR_HOSTS", "").strip()
     raw_urls = os.getenv("WAIT_FOR_URLS", "").strip()
     timeout_seconds = int(os.getenv("WAIT_FOR_TIMEOUT_SECONDS", "180"))
+
+    print(f"dependency_wait_started service={service_name}", flush=True)
 
     if not raw_hosts and not raw_urls:
         print("dependency_wait_skipped reason=empty_wait_targets", flush=True)
@@ -65,7 +68,7 @@ def main() -> int:
 
             wait_for_url(url=url, timeout_seconds=timeout_seconds)
 
-    print("dependency_wait_completed", flush=True)
+    print(f"dependency_wait_completed service={service_name}", flush=True)
     return 0
 
 

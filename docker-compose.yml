@@ -27,12 +27,50 @@ x-app-base: &app-base
     NEO4J_PASSWORD: ${NEO4J_PASSWORD:-change-this-in-production}
     NEO4J_DATABASE: ${NEO4J_DATABASE:-neo4j}
     NEO4J_MAX_CONNECTION_POOL_SIZE: ${NEO4J_MAX_CONNECTION_POOL_SIZE:-20}
+    MEMORY_AGENT_BASE_URL: http://memory-agent-api:8010
+    MEMORY_AGENT_ENABLED: "${MEMORY_AGENT_ENABLED:-false}"
+    MEMORY_AGENT_SERVICE_JWT_SECRET: ${MEMORY_AGENT_SERVICE_JWT_SECRET:-}
     PYTHONPATH: /app
+    WAIT_FOR_SERVICE_NAME: mneme
     WAIT_FOR_HOSTS: ${WAIT_FOR_HOSTS:-postgres:5432,redis:6379,neo4j:7687}
     WAIT_FOR_URLS: ${WAIT_FOR_URLS:-}
     WAIT_FOR_TIMEOUT_SECONDS: ${WAIT_FOR_TIMEOUT_SECONDS:-180}
   volumes:
     - ./storage:/app/storage
+
+x-memory-agent-base: &memory-agent-base
+  build:
+    context: .
+    dockerfile: docker/Dockerfile
+    args:
+      PYTHON_VERSION: ${PYTHON_VERSION:-3.12}
+      PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
+      PIP_EXTRA_INDEX_URL: ${PIP_EXTRA_INDEX_URL:-}
+  image: ${APP_IMAGE_REPOSITORY:-reminder-app}:${APP_IMAGE_TAG:-local}
+  pull_policy: ${APP_IMAGE_PULL_POLICY:-missing}
+  restart: unless-stopped
+  init: true
+  env_file:
+    - .env
+  environment:
+    MEMORY_AGENT_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-123456}@postgres:5432/${MEMORY_AGENT_POSTGRES_DB:-memory_agent}
+    MEMORY_AGENT_API_HOST: 0.0.0.0
+    MEMORY_AGENT_API_PORT: 8010
+    MEMORY_AGENT_SERVICE_JWT_SECRET: ${MEMORY_AGENT_SERVICE_JWT_SECRET:-}
+    MEMORY_AGENT_SERVICE_JWT_AUDIENCE: ${MEMORY_AGENT_SERVICE_JWT_AUDIENCE:-memory-agent}
+    MEMORY_AGENT_CELERY_BROKER_URL: redis://redis:6379/2
+    MEMORY_AGENT_CELERY_RESULT_BACKEND: redis://redis:6379/3
+    MEMORY_AGENT_CELERY_QUEUE: ${MEMORY_AGENT_CELERY_QUEUE:-memory_agent}
+    MEMORY_AGENT_ANSWER_LLM_PROVIDER: ${MEMORY_AGENT_ANSWER_LLM_PROVIDER:-openai}
+    MEMORY_AGENT_ANSWER_LLM_BASE_URL: ${MEMORY_AGENT_ANSWER_LLM_BASE_URL:-}
+    MEMORY_AGENT_ANSWER_LLM_API_KEY: ${MEMORY_AGENT_ANSWER_LLM_API_KEY:-}
+    MEMORY_AGENT_ANSWER_LLM_MODEL: ${MEMORY_AGENT_ANSWER_LLM_MODEL:-}
+    MEMORY_AGENT_ANSWER_LLM_TEMPERATURE: ${MEMORY_AGENT_ANSWER_LLM_TEMPERATURE:-0.0}
+    PYTHONPATH: /app
+    WAIT_FOR_SERVICE_NAME: memory-agent
+    WAIT_FOR_HOSTS: postgres:5432,redis:6379
+    WAIT_FOR_URLS: ""
+    WAIT_FOR_TIMEOUT_SECONDS: ${WAIT_FOR_TIMEOUT_SECONDS:-180}
 
 x-logging: &default-logging
   driver: json-file
@@ -59,6 +97,34 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+
+  memory-agent-db-init:
+    image: postgres:17
+    container_name: reminder-memory-agent-db-init
+    restart: "no"
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGUSER: ${POSTGRES_USER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-123456}
+      PGDATABASE: ${POSTGRES_DB:-agentic}
+      MEMORY_AGENT_POSTGRES_DB: ${MEMORY_AGENT_POSTGRES_DB:-memory_agent}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *default-logging
+    command:
+      - sh
+      - -ec
+      - |
+        if [ "$$MEMORY_AGENT_POSTGRES_DB" = "$$PGDATABASE" ]; then
+          echo "Memory Agent database must differ from Mneme database" >&2
+          exit 1
+        fi
+        psql --set=ON_ERROR_STOP=1 --set=agent_db="$$MEMORY_AGENT_POSTGRES_DB" --tuples-only --no-align <<'SQL'
+        SELECT format('CREATE DATABASE %I', :'agent_db')
+        WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'agent_db')\gexec
+        SQL
 
   etcd:
     profiles: ["vector"]
@@ -198,6 +264,44 @@ services:
         condition: service_completed_successfully
     logging: *default-logging
     command: ["sh", "/app/docker/start-worker.sh"]
+
+  memory-agent-migrate:
+    <<: *memory-agent-base
+    container_name: reminder-memory-agent-migrate
+    restart: "no"
+    depends_on:
+      memory-agent-db-init:
+        condition: service_completed_successfully
+    logging: *default-logging
+    command: ["alembic", "-c", "/app/services/memory_agent/alembic.ini", "upgrade", "head"]
+
+  memory-agent-api:
+    <<: *memory-agent-base
+    container_name: reminder-memory-agent-api
+    depends_on:
+      memory-agent-migrate:
+        condition: service_completed_successfully
+    expose:
+      - "8010"
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; import sys; sys.exit(0 if urlopen('http://127.0.0.1:8010/health/readiness').status == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    logging: *default-logging
+    command: ["sh", "/app/docker/start-memory-agent-api.sh"]
+
+  memory-agent-worker:
+    <<: *memory-agent-base
+    container_name: reminder-memory-agent-worker
+    depends_on:
+      memory-agent-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    logging: *default-logging
+    command: ["sh", "/app/docker/start-memory-agent-worker.sh"]
 
 volumes:
   postgres_data:

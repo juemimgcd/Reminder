@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.mneme.models.base import Base
@@ -12,6 +12,10 @@ class ChatSession(Base):
     __table_args__ = (
         Index("idx_chat_sessions_user_id", "user_id"),
         Index("idx_chat_sessions_knowledge_base_pk", "knowledge_base_pk"),
+        CheckConstraint(
+            "answer_mode IN ('kb_qa', 'memory_query', 'profile_query', 'analysis_query', 'general_chat')",
+            name="ck_chat_sessions_answer_mode",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, comment="会话ID")
@@ -21,19 +25,20 @@ class ChatSession(Base):
         nullable=False,
         comment="所属用户ID",
     )
-    knowledge_base_id: Mapped[str] = mapped_column(
+    knowledge_base_id: Mapped[str | None] = mapped_column(
         String(64),
-        nullable=False,
+        nullable=True,
         comment="所属知识库公开ID",
     )
-    knowledge_base_pk: Mapped[int] = mapped_column(
+    knowledge_base_pk: Mapped[int | None] = mapped_column(
         BigInteger,
         ForeignKey("knowledge_bases.pk"),
-        nullable=False,
+        nullable=True,
         comment="所属知识库内部主键",
     )
     title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, comment="会话标题")
 
+    answer_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="kb_qa", server_default="kb_qa")
     message_count: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0", comment="message count"
     )

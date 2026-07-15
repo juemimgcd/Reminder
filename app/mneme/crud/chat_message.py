@@ -10,8 +10,8 @@ async def create_chat_message(
     message_id: str,
     session_id: str,
     user_id: int,
-    knowledge_base_id: str,
-    knowledge_base_pk: int,
+    knowledge_base_id: str | None,
+    knowledge_base_pk: int | None,
     role: str,
     content: str,
     agent_run_id: str | None = None,
@@ -21,6 +21,7 @@ async def create_chat_message(
     tool_calls_json: list | None = None,
     route_json: dict | None = None,
     model_config_id: str | None = None,
+    answer_metadata_json: dict | None = None,
 ) -> ChatMessage:
     message = ChatMessage(
         id=message_id,
@@ -37,6 +38,7 @@ async def create_chat_message(
         tool_calls_json=tool_calls_json,
         route_json=route_json,
         model_config_id=model_config_id,
+        answer_metadata_json=answer_metadata_json,
     )
     db.add(message)
     await db.flush()

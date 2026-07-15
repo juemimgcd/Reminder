@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pydantic import AliasChoices, Field, model_validator
+from pydantic import AliasChoices, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_BASE_DIR = Path(__file__).resolve().parents[3]
@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     STORAGE_DIR: Path = DEFAULT_BASE_DIR / "storage"
     RAW_FILE_DIR: Path = DEFAULT_BASE_DIR / "storage" / "raw"
 
-    # ALLOWED_EXTENSIONS=[".pdf",".txt",".md",".docx",".pptx",".xlsx",".xls",".csv",".json",".xml",".html",".htm",".epub"]
+    # ALLOWED_EXTENSIONS includes common document, spreadsheet, data, and web formats.
     ALLOWED_EXTENSIONS: set[str] = {
         ".pdf",
         ".txt",
@@ -92,6 +92,11 @@ class Settings(BaseSettings):
     NEO4J_PASSWORD: str = "change-this-in-production"
     NEO4J_DATABASE: str = "neo4j"
     NEO4J_MAX_CONNECTION_POOL_SIZE: int = 20
+
+    MEMORY_AGENT_BASE_URL: str = "http://127.0.0.1:8010"
+    MEMORY_AGENT_SERVICE_JWT_SECRET: SecretStr = SecretStr("")
+    MEMORY_AGENT_TIMEOUT_SECONDS: int = 30
+    MEMORY_AGENT_OUTBOX_TARGET: str = "memory_agent_http"
 
     LLM_PROVIDER: str = "deepseek"
     LLM_API_KEY: str = ""
