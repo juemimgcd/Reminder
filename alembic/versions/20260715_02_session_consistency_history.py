@@ -1,7 +1,7 @@
 """add agent run idempotency and persisted session summaries
 
-Revision ID: 20260715_02
-Revises: 20260715_01
+Revision ID: 20260715_05
+Revises: 20260715_04
 Create Date: 2026-07-15 00:00:01.000000
 
 """
@@ -10,17 +10,13 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision = "20260715_02"
-down_revision = "20260715_01"
+revision = "20260715_05"
+down_revision = "20260715_04"
 branch_labels = None
 depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "chat_messages",
-        sa.Column("agent_run_id", sa.String(length=64), nullable=True),
-    )
     op.add_column(
         "chat_messages",
         sa.Column("sequence_no", sa.BigInteger(), nullable=True),
@@ -84,4 +80,3 @@ def downgrade() -> None:
     )
     op.drop_index("idx_chat_messages_agent_run_id", table_name="chat_messages")
     op.drop_column("chat_messages", "sequence_no")
-    op.drop_column("chat_messages", "agent_run_id")

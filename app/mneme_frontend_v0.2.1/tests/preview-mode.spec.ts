@@ -276,6 +276,29 @@ test('ai laboratory filters and deletes chat sessions', async ({ page }) => {
   await expect(page.getByTestId('ai-history-rail')).not.toContainText('Preview Vault Review');
 });
 
+test('ai laboratory lets the user select the answer mode', async ({ page }) => {
+  await openPreview(page);
+  await page.getByRole('button', { name: 'AI Laboratory', exact: true }).click();
+
+  const selector = page.getByTestId('answer-mode-selector');
+  const knowledgeBase = selector.getByRole('button', { name: 'Knowledge base', exact: true });
+  const longTermMemory = selector.getByRole('button', { name: 'Long-term memory', exact: true });
+
+  await expect(knowledgeBase).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('answer-mode-description')).toContainText('indexed documents');
+
+  await longTermMemory.click();
+
+  await expect(longTermMemory).toHaveAttribute('aria-pressed', 'true');
+  await expect(knowledgeBase).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByTestId('answer-mode-description')).toContainText('stored memory evidence');
+
+  const composer = page.getByTestId('workspace-chat-command');
+  await composer.locator('textarea').fill('What changed in my notes?');
+  await composer.getByRole('button', { name: 'Send message' }).click();
+  await expect(page.getByTestId('answer-mode-badge').last()).toHaveText('Long-term memory');
+});
+
 test('ai laboratory renders API-backed sessions and appends sent messages', async ({ page }) => {
   await openPreview(page);
   await page.getByRole('button', { name: 'AI Laboratory', exact: true }).click();
@@ -286,7 +309,7 @@ test('ai laboratory renders API-backed sessions and appends sent messages', asyn
 
   const composer = page.getByTestId('workspace-chat-command').locator('textarea');
   await composer.fill('Summarize the graph contradictions');
-  await page.getByTestId('workspace-chat-command').getByRole('button').click();
+  await page.getByTestId('workspace-chat-command').getByRole('button', { name: 'Send message' }).click();
 
   await expect(page.getByTestId('chat-function-grid')).toContainText('Summarize the graph contradictions');
   await expect(page.getByTestId('chat-function-grid')).toContainText('Preview answer for: Summarize the graph contradictions');

@@ -8,7 +8,7 @@ const emit = defineEmits<{ navigate: [id: string]; toggleResources: [] }>();
 </script>
 
 <template>
-  <nav data-testid="mobile-navigation" class="mobile-navigation" aria-label="Mobile workspace">
+  <nav data-testid="mobile-navigation" class="mobile-navigation" aria-label="Mobile workspace" :style="{ gridTemplateColumns: `repeat(${items.length + 1}, minmax(0, 1fr))` }">
     <button type="button" aria-label="Open resources" @click="emit('toggleResources')"><Menu class="size-[18px]" /><span>Files</span></button>
     <button
       v-for="item in items"

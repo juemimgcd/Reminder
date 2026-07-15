@@ -7,6 +7,7 @@ from fastapi import HTTPException
 from langchain_core.documents import Document as LCDocument
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.mneme.agent.contracts import RetrievalScope
 from app.mneme.clients.vector_store_client import similarity_search_with_score_resilient
 from app.mneme.conf.config import settings
 from app.mneme.conf.database import open_read_session
@@ -334,6 +335,7 @@ async def build_query_context(
     user_id: int | None = None,
     knowledge_base_id: str | None = None,
     context_budget: int | None = None,
+    retrieval_scope: RetrievalScope = "hybrid",
 ) -> dict[str, Any]:
     if not knowledge_base_id:
         raise HTTPException(status_code=400, detail="Knowledge base id not provided")
@@ -343,36 +345,54 @@ async def build_query_context(
     keyword_recall_k = max(top_k, settings.RETRIEVAL_KEYWORD_RECALL_K)
     memory_recall_k = max(top_k, settings.RETRIEVAL_MEMORY_RECALL_K)
 
-    vector_task = asyncio.create_task(
-        retrieve_documents_with_scores(
-            query=query,
-            top_k=vector_recall_k,
-            user_id=user_id,
-            knowledge_base_id=knowledge_base_id,
-        )
-    )
     query_terms = extract_query_terms(query)
 
-    async with open_read_session() as keyword_db, open_read_session() as memory_db:
-        keyword_task = asyncio.create_task(
-            search_chunks_by_keywords(
-                keyword_db,
-                knowledge_base_id=knowledge_base_id,
+    if retrieval_scope == "hybrid":
+        vector_task = asyncio.create_task(
+            retrieve_documents_with_scores(
+                query=query,
+                top_k=vector_recall_k,
                 user_id=user_id,
-                query_terms=query_terms,
-                limit=keyword_recall_k,
+                knowledge_base_id=knowledge_base_id,
             )
         )
-        memory_task = asyncio.create_task(
-            search_memory_entries_by_keywords(
+        async with open_read_session() as keyword_db, open_read_session() as memory_db:
+            keyword_task = asyncio.create_task(
+                search_chunks_by_keywords(
+                    keyword_db,
+                    knowledge_base_id=knowledge_base_id,
+                    user_id=user_id,
+                    query_terms=query_terms,
+                    limit=keyword_recall_k,
+                )
+            )
+            memory_task = asyncio.create_task(
+                search_memory_entries_by_keywords(
+                    memory_db,
+                    knowledge_base_id=knowledge_base_id,
+                    user_id=user_id,
+                    query_terms=query_terms,
+                    limit=memory_recall_k,
+                )
+            )
+            raw_vector_items, chunk_rows, memory_rows = await asyncio.gather(
+                vector_task,
+                keyword_task,
+                memory_task,
+            )
+        lexical_backend = "postgres_keyword_ranked"
+    else:
+        raw_vector_items = []
+        chunk_rows = []
+        async with open_read_session() as memory_db:
+            memory_rows = await search_memory_entries_by_keywords(
                 memory_db,
                 knowledge_base_id=knowledge_base_id,
                 user_id=user_id,
                 query_terms=query_terms,
                 limit=memory_recall_k,
             )
-        )
-        raw_vector_items, chunk_rows, memory_rows = await asyncio.gather(vector_task, keyword_task, memory_task)
+        lexical_backend = None
 
     deduped_vector_items = deduplicate_retrieved_documents(raw_vector_items)
     merged_vector_docs = merge_adjacent_scored_documents(deduped_vector_items)
@@ -401,8 +421,6 @@ async def build_query_context(
         )
         for chunk, score in chunk_rows
     ]
-    lexical_backend = "postgres_keyword_ranked"
-
     memory_items = [
         build_context_item_from_memory(
             row,

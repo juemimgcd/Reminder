@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Optional
 
-from sqlalchemy import DateTime, Index, Integer, JSON, String, Text
+from sqlalchemy import JSON, DateTime, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.mneme.models.base import Base
@@ -31,13 +31,21 @@ class OutboxEvent(Base):
     )
     attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="Attempt count")
     max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=3, comment="Max attempts")
+    enqueued_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        comment="Immutable event enqueue time",
+    )
     next_attempt_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         comment="Next eligible dispatch time",
     )
     locked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, comment="Lock time")
-    processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, comment="Processed time")
+    processed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="Processed time"
+    )
     last_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True, comment="Last error")
 
     def __repr__(self) -> str:
