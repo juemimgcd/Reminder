@@ -80,4 +80,3 @@ def test_document_retriever_passes_scope_and_top_k_to_both_recall_ports():
     keyword.assert_awaited_once()
     assert vector.await_args.kwargs["scope"].owner_id == 7
     assert vector.await_args.kwargs["limit"] == 3
-

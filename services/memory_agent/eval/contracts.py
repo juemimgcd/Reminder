@@ -89,6 +89,12 @@ class EvalCase:
         mode = str(value.get("mode", ""))
         if mode not in ANSWER_MODES:
             raise ValueError(f"{value.get('case_id', '<unknown>')}: unsupported answer mode {mode!r}")
+        if "actual_mode" not in prediction:
+            raise ValueError(f"{value.get('case_id', '<unknown>')}: prediction.actual_mode is required")
+        if no_evidence and "insufficient_evidence" not in prediction:
+            raise ValueError(
+                f"{value.get('case_id', '<unknown>')}: prediction.insufficient_evidence is required for no-evidence cases"
+            )
         top_k = int(value.get("top_k", 5))
         if top_k < 1:
             raise ValueError(f"{value.get('case_id', '<unknown>')}: top_k must be positive")
@@ -106,7 +112,7 @@ class EvalCase:
             historical=historical,
             conflict=conflict,
             unauthorized=unauthorized,
-            actual_mode=(str(prediction["actual_mode"]) if prediction.get("actual_mode") is not None else None),
+            actual_mode=str(prediction["actual_mode"]),
             answer=str(prediction.get("answer", value.get("answer", ""))),
             insufficient_evidence=bool(
                 prediction.get("insufficient_evidence", value.get("insufficient_evidence", no_evidence))

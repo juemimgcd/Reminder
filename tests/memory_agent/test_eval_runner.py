@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from services.memory_agent.eval.contracts import EvalCase
 from services.memory_agent.eval.metrics import evaluate_case
 from services.memory_agent.eval.runner import load_cases, main, run_evaluation
@@ -54,6 +56,7 @@ def test_metrics_flag_scope_leak_and_invalid_citation():
             "owner_id": 7,
             "expected": {"source_ids": ["m1"], "required_claims": ["answer"]},
             "prediction": {
+                "actual_mode": "memory_query",
                 "answer": "answer",
                 "retrieved": [{"source_id": "m1", "source_type": "memory", "owner_id": 99}],
                 "citations": [{"source_id": "m1", "source_type": "document"}],
@@ -66,6 +69,18 @@ def test_metrics_flag_scope_leak_and_invalid_citation():
     assert result.source_scope_violations == 1
     assert result.citation_precision == 0.0
     assert result.citation_coverage == 0.0
+
+
+def test_prediction_mode_is_explicitly_required():
+    with pytest.raises(ValueError, match="prediction.actual_mode is required"):
+        EvalCase.from_mapping(
+            {
+                "case_id": "missing-mode",
+                "mode": "general_chat",
+                "question": "q",
+                "prediction": {"answer": "a"},
+            }
+        )
 
 
 def test_cli_writes_json_report(tmp_path):
