@@ -179,6 +179,11 @@ class AnswerRunRepository:
             row.total_tokens = answer.total_tokens
             row.cost = Decimal(str(answer.cost))
             row.model_attempts = list(answer.model_attempts)
+            row.source_ids = list(
+                dict.fromkeys(
+                    [*row.source_ids, *(item.source_id for item in answer.tool_evidence)]
+                )
+            )
             row.selected_provider = answer.selected_provider
             row.selected_model = answer.selected_model
             row.fallback_used = answer.fallback_used

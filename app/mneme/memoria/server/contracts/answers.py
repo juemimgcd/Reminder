@@ -44,6 +44,8 @@ class AnswerResponse(BaseModel):
     insufficient_evidence: bool = False
     memory_ids: list[str] = Field(default_factory=list)
     document_ids: list[str] = Field(default_factory=list)
+    tool_calls: list[dict[str, Any]] = Field(default_factory=list)
+    stop_reason: str | None = None
     run_id: str
 
 

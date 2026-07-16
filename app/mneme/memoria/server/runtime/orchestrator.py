@@ -14,6 +14,7 @@ from app.mneme.memoria.server.runtime.contracts import (
     GenerationRequest,
     RetrievalPlan,
     RunPhase,
+    ToolExecutionContext,
     retrieval_request,
 )
 from app.mneme.memoria.server.runtime.plans import MODE_PLANS
@@ -303,6 +304,15 @@ class MemoryAgent:
                             conversation=request.conversation,
                             model=request.model,
                             allow_model_fallback=request.allow_model_fallback,
+                            tool_context=ToolExecutionContext(
+                                request_id=request.request_id,
+                                owner_id=request.owner_id,
+                                knowledge_base_id=request.knowledge_base_id,
+                                mode=request.answer_mode,
+                                top_k=request.top_k,
+                                plan=plan,
+                                allow_action_proposals=request.session_id is not None,
+                            ),
                         )
                     )
             except TimeoutError:
@@ -325,6 +335,10 @@ class MemoryAgent:
                     error_code=code,
                 )
                 raise AnswerRunExecutionError(run_id=run_id, error_code=code) from None
+
+            for item in generated.tool_evidence:
+                if all(existing.evidence_id != item.evidence_id for existing in evidence):
+                    evidence.append(item)
 
             await self._runs.record_generation(
                 run_id=run_id,
@@ -407,6 +421,8 @@ class MemoryAgent:
                 insufficient_evidence=insufficient_evidence,
                 memory_ids=memory_ids,
                 document_ids=document_ids,
+                tool_calls=generated.tool_calls,
+                stop_reason=generated.stop_reason,
                 run_id=run_id,
             )
             await self._runs.complete(

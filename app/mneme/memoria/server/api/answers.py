@@ -16,15 +16,17 @@ from app.mneme.memoria.server.runtime.orchestrator import (
     RuntimeDependencyError,
 )
 from app.mneme.memoria.server.runtime.retriever import ScopedEvidenceRetriever
+from app.mneme.memoria.server.runtime.tools import ScopedToolExecutor
 from app.mneme.memoria.server.security.service_tokens import ANSWERS_WRITE_SCOPE
 
 router = APIRouter()
 
 
 def get_memory_agent() -> MemoryAgent:
+    retriever = ScopedEvidenceRetriever()
     return MemoryAgent(
-        retriever=ScopedEvidenceRetriever(),
-        generator=ConfiguredModelGateway(),
+        retriever=retriever,
+        generator=ConfiguredModelGateway(tool_executor=ScopedToolExecutor(retriever)),
         citation_validator=EvidenceCitationValidator(),
     )
 

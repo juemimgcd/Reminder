@@ -5,10 +5,12 @@ from collections.abc import Awaitable, Callable
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.mneme.memoria.actions import WRITE_ACTION_CATALOG
 from app.mneme.memoria.clients.memory_agent import MemoryAgentClient, MemoryAgentUnavailable
 from app.mneme.memoria.configuration.repository import get_ai_model_config, get_default_ai_model_config
 from app.mneme.memoria.configuration.service import decrypt_api_key
 from app.mneme.memoria.contracts import AnswerMode
+from app.mneme.memoria.persistence.automation import create_or_get_tool_approval
 from app.mneme.memoria.router import route_answer_mode
 from app.mneme.memoria.schemas.memory_agent import (
     ConversationContextData,
@@ -144,4 +146,55 @@ def memory_agent_answer_to_chat_result(response: MemoryAgentAnswerResponse) -> d
         "confidence_numeric": response.confidence,
         "route": route,
         "debug": None,
+        "tool_calls": [dict(item) for item in response.tool_calls if isinstance(item, dict)],
+        "stop_reason": response.stop_reason,
     }
+
+
+async def persist_action_proposals(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    message_id: str,
+    run_id: str,
+    tool_calls: list[dict],
+) -> list[dict]:
+    persisted: list[dict] = []
+    for item in tool_calls:
+        trace = dict(item)
+        name = trace.get("name")
+        definition = WRITE_ACTION_CATALOG.get(name) if isinstance(name, str) else None
+        if trace.get("status") != "approval_required" or definition is None:
+            persisted.append(trace)
+            continue
+        tool_call_id = trace.get("tool_call_id")
+        summary = trace.get("summary")
+        arguments = trace.get("arguments")
+        if (
+            not isinstance(tool_call_id, str)
+            or not tool_call_id
+            or not isinstance(summary, str)
+            or not summary.strip()
+            or not isinstance(arguments, dict)
+        ):
+            trace["status"] = "rejected"
+            persisted.append(trace)
+            continue
+        approval = await create_or_get_tool_approval(
+            db,
+            id=f"approval_{uuid.uuid4().hex}",
+            user_id=user_id,
+            run_id=run_id,
+            action_name=definition.name,
+            risk_level=definition.risk_level.value,
+            action_summary=summary[:2000],
+            arguments_json=arguments,
+            status="pending",
+            apply_enabled=definition.apply_enabled,
+            idempotency_key=f"{user_id}:{message_id}:{tool_call_id}",
+        )
+        trace["approval_id"] = approval.id
+        trace["status"] = approval.status
+        trace["apply_enabled"] = approval.apply_enabled
+        persisted.append(trace)
+    return persisted

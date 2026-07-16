@@ -36,6 +36,7 @@ from app.mneme.domains.tasks.outbox import (
 from app.mneme.memoria.chat_bridge import (
     answer_via_memory_agent,
     memory_agent_answer_to_chat_result,
+    persist_action_proposals,
     resolve_model_config,
 )
 from app.mneme.memoria.clients.memory_agent import MemoryAgentRejected, MemoryAgentUnavailable
@@ -402,6 +403,13 @@ async def ask_in_chat_session(
         raise asyncio.CancelledError
 
     result = memory_agent_answer_to_chat_result(agent_response)
+    result["tool_calls"] = await persist_action_proposals(
+        db,
+        user_id=current_user.id,
+        message_id=user_message.id,
+        run_id=agent_response.run_id,
+        tool_calls=result["tool_calls"],
+    )
     assistant_message = await create_chat_message(
         db,
         message_id=build_chat_answer_message_id(user_message.id),
@@ -413,6 +421,7 @@ async def ask_in_chat_session(
         content=result["answer"],
         sources_json=result["sources"],
         citations_json=result["citations"],
+        tool_calls_json=result["tool_calls"],
         route_json=result["route"],
         model_config_id=model_config.id if model_config else None,
         agent_run_id=agent_run_id or agent_response.run_id,
@@ -421,6 +430,7 @@ async def ask_in_chat_session(
             "confidence": result["confidence_numeric"],
             "uncertainty": result["uncertainty"],
             "insufficient_evidence": result["insufficient_evidence"],
+            "stop_reason": result["stop_reason"],
         },
     )
     session.message_count = (session.message_count or 0) + 1

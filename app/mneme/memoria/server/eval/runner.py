@@ -19,8 +19,15 @@ from uuid import uuid4
 
 import httpx
 
-from app.mneme.memoria.server.eval.contracts import Citation, EvalCase, EvaluationReport, Evidence
-from app.mneme.memoria.server.eval.metrics import GATE_REQUIREMENTS, check_gates, evaluate_case, summarize_metrics
+from app.mneme.memoria.server.eval.contracts import Citation, EvalCase, EvaluationReport, Evidence, ToolTrace
+from app.mneme.memoria.server.eval.metrics import (
+    AGENT_GATE_REQUIREMENTS,
+    GATE_REQUIREMENTS,
+    check_agent_gates,
+    check_gates,
+    evaluate_case,
+    summarize_metrics,
+)
 
 
 def load_cases(path: str | Path) -> list[EvalCase]:
@@ -51,6 +58,8 @@ def run_evaluation(cases: Iterable[EvalCase], *, dataset_version: str = "v1") ->
         by_mode=by_mode,
         gates=check_gates(overall),
         gate_requirements=GATE_REQUIREMENTS.copy(),
+        agent_gates=check_agent_gates(overall),
+        agent_gate_requirements=AGENT_GATE_REQUIREMENTS.copy(),
     )
 
 
@@ -122,6 +131,16 @@ async def run_live_predictions(
                     insufficient_evidence=bool(payload.get("insufficient_evidence", False)),
                     retrieved=retrieved,
                     citations=citations,
+                    tool_calls=tuple(
+                        ToolTrace.from_mapping(item)
+                        for item in payload.get("tool_calls", [])
+                        if isinstance(item, dict)
+                    ),
+                    stop_reason=(
+                        str(payload["stop_reason"])
+                        if payload.get("stop_reason") is not None
+                        else None
+                    ),
                 )
             )
     return predictions
@@ -147,8 +166,17 @@ def main(argv: list[str] | None = None) -> int:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     report_json = json.dumps(report.to_dict(), ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     args.output.write_text(report_json, encoding="utf-8")
-    print(json.dumps({"case_count": report.case_count, "gates": report.gates}, sort_keys=True))
-    return 0 if all(report.gates.values()) else 1
+    print(
+        json.dumps(
+            {
+                "agent_gates": report.agent_gates,
+                "case_count": report.case_count,
+                "gates": report.gates,
+            },
+            sort_keys=True,
+        )
+    )
+    return 0 if all((*report.gates.values(), *report.agent_gates.values())) else 1
 
 
 if __name__ == "__main__":  # pragma: no cover
