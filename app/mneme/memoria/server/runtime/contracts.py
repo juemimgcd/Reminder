@@ -3,7 +3,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.mneme.memoria.server.contracts.answers import AnswerRequest
+from app.mneme.memoria.server.contracts.answers import AnswerRequest, ConversationContextData
 from app.mneme.memoria.server.contracts.common import AnswerMode, ModelInvocationConfig
 from app.mneme.memoria.server.retrieval.contracts import RetrievedEvidence
 
@@ -42,6 +42,7 @@ class GenerationRequest(BaseModel):
     mode: AnswerMode
     question: str = Field(exclude=True, repr=False)
     evidence: list[RetrievedEvidence] = Field(repr=False)
+    conversation: ConversationContextData = Field(default_factory=ConversationContextData, repr=False)
     model: ModelInvocationConfig | None = Field(default=None, exclude=True)
     allow_model_fallback: bool = False
 

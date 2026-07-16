@@ -300,6 +300,7 @@ class MemoryAgent:
                             mode=request.answer_mode,
                             question=request.question,
                             evidence=evidence,
+                            conversation=request.conversation,
                             model=request.model,
                             allow_model_fallback=request.allow_model_fallback,
                         )

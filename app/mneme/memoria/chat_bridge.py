@@ -11,6 +11,7 @@ from app.mneme.memoria.configuration.service import decrypt_api_key
 from app.mneme.memoria.contracts import AnswerMode
 from app.mneme.memoria.router import route_answer_mode
 from app.mneme.memoria.schemas.memory_agent import (
+    ConversationContextData,
     MemoryAgentAnswerRequest,
     MemoryAgentAnswerResponse,
     MemoryAgentStreamEvent,
@@ -54,6 +55,7 @@ async def answer_via_memory_agent(
     idempotency_key: str | None = None,
     trace_id: str | None = None,
     event_callback: Callable[[MemoryAgentStreamEvent], Awaitable[None]] | None = None,
+    conversation: ConversationContextData | None = None,
 ) -> MemoryAgentAnswerResponse:
     if answer_mode != "general_chat" and knowledge_base_id is None:
         raise BusinessException(message="knowledge base is required for this answer mode", code=4053)
@@ -68,6 +70,7 @@ async def answer_via_memory_agent(
         answer_mode=answer_mode,
         top_k=top_k,
         allow_model_fallback=model_config is None,
+        conversation=conversation or ConversationContextData(),
         model=_model_invocation_config(model_config),
     )
     async with MemoryAgentClient() as client:

@@ -10,6 +10,7 @@ AnswerMode = Literal[
     "analysis_query",
     "general_chat",
 ]
+ConversationRole = Literal["user", "assistant"]
 MemoryAgentEventType = Literal[
     "document.projection.upserted",
     "document.memory.observed",
@@ -89,6 +90,18 @@ class EventReceipt(BaseModel):
     duplicate: bool
 
 
+class ConversationMessageData(BaseModel):
+    message_id: str = Field(min_length=1, max_length=128)
+    role: ConversationRole
+    content: str = Field(min_length=1, max_length=20_000)
+
+
+class ConversationContextData(BaseModel):
+    summary: str = Field(default="", max_length=20_000)
+    summary_through_message_id: str | None = Field(default=None, max_length=128)
+    messages: list[ConversationMessageData] = Field(default_factory=list, max_length=24)
+
+
 class MemoryAgentAnswerRequest(BaseModel):
     request_id: str
     trace_id: str = Field(default="", max_length=64)
@@ -100,6 +113,7 @@ class MemoryAgentAnswerRequest(BaseModel):
     answer_mode: AnswerMode
     top_k: int = Field(default=4, ge=1, le=10)
     allow_model_fallback: bool = False
+    conversation: ConversationContextData = Field(default_factory=ConversationContextData)
     model: ModelInvocationConfig | None = Field(default=None, exclude=True)
 
 
