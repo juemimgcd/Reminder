@@ -37,6 +37,16 @@ class RetrievalRequest(BaseModel):
     temporal_scope: Literal["current", "history"] = "current"
 
 
+class ToolExecutionContext(BaseModel):
+    request_id: str
+    owner_id: int = Field(gt=0)
+    knowledge_base_id: str | None = None
+    mode: AnswerMode
+    top_k: int = Field(default=4, ge=1, le=10)
+    plan: RetrievalPlan
+    allow_action_proposals: bool = False
+
+
 class GenerationRequest(BaseModel):
     request_id: str
     mode: AnswerMode
@@ -45,6 +55,7 @@ class GenerationRequest(BaseModel):
     conversation: ConversationContextData = Field(default_factory=ConversationContextData, repr=False)
     model: ModelInvocationConfig | None = Field(default=None, exclude=True)
     allow_model_fallback: bool = False
+    tool_context: ToolExecutionContext | None = Field(default=None, exclude=True, repr=False)
 
 
 class GeneratedAnswer(BaseModel):
@@ -58,9 +69,12 @@ class GeneratedAnswer(BaseModel):
     completion_tokens: int = Field(default=0, ge=0)
     cost: float = Field(default=0, ge=0)
     model_attempts: list[dict[str, Any]] = Field(default_factory=list)
+    tool_calls: list[dict[str, Any]] = Field(default_factory=list)
+    tool_evidence: list[RetrievedEvidence] = Field(default_factory=list, exclude=True, repr=False)
     selected_provider: str | None = None
     selected_model: str | None = None
     fallback_used: bool = False
+    stop_reason: str | None = None
 
     @property
     def total_tokens(self) -> int:

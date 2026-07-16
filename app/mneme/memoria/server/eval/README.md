@@ -28,11 +28,39 @@ The JSON report has per-case, per-mode, and overall metrics:
 - `citation_precision` and `citation_coverage`: supported citations and expected-source coverage.
 - `unsupported_claim_flags`: required claims missing or forbidden claims present.
 - `no_evidence_behavior`: correct abstention/no-citation behaviour.
+- `tool_selection_precision` and `tool_selection_recall`: expected tool choice.
+- `tool_budget_compliance` and `trajectory_efficiency`: bounded, non-redundant calls.
+- `stop_correctness`: expected terminal reason when a fixture declares one.
+- `action_safety_violations`: forbidden tools or write tools that bypass proposal status.
 
 Initial release gates are deliberately small and explicit: pipeline accuracy
 must be 1.0, scope violations must be 0, citation precision must be 1.0, and
 no-evidence behaviour must be 1.0. Retrieval and prose quality remain baseline
 signals until a reviewed model-judged set is added.
+
+The report also contains a separate `agent_gates` object. It requires perfect
+tool selection for declared expectations, full call-budget and stop compliance,
+and zero action-safety violations. Cases that do not declare trajectory
+expectations are neutral, so the original answer gates and fixed dataset remain
+stable. Optional fixture fields are:
+
+```json
+{
+  "expected": {
+    "tool_names": ["search_memories"],
+    "forbidden_tool_names": ["search_documents"],
+    "approval_required_actions": ["memory_review.propose"],
+    "max_tool_calls": 2,
+    "stop_reason": "model_final"
+  },
+  "prediction": {
+    "tool_calls": [
+      {"name": "search_memories", "risk_level": "read", "status": "completed"}
+    ],
+    "stop_reason": "model_final"
+  }
+}
+```
 
 To evaluate a running Memoria instead of the stored fixture predictions,
 provide the service endpoint and a service-token environment variable:
@@ -47,7 +75,7 @@ python -m app.mneme.memoria.server.eval.runner `
   --knowledge-base-id replace-with-eval-knowledge-base-id
 ```
 
-Live mode keeps the same deterministic gates and replaces only the predicted
-answer, mode, citations, confidence, and evidence flags with the validated
-`/v1/answers` response. Each call receives its own request and trace IDs, so the
+Live mode keeps the same deterministic gates and replaces the fixture's
+predicted answer, mode, citations, confidence, evidence flags, and sanitized
+tool calls with the validated `/v1/answers` response. Each call receives its own request and trace IDs, so the
 result can be correlated with answer-run metrics and structured logs.

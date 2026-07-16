@@ -48,6 +48,27 @@ class Citation:
 
 
 @dataclass(frozen=True)
+class ToolTrace:
+    name: str
+    status: str
+    risk_level: str = "read"
+    tool_call_id: str | None = None
+
+    @classmethod
+    def from_mapping(cls, value: Mapping[str, Any]) -> "ToolTrace":
+        return cls(
+            name=str(value.get("name", "")),
+            status=str(value.get("status", "")),
+            risk_level=str(value.get("risk_level", "read")),
+            tool_call_id=(
+                str(value["tool_call_id"])
+                if value.get("tool_call_id") is not None
+                else None
+            ),
+        )
+
+
+@dataclass(frozen=True)
 class EvalCase:
     case_id: str
     version: str
@@ -68,6 +89,13 @@ class EvalCase:
     retrieved: tuple[Evidence, ...] = ()
     citations: tuple[Citation, ...] = ()
     rejected_citations: tuple[Citation, ...] = ()
+    expected_tool_names: tuple[str, ...] = ()
+    forbidden_tool_names: tuple[str, ...] = ()
+    approval_required_actions: tuple[str, ...] = ()
+    max_tool_calls: int = 4
+    expected_stop_reason: str | None = None
+    tool_calls: tuple[ToolTrace, ...] = ()
+    stop_reason: str | None = None
     top_k: int = 5
     tags: tuple[str, ...] = ()
 
@@ -78,6 +106,7 @@ class EvalCase:
         retrieved_raw = prediction.get("retrieved", value.get("retrieved", ()))
         citations_raw = prediction.get("citations", value.get("citations", ()))
         rejected_citations_raw = prediction.get("rejected_citations", value.get("rejected_citations", ()))
+        tool_calls_raw = prediction.get("tool_calls", value.get("tool_calls", ()))
         source_ids = expected.get("source_ids", value.get("expected_source_ids", ()))
         source_types = expected.get("source_types", value.get("expected_source_types", ()))
         required = expected.get("required_claims", value.get("required_claims", ()))
@@ -86,6 +115,20 @@ class EvalCase:
         historical = bool(expected.get("historical", value.get("historical", False)))
         conflict = bool(expected.get("conflict", value.get("conflict", False)))
         unauthorized = bool(expected.get("unauthorized", value.get("unauthorized", False)))
+        expected_tool_names = expected.get("tool_names", value.get("expected_tool_names", ()))
+        forbidden_tool_names = expected.get(
+            "forbidden_tool_names",
+            value.get("forbidden_tool_names", ()),
+        )
+        approval_required_actions = expected.get(
+            "approval_required_actions",
+            value.get("approval_required_actions", ()),
+        )
+        max_tool_calls = int(expected.get("max_tool_calls", value.get("max_tool_calls", 4)))
+        expected_stop_reason = expected.get(
+            "stop_reason",
+            value.get("expected_stop_reason"),
+        )
         mode = str(value.get("mode", ""))
         if mode not in ANSWER_MODES:
             raise ValueError(f"{value.get('case_id', '<unknown>')}: unsupported answer mode {mode!r}")
@@ -99,6 +142,8 @@ class EvalCase:
         top_k = int(value.get("top_k", 5))
         if top_k < 1:
             raise ValueError(f"{value.get('case_id', '<unknown>')}: top_k must be positive")
+        if max_tool_calls < 0:
+            raise ValueError(f"{value.get('case_id', '<unknown>')}: max_tool_calls cannot be negative")
         return cls(
             case_id=str(value["case_id"]),
             version=str(value.get("version", "v1")),
@@ -121,6 +166,19 @@ class EvalCase:
             retrieved=tuple(Evidence.from_mapping(item, index) for index, item in enumerate(retrieved_raw, 1)),
             citations=tuple(Citation.from_mapping(item) for item in citations_raw),
             rejected_citations=tuple(Citation.from_mapping(item) for item in rejected_citations_raw),
+            expected_tool_names=tuple(str(item) for item in expected_tool_names),
+            forbidden_tool_names=tuple(str(item) for item in forbidden_tool_names),
+            approval_required_actions=tuple(str(item) for item in approval_required_actions),
+            max_tool_calls=max_tool_calls,
+            expected_stop_reason=(
+                str(expected_stop_reason) if expected_stop_reason is not None else None
+            ),
+            tool_calls=tuple(ToolTrace.from_mapping(item) for item in tool_calls_raw),
+            stop_reason=(
+                str(prediction["stop_reason"])
+                if prediction.get("stop_reason") is not None
+                else None
+            ),
             top_k=top_k,
             tags=tuple(str(item) for item in value.get("tags", ())),
         )
@@ -141,6 +199,12 @@ class CaseMetrics:
     citation_coverage: float
     unsupported_claim_flags: int
     no_evidence_behavior: float
+    tool_selection_precision: float
+    tool_selection_recall: float
+    tool_budget_compliance: float
+    trajectory_efficiency: float
+    stop_correctness: float
+    action_safety_violations: int
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -155,6 +219,8 @@ class EvaluationReport:
     by_mode: dict[str, dict[str, float | int]]
     gates: dict[str, bool]
     gate_requirements: dict[str, float | int]
+    agent_gates: dict[str, bool]
+    agent_gate_requirements: dict[str, float | int]
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -165,4 +231,6 @@ class EvaluationReport:
             "by_mode": self.by_mode,
             "gates": self.gates,
             "gate_requirements": self.gate_requirements,
+            "agent_gates": self.agent_gates,
+            "agent_gate_requirements": self.agent_gate_requirements,
         }

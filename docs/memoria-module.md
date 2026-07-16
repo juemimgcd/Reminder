@@ -109,9 +109,9 @@ text is not retrieved evidence, cannot support a citation, and cannot override
 the current evidence-only answer policy. Callers that omit conversation context
 retain the previous single-turn behavior.
 
-The conversation-context layer itself does not execute tools, approve writes,
-or orchestrate multiple Agents. The bounded model-review loop built on this
-context is described below; action and delegation remain later milestones.
+The conversation-context layer itself does not execute tools or orchestrate
+multiple Agents. The bounded model-review loop and its controlled tool boundary
+are described below; multi-Agent delegation remains a later milestone.
 
 ## Bounded reasoning loop
 
@@ -129,9 +129,37 @@ completion usage is aggregated across successful steps. The existing
 step, decision, and terminal stop reason; it does not store prompts, progress
 notes, candidate answers, or credentials.
 
-Retrieval and citation validation remain single-pass in this milestone. The
-loop does not yet select or execute tools, mutate external state, or delegate
-work to another Agent.
+The initial retrieval pass remains in place for latency and backward
+compatibility. Before its final step, the model may additionally select a
+source-specific read tool. The runtime intersects every request with the
+answer-mode retrieval plan, owner ID, knowledge-base scope, and request top-k;
+tool evidence is deduplicated into the same citation-validation boundary.
+
+Tool execution shares the reasoning-step and aggregate token limits and also
+has its own `ANSWER_TOOL_MAX_CALLS` hard cap. Only bounded status observations
+cross model steps. Public traces contain tool name, risk, status, result count,
+and proposal metadata where required; they do not contain read queries,
+evidence text, prompts, hidden reasoning, or credentials.
+
+Catalogued write tools are available only for requests tied to a durable chat
+session and are proposal-only. Memoria returns
+`approval_required`, and Mneme persists an idempotent approval row keyed by
+user, message, and tool-call ID. Neither proposal creation nor an `approved`
+decision applies a mutation while `apply_enabled=false`. Unknown, out-of-mode,
+malformed, and over-budget tool requests are rejected or recorded as bounded
+observations. No tool delegates work to another Agent.
+
+## Agent quality evaluation
+
+The deterministic evaluation runner scores both final-answer behavior and an
+optional sanitized tool trajectory. Existing `gates` retain their stable answer
+contract. Separate `agent_gates` cover tool selection precision/recall, call
+budget compliance, expected stop reason, and zero action-safety violations.
+Cases without trajectory expectations remain neutral, so the versioned
+25-case answer baseline is backward compatible. Live evaluation captures the
+`tool_calls` returned by `/v1/answers`; fixture cases may additionally specify
+expected or forbidden tool names, proposal-only actions, maximum calls, and a
+terminal stop reason.
 
 ## Operational checks
 

@@ -12,21 +12,36 @@ from app.mneme.memoria.server.runtime.contracts import GeneratedAnswer, Generati
 from app.mneme.memoria.server.runtime.orchestrator import RuntimeDependencyError
 from app.mneme.memoria.server.runtime.prompts import build_messages
 from app.mneme.memoria.server.runtime.reasoning import transition_reasoning_step
+from app.mneme.memoria.server.runtime.tools import (
+    ScopedToolExecutor,
+    ToolRequest,
+    available_tool_specs,
+    bounded_observations,
+    budget_exceeded_execution,
+)
+
+
+class _ProviderToolCall(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    arguments: dict[str, Any] = Field(default_factory=dict)
 
 
 class _ProviderAnswer(BaseModel):
-    decision: Literal["continue", "final"] = "final"
+    decision: Literal["tool", "continue", "final"] = "final"
     reasoning_summary: str | None = Field(default=None, max_length=2000)
     answer: str = Field(min_length=1, max_length=20000)
     citations: list[dict[str, Any]] = Field(default_factory=list, max_length=50)
     confidence: float = Field(ge=0, le=1)
     uncertainty: str | None = Field(default=None, max_length=2000)
     insufficient_evidence: bool = False
+    tool_calls: list[_ProviderToolCall] = Field(default_factory=list, max_length=12)
 
     @model_validator(mode="after")
-    def continuing_requires_summary(self) -> "_ProviderAnswer":
-        if self.decision == "continue" and not (self.reasoning_summary or "").strip():
-            raise ValueError("reasoning_summary is required when decision is continue")
+    def validate_decision_payload(self) -> "_ProviderAnswer":
+        if self.decision in {"continue", "tool"} and not (self.reasoning_summary or "").strip():
+            raise ValueError("reasoning_summary is required when decision is not final")
+        if (self.decision == "tool") != bool(self.tool_calls):
+            raise ValueError("tool_calls must be non-empty only when decision is tool")
         return self
 
 
@@ -58,6 +73,9 @@ class _PromptBudget:
 
 
 class ConfiguredModelGateway:
+    def __init__(self, *, tool_executor: ScopedToolExecutor | None = None) -> None:
+        self._tool_executor = tool_executor
+
     async def generate(self, request: GenerationRequest) -> GeneratedAnswer:
         configs = self._resolve_configs(request)
         attempts: list[dict[str, Any]] = []
@@ -65,6 +83,11 @@ class ConfiguredModelGateway:
 
         for config in configs:
             reasoning_summary = ""
+            combined_evidence = list(request.evidence)
+            tool_evidence = []
+            tool_trace: list[dict[str, Any]] = []
+            observations: list[dict[str, Any]] = []
+            tool_call_count = 0
             remaining_output_tokens = settings.ANSWER_REASONING_TOTAL_OUTPUT_TOKENS
             prompt_tokens = 0
             completion_tokens = 0
@@ -89,7 +112,7 @@ class ConfiguredModelGateway:
                     messages = build_messages(
                         mode=request.mode,
                         question=budget.question,
-                        evidence=request.evidence,
+                        evidence=combined_evidence,
                         conversation=request.conversation,
                         max_conversation_chars=budget.conversation_chars,
                         max_context_chars=budget.evidence_chars,
@@ -97,6 +120,15 @@ class ConfiguredModelGateway:
                         max_reasoning_chars=budget.reasoning_chars,
                         step_index=reasoning_step,
                         max_steps=settings.ANSWER_REASONING_MAX_STEPS,
+                        available_tools=(
+                            available_tool_specs(request.tool_context)
+                            if self._tool_executor is not None and request.tool_context is not None
+                            else []
+                        ),
+                        tool_observations=bounded_observations(
+                            observations,
+                            max_chars=settings.ANSWER_TOOL_OBSERVATION_MAX_CHARS,
+                        ),
                     )
                     step_completed = False
                     for attempt in range(1, settings.ANSWER_LLM_MAX_ATTEMPTS + 1):
@@ -112,6 +144,12 @@ class ConfiguredModelGateway:
                             if not isinstance(content, str) or not content:
                                 raise ValueError("empty provider response")
                             parsed = _ProviderAnswer.model_validate(json.loads(content))
+                            if parsed.decision == "tool" and (
+                                self._tool_executor is None
+                                or request.tool_context is None
+                                or reasoning_step >= settings.ANSWER_REASONING_MAX_STEPS
+                            ):
+                                raise ValueError("tool decision is unavailable at this step")
                         except (ValidationError, ValueError, KeyError, IndexError, json.JSONDecodeError):
                             last_failure = _Failure("AGENT_MODEL_INVALID_RESPONSE", True)
                         except asyncio.CancelledError:
@@ -138,7 +176,7 @@ class ConfiguredModelGateway:
                             transition = transition_reasoning_step(
                                 step_index=reasoning_step,
                                 max_steps=settings.ANSWER_REASONING_MAX_STEPS,
-                                decision=parsed.decision,
+                                decision="continue" if parsed.decision == "tool" else parsed.decision,
                                 summary=parsed.reasoning_summary or "",
                                 max_summary_chars=settings.ANSWER_REASONING_SUMMARY_MAX_CHARS,
                                 budget_exhausted=remaining_output_tokens <= 0,
@@ -151,6 +189,7 @@ class ConfiguredModelGateway:
                                     reasoning_step=reasoning_step,
                                     decision=parsed.decision,
                                     stop_reason=transition.stop_reason,
+                                    tool_names=[item.name for item in parsed.tool_calls],
                                 )
                             )
                             if not transition.should_continue:
@@ -165,10 +204,38 @@ class ConfiguredModelGateway:
                                     completion_tokens=completion_tokens,
                                     cost=0,
                                     model_attempts=attempts,
+                                    tool_calls=tool_trace,
+                                    tool_evidence=tool_evidence,
                                     selected_provider=config.provider,
                                     selected_model=config.model_name,
                                     fallback_used=config.fallback,
+                                    stop_reason=transition.stop_reason,
                                 )
+                            if parsed.decision == "tool":
+                                for call_index, provider_call in enumerate(parsed.tool_calls, 1):
+                                    call = ToolRequest.model_validate(provider_call.model_dump())
+                                    tool_call_id = f"tool_{reasoning_step}_{call_index}"
+                                    if tool_call_count >= settings.ANSWER_TOOL_MAX_CALLS:
+                                        execution = budget_exceeded_execution(
+                                            call,
+                                            tool_call_id=tool_call_id,
+                                        )
+                                    else:
+                                        tool_call_count += 1
+                                        execution = await self._tool_executor.execute(
+                                            call,
+                                            context=request.tool_context,
+                                            tool_call_id=tool_call_id,
+                                        )
+                                    tool_trace.append(execution.trace)
+                                    observations.append(execution.observation)
+                                    for item in execution.evidence:
+                                        if all(
+                                            existing.evidence_id != item.evidence_id
+                                            for existing in combined_evidence
+                                        ):
+                                            combined_evidence.append(item)
+                                            tool_evidence.append(item)
                             reasoning_summary = transition.summary
                             step_completed = True
                             break
@@ -318,6 +385,7 @@ def _attempt(
     reasoning_step: int = 1,
     decision: str | None = None,
     stop_reason: str | None = None,
+    tool_names: list[str] | None = None,
 ) -> dict[str, Any]:
     return {
         "provider": config.provider,
@@ -329,6 +397,7 @@ def _attempt(
         **({"error_code": error_code} if error_code else {}),
         **({"decision": decision} if decision else {}),
         **({"stop_reason": stop_reason} if stop_reason else {}),
+        **({"tool_names": tool_names} if tool_names else {}),
     }
 
 
