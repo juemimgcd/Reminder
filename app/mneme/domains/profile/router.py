@@ -7,14 +7,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.mneme.conf.database import get_database, get_write_database
 from app.mneme.conf.logging import app_logger
 from app.mneme.crud.knowledge_base import get_knowledge_base_by_id
-from app.mneme.domains.automation.service import emit_domain_event
-from app.mneme.domains.profile.insight import build_evidence_profile_for_knowledge_base, build_profile_for_knowledge_base
+from app.mneme.domains.profile.insight import (
+    build_evidence_profile_for_knowledge_base,
+    build_profile_for_knowledge_base,
+)
+from app.mneme.memoria.automation.service import emit_domain_event
 from app.mneme.models.user import User
 from app.mneme.schemas.profile import PersonalProfileResult
 from app.mneme.schemas.profile_evidence import EvidenceProfileData
 from app.mneme.utils.auth import get_current_user
 from app.mneme.utils.response import success_response
-
 
 router = APIRouter(prefix="/profile", tags=["profile"])
 

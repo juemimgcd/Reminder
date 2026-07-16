@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.mneme.agent.contracts import AnswerMode
+from app.mneme.memoria.contracts import AnswerMode
 from app.mneme.schemas.chat import ChatCitationItem, ChatSourceItem, QueryRouteDecision
 
 

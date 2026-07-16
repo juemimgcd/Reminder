@@ -14,17 +14,17 @@
 
 ## Scope and file map
 
-- Create `services/memory_agent/runtime/reasoning.py`: pure bounded-loop transition and stop-reason contract.
-- Modify `services/memory_agent/config.py`: maximum steps, summary size, and total completion-token budget.
-- Modify `services/memory_agent/runtime/prompts.py`: step control, progress summary, and no-chain-of-thought output contract.
-- Modify `services/memory_agent/providers/llm.py`: repeated structured calls, retries per step, aggregate usage, and sanitized trajectory metadata.
-- Modify `docs/agent-module.md`: runtime semantics and milestone boundary.
+- Create `app/mneme/memoria/server/runtime/reasoning.py`: pure bounded-loop transition and stop-reason contract.
+- Modify `app/mneme/memoria/server/config.py`: maximum steps, summary size, and total completion-token budget.
+- Modify `app/mneme/memoria/server/runtime/prompts.py`: step control, progress summary, and no-chain-of-thought output contract.
+- Modify `app/mneme/memoria/server/providers/llm.py`: repeated structured calls, retries per step, aggregate usage, and sanitized trajectory metadata.
+- Modify `docs/memoria-module.md`: runtime semantics and milestone boundary.
 - Do not modify database migrations, API response shape, retrieval, citation validation, tests, tools, or multi-agent code.
 
 ### Task 1: Define the pure bounded-loop transition
 
 **Files:**
-- Create: `services/memory_agent/runtime/reasoning.py`
+- Create: `app/mneme/memoria/server/runtime/reasoning.py`
 
 - [ ] **Step 1: Run a disposable RED contract**
 
@@ -75,7 +75,7 @@ Expected: PASS for all four stop/continue paths and invalid step bounds.
 ### Task 2: Configure hard execution bounds
 
 **Files:**
-- Modify: `services/memory_agent/config.py`
+- Modify: `app/mneme/memoria/server/config.py`
 
 - [ ] **Step 1: Add three constrained settings**
 
@@ -90,8 +90,8 @@ Each configured provider receives at most this many reasoning steps and this agg
 ### Task 3: Add structured step prompts without chain-of-thought
 
 **Files:**
-- Modify: `services/memory_agent/runtime/prompts.py`
-- Modify: `services/memory_agent/providers/llm.py`
+- Modify: `app/mneme/memoria/server/runtime/prompts.py`
+- Modify: `app/mneme/memoria/server/providers/llm.py`
 
 - [ ] **Step 1: Extend the parsed provider answer**
 
@@ -115,7 +115,7 @@ Extend `_PromptBudget` with `reasoning_chars`. After bounding the question, priv
 ### Task 4: Execute repeated model steps
 
 **Files:**
-- Modify: `services/memory_agent/providers/llm.py`
+- Modify: `app/mneme/memoria/server/providers/llm.py`
 
 - [ ] **Step 1: Add a reasoning-step loop around existing retries**
 
@@ -149,7 +149,7 @@ Assert two model calls, final step-2 answer, aggregate token counts, `model_fina
 ### Task 5: Document and verify
 
 **Files:**
-- Modify: `docs/agent-module.md`
+- Modify: `docs/memoria-module.md`
 
 - [ ] **Step 1: Document bounded-loop semantics**
 
@@ -159,7 +159,7 @@ State that retrieval remains single-pass, each model step must provide a complet
 
 ```powershell
 New-Item -ItemType Directory -Force .tmp | Out-Null
-D:\python_mine\Mneme\.venv\Scripts\python.exe -m pytest tests\memory_agent -q --basetemp .tmp\pytest-bounded-reasoning
+D:\python_mine\Mneme\.venv\Scripts\python.exe -m pytest tests\memoria -q --basetemp .tmp\pytest-bounded-reasoning
 D:\python_mine\Mneme\.venv\Scripts\python.exe -m pytest tests\test_chat_session_persistence.py tests\test_memory_agent_chat_cutover.py tests\test_memory_agent_boundary.py tests\test_memory_agent_client.py -q --basetemp .tmp\pytest-bounded-reasoning-boundary
 ```
 
@@ -168,8 +168,8 @@ Expected: all selected tests PASS.
 - [ ] **Step 3: Run static and scope checks**
 
 ```powershell
-D:\python_mine\Mneme\.venv\Scripts\python.exe -m ruff check services\memory_agent\config.py services\memory_agent\runtime\reasoning.py services\memory_agent\runtime\prompts.py services\memory_agent\providers\llm.py
-D:\python_mine\Mneme\.venv\Scripts\python.exe -m compileall -q services\memory_agent
+D:\python_mine\Mneme\.venv\Scripts\python.exe -m ruff check app\mneme\memoria\server\config.py app\mneme\memoria\server\runtime\reasoning.py app\mneme\memoria\server\runtime\prompts.py app\mneme\memoria\server\providers\llm.py
+D:\python_mine\Mneme\.venv\Scripts\python.exe -m compileall -q app\mneme\memoria\server
 git diff --check
 ```
 

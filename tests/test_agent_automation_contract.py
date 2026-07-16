@@ -4,12 +4,11 @@ from types import SimpleNamespace
 
 import yaml
 
-from app.mneme.agent.actions import ToolRiskLevel, WRITE_ACTION_CATALOG
-from app.mneme.agent.run_models import AgentRunRecord
 from app.mneme.bootstrap.app_factory import create_app
-from app.mneme.domains.automation.service import heartbeat_is_active
 from app.mneme.infra.celery_app import celery_app
-
+from app.mneme.memoria.actions import WRITE_ACTION_CATALOG, ToolRiskLevel
+from app.mneme.memoria.automation.service import heartbeat_is_active
+from app.mneme.memoria.run_models import AgentRunRecord
 
 ROOT = Path(__file__).resolve().parents[1]
 

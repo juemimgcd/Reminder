@@ -1,12 +1,12 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from app.mneme.models.chat_message import ChatMessage
-from app.mneme.schemas.memory_agent import (
+from app.mneme.memoria.schemas.memory_agent import (
     ConversationContextData,
     ConversationMessageData,
     ConversationRole,
 )
+from app.mneme.models.chat_message import ChatMessage
 
 MAX_MESSAGE_CONTENT_CHARS = 20_000
 

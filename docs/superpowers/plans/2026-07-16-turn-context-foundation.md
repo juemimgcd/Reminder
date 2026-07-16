@@ -17,23 +17,23 @@
 This milestone deliberately stops before agent loops, tools, approvals, evaluation, and multi-agent orchestration.
 
 - Create `app/mneme/domains/chat/context.py`: deterministic recent-message selection and rolling-summary logic.
-- Modify `app/mneme/schemas/memory_agent.py`: API-side conversation context models.
+- Modify `app/mneme/memoria/schemas/memory_agent.py`: API-side conversation context models.
 - Modify `app/mneme/domains/chat/service.py`: prepare, persist, and send context.
-- Modify `services/memory_agent/contracts/answers.py`: service-side mirror contract.
-- Modify `services/memory_agent/runtime/contracts.py`: carry context into generation.
-- Modify `services/memory_agent/runtime/orchestrator.py`: propagate request context.
-- Modify `services/memory_agent/providers/llm.py`: unified prompt budget.
-- Modify `services/memory_agent/runtime/prompts.py`: context-aware prompt rendering.
-- Modify `docs/agent-module.md`: ownership and safety semantics.
+- Modify `app/mneme/memoria/server/contracts/answers.py`: service-side mirror contract.
+- Modify `app/mneme/memoria/server/runtime/contracts.py`: carry context into generation.
+- Modify `app/mneme/memoria/server/runtime/orchestrator.py`: propagate request context.
+- Modify `app/mneme/memoria/server/providers/llm.py`: unified prompt budget.
+- Modify `app/mneme/memoria/server/runtime/prompts.py`: context-aware prompt rendering.
+- Modify `docs/memoria-module.md`: ownership and safety semantics.
 
 No test file is created or modified. The repository's test-addition policy is satisfied with disposable inline behavior contracts plus the existing suite.
 
 ### Task 1: Define backward-compatible conversation contracts
 
 **Files:**
-- Modify: `app/mneme/schemas/memory_agent.py`
-- Modify: `services/memory_agent/contracts/answers.py`
-- Modify: `services/memory_agent/runtime/contracts.py`
+- Modify: `app/mneme/memoria/schemas/memory_agent.py`
+- Modify: `app/mneme/memoria/server/contracts/answers.py`
+- Modify: `app/mneme/memoria/server/runtime/contracts.py`
 
 - [ ] **Step 1: Run a disposable RED contract**
 
@@ -149,7 +149,7 @@ Expected: PASS for exclusion, ordering, compaction, watermark, and length bounds
 
 **Files:**
 - Modify: `app/mneme/domains/chat/service.py`
-- Modify: `services/memory_agent/runtime/orchestrator.py`
+- Modify: `app/mneme/memoria/server/runtime/orchestrator.py`
 
 - [ ] **Step 1: Set `conversation=conversation` on `MemoryAgentAnswerRequest`**
 
@@ -170,8 +170,8 @@ Expected: all selected tests PASS; legacy fixtures remain valid.
 ### Task 4: Apply one model-aware prompt budget
 
 **Files:**
-- Modify: `services/memory_agent/providers/llm.py`
-- Modify: `services/memory_agent/runtime/prompts.py`
+- Modify: `app/mneme/memoria/server/providers/llm.py`
+- Modify: `app/mneme/memoria/server/runtime/prompts.py`
 
 - [ ] **Step 1: Extend `_PromptBudget`**
 
@@ -217,7 +217,7 @@ Use an inline contract to confirm tiny budgets drop oldest recent turns first, t
 Then run:
 
 ```powershell
-D:\python_mine\Mneme\.venv\Scripts\python.exe -m pytest tests\test_answer_mode_pipelines.py tests\memory_agent\test_runtime_modes.py tests\memory_agent\test_runtime_failures.py tests\memory_agent\test_citation_validation.py -q --basetemp .tmp\pytest-turn-context-runtime
+D:\python_mine\Mneme\.venv\Scripts\python.exe -m pytest tests\test_answer_mode_pipelines.py tests\memoria\test_runtime_modes.py tests\memoria\test_runtime_failures.py tests\memoria\test_citation_validation.py -q --basetemp .tmp\pytest-turn-context-runtime
 ```
 
 Expected: all selected tests PASS.
@@ -225,7 +225,7 @@ Expected: all selected tests PASS.
 ### Task 5: Document and verify the milestone
 
 **Files:**
-- Modify: `docs/agent-module.md`
+- Modify: `docs/memoria-module.md`
 
 - [ ] **Step 1: Document ownership and safety**
 
@@ -234,7 +234,7 @@ Document that Mneme owns history/summary/watermark; the Memory Agent receives on
 - [ ] **Step 2: Run the focused baseline**
 
 ```powershell
-D:\python_mine\Mneme\.venv\Scripts\python.exe -m pytest tests\test_chat_session_persistence.py tests\test_memory_agent_chat_cutover.py tests\test_answer_mode_pipelines.py tests\memory_agent\test_runtime_modes.py tests\memory_agent\test_runtime_failures.py tests\memory_agent\test_citation_validation.py -q --basetemp .tmp\pytest-turn-context-final
+D:\python_mine\Mneme\.venv\Scripts\python.exe -m pytest tests\test_chat_session_persistence.py tests\test_memory_agent_chat_cutover.py tests\test_answer_mode_pipelines.py tests\memoria\test_runtime_modes.py tests\memoria\test_runtime_failures.py tests\memoria\test_citation_validation.py -q --basetemp .tmp\pytest-turn-context-final
 ```
 
 Expected: at least the 25 baseline tests PASS.
@@ -242,8 +242,8 @@ Expected: at least the 25 baseline tests PASS.
 - [ ] **Step 3: Run static and hygiene checks**
 
 ```powershell
-D:\python_mine\Mneme\.venv\Scripts\python.exe -m compileall -q app\mneme services\memory_agent
-D:\python_mine\Mneme\.venv\Scripts\python.exe -m ruff check app\mneme\domains\chat\context.py app\mneme\domains\chat\service.py app\mneme\schemas\memory_agent.py services\memory_agent\contracts\answers.py services\memory_agent\runtime\contracts.py services\memory_agent\runtime\orchestrator.py services\memory_agent\runtime\prompts.py services\memory_agent\providers\llm.py
+D:\python_mine\Mneme\.venv\Scripts\python.exe -m compileall -q app\mneme
+D:\python_mine\Mneme\.venv\Scripts\python.exe -m ruff check app\mneme\domains\chat\context.py app\mneme\domains\chat\service.py app\mneme\memoria\schemas\memory_agent.py app\mneme\memoria\server\contracts\answers.py app\mneme\memoria\server\runtime\contracts.py app\mneme\memoria\server\runtime\orchestrator.py app\mneme\memoria\server\runtime\prompts.py app\mneme\memoria\server\providers\llm.py
 git diff --check
 ```
 

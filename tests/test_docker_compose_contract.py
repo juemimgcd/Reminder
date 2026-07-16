@@ -77,7 +77,7 @@ class DockerComposeContractTest(unittest.TestCase):
 
         self.assertEqual(
             migrate["command"],
-            ["alembic", "-c", "/app/services/memory_agent/alembic.ini", "upgrade", "head"],
+            ["alembic", "-c", "/app/app/mneme/memoria/server/alembic.ini", "upgrade", "head"],
         )
         self.assertEqual(api["depends_on"]["memory-agent-migrate"]["condition"], "service_completed_successfully")
         self.assertIn("/health/readiness", " ".join(api["healthcheck"]["test"]))

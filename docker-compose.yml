@@ -291,7 +291,7 @@ services:
       memory-agent-db-init:
         condition: service_completed_successfully
     logging: *default-logging
-    command: ["alembic", "-c", "/app/services/memory_agent/alembic.ini", "upgrade", "head"]
+    command: ["alembic", "-c", "/app/app/mneme/memoria/server/alembic.ini", "upgrade", "head"]
 
   memory-agent-api:
     <<: *memory-agent-base

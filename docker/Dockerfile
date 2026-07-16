@@ -56,7 +56,7 @@ RUN python -m pip install --upgrade pip setuptools wheel && \
 COPY . .
 COPY --from=frontend-builder /frontend/dist /app/app/mneme_frontend_v0.2.1/dist
 
-RUN test -d /app/services/memory_agent && \
+RUN test -d /app/app/mneme/memoria/server && \
     test -f /app/docker/start-memory-agent-api.sh && \
     test -f /app/docker/start-memory-agent-worker.sh
 
