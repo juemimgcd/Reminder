@@ -29,11 +29,12 @@ class FinalBackendConvergenceTest(unittest.TestCase):
         self.assertNotIn("provider secret", response.text)
         self.assertEqual(response.headers["x-request-id"], payload["request_id"])
 
-    def test_router_registry_uses_only_domain_routers(self):
+    def test_router_registry_uses_explicit_owner_packages(self):
         self.assertTrue(ROUTER_MODULE_NAMES)
         for module_name in ROUTER_MODULE_NAMES:
             self.assertTrue(
-                module_name.startswith("app.mneme.domains."),
+                module_name.startswith(("app.mneme.domains.", "app.mneme.memoria.api."))
+                or module_name == "app.mneme.memoria.configuration.router",
                 f"legacy router module still registered: {module_name}",
             )
 

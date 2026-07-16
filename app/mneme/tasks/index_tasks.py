@@ -4,12 +4,12 @@ from app.mneme.conf.database import open_read_session, open_write_session
 from app.mneme.conf.logging import app_logger
 from app.mneme.crud.document import get_document_by_id, update_document_status
 from app.mneme.crud.task_record import get_task_record_by_id
-from app.mneme.infra.celery_app import celery_app
-from app.mneme.models.document import Document
 from app.mneme.domains.documents.pipeline import run_document_index_pipeline
 from app.mneme.domains.tasks.state import CANCELLED, FAILED, SUCCEEDED, transition_task_status
+from app.mneme.infra.celery_app import celery_app
+from app.mneme.memoria.automation.service import emit_domain_event
+from app.mneme.models.document import Document
 from app.mneme.utils.exceptions import BusinessException
-from app.mneme.domains.automation.service import emit_domain_event
 
 
 async def load_document_snapshot(*, document_id: str) -> Document | None:

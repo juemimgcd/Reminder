@@ -4,11 +4,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.mneme.conf.database import get_database
 from app.mneme.conf.logging import app_logger
 from app.mneme.crud.knowledge_base import get_knowledge_base_by_id
-from app.mneme.domains.chat.service import (
-    _resolve_model_config,
+from app.mneme.domains.chat.service import build_chat_message_id
+from app.mneme.memoria.chat_bridge import (
     answer_via_memory_agent,
-    build_chat_message_id,
     memory_agent_answer_to_chat_result,
+    resolve_model_config,
 )
 from app.mneme.models.user import User
 from app.mneme.schemas.companion import CompanionAnswerResult, CompanionQueryRequest
@@ -38,7 +38,7 @@ async def get_companion_reply(
     if knowledge_base.user_id != current_user.id:
         raise BusinessException(message="知识库不属于当前用户", code=4007)
 
-    model_config = await _resolve_model_config(db, user_id=current_user.id, config_id=None)
+    model_config = await resolve_model_config(db, user_id=current_user.id, config_id=None)
     await db.rollback()
     agent_response = await answer_via_memory_agent(
         owner_id=current_user.id,

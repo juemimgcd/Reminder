@@ -3,7 +3,7 @@ from pathlib import Path
 CHAT_SERVICE = Path(__file__).parents[1] / "app" / "mneme" / "domains" / "chat" / "service.py"
 ONLINE_ROUTER_FILES = (
     CHAT_SERVICE,
-    CHAT_SERVICE.parents[1] / "retrieval" / "router.py",
+    CHAT_SERVICE.parents[2] / "memoria" / "api" / "retrieval.py",
     CHAT_SERVICE.parents[1] / "companion" / "router.py",
 )
 

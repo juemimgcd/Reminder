@@ -1,14 +1,17 @@
 import asyncio
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from app.mneme.conf.config import settings
-from app.mneme.models.base import Base
 import app.mneme.models as models
+from alembic import context
+from app.mneme.conf.config import settings
+from app.mneme.memoria.models import ai_model_config, automation, runtime_event
+from app.mneme.models.base import Base
+
+_MODEL_MODULES = (models, ai_model_config, automation, runtime_event)
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config

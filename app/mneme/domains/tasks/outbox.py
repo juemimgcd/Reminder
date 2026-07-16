@@ -9,7 +9,6 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.mneme.clients.memory_agent_client import MemoryAgentRetryable
 from app.mneme.clients.vector_store_client import (
     add_documents_to_vector_store_in_batches,
     delete_documents_from_vector_store,
@@ -33,11 +32,12 @@ from app.mneme.domains.graph.projection import (
     sync_knowledge_base_projection,
     sync_user_projection,
 )
-from app.mneme.domains.tasks.outbox_http import apply_memory_agent_http_event
+from app.mneme.memoria.automation.http_outbox import apply_memory_agent_http_event
+from app.mneme.memoria.clients.memory_agent import MemoryAgentRetryable
+from app.mneme.memoria.schemas.memory_agent import MemoryAgentEvent
 from app.mneme.models.chunk import Chunk
 from app.mneme.models.document import Document
 from app.mneme.models.outbox_event import OutboxEvent
-from app.mneme.schemas.memory_agent import MemoryAgentEvent
 from app.mneme.utils.exceptions import BusinessException
 
 OUTBOX_PENDING = "pending"
@@ -712,11 +712,11 @@ async def apply_graph_projection_upsert(event: OutboxEvent) -> dict[str, str | b
 
 async def apply_outbox_event(event: OutboxEvent) -> dict[str, Any]:
     if event.target_backend == "in_app":
-        from app.mneme.domains.automation.outbox import apply_in_app_notification_event
+        from app.mneme.memoria.automation.outbox import apply_in_app_notification_event
 
         return await apply_in_app_notification_event(event)
     if event.target_backend == "internal_hook":
-        from app.mneme.domains.automation.outbox import apply_internal_hook_event
+        from app.mneme.memoria.automation.outbox import apply_internal_hook_event
 
         return await apply_internal_hook_event(event)
     if event.target_backend == settings.MEMORY_AGENT_OUTBOX_TARGET:

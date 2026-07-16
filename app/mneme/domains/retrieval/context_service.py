@@ -7,18 +7,17 @@ from fastapi import HTTPException
 from langchain_core.documents import Document as LCDocument
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.mneme.agent.contracts import RetrievalScope
 from app.mneme.clients.vector_store_client import similarity_search_with_score_resilient
 from app.mneme.conf.config import settings
 from app.mneme.conf.database import open_read_session
 from app.mneme.conf.logging import log_event
 from app.mneme.crud.chunk import search_chunks_by_keywords
 from app.mneme.crud.memory_entry import search_memory_entries_by_keywords
-from app.mneme.models import Chunk, MemoryEntry
-from app.mneme.schemas.chat import ContextItem
 from app.mneme.domains.retrieval.debug import build_retrieval_debug_packet
 from app.mneme.domains.retrieval.fusion import fuse_and_rerank_context_items
-
+from app.mneme.memoria.contracts import RetrievalScope
+from app.mneme.models import Chunk, MemoryEntry
+from app.mneme.schemas.chat import ContextItem
 
 MetadataFilter = dict[str, int | str]
 

@@ -3,7 +3,7 @@ set -eu
 
 python /app/docker/wait_for_services.py
 
-exec celery -A services.memory_agent.celery_app:celery_app worker \
+exec celery -A app.mneme.memoria.server.celery_app:celery_app worker \
   --beat \
   --loglevel "${CELERY_LOG_LEVEL:-INFO}" \
   --concurrency "${MEMORY_AGENT_WORKER_CONCURRENCY:-2}" \

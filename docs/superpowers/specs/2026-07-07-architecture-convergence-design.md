@@ -379,7 +379,7 @@ ROUTER_MODULE_NAMES = [
     "app.mneme.domains.auth.router",
     "app.mneme.domains.users.router",
     "app.mneme.domains.documents.router",
-    "app.mneme.domains.retrieval.router",
+    "app.mneme.memoria.api.retrieval",
     "app.mneme.domains.memory.router",
     "app.mneme.domains.advice.router",
     "app.mneme.domains.analysis.router",
@@ -492,7 +492,7 @@ First implementation slice:
 1. Move retrieval fusion/debug/query-router/context/query service logic into `domains/retrieval/`.
 2. Move `routers/chat.py` into `domains/retrieval/router.py`.
 3. Update imports in routers, tests, graph services, companion services, and any other callers.
-4. Update `bootstrap/router_registry.py` to register `app.mneme.domains.retrieval.router`.
+4. Update `bootstrap/router_registry.py` to register `app.mneme.memoria.api.retrieval`.
 5. Delete old retrieval service files and the old chat router after references are gone.
 6. Run focused retrieval tests and route smoke checks.
 
