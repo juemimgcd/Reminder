@@ -32,6 +32,7 @@ from app.mneme.crud.chat_session import (
     list_chat_sessions as list_chat_session_rows,
 )
 from app.mneme.crud.knowledge_base import get_knowledge_base_by_id
+from app.mneme.domains.chat.context import prepare_conversation_context
 from app.mneme.domains.settings.ai_models import decrypt_api_key
 from app.mneme.domains.tasks.outbox import (
     enqueue_conversation_completed,
@@ -46,6 +47,7 @@ from app.mneme.models.user import User
 from app.mneme.schemas.chat import ChatCitationItem, ChatSourceItem, QueryRouteDecision
 from app.mneme.schemas.chat_session import ChatMessageData
 from app.mneme.schemas.memory_agent import (
+    ConversationContextData,
     MemoryAgentAnswerRequest,
     MemoryAgentAnswerResponse,
     MemoryAgentStreamEvent,
@@ -260,6 +262,7 @@ async def answer_via_memory_agent(
     idempotency_key: str | None = None,
     trace_id: str | None = None,
     event_callback: Callable[[MemoryAgentStreamEvent], Awaitable[None]] | None = None,
+    conversation: ConversationContextData | None = None,
 ) -> MemoryAgentAnswerResponse:
     if answer_mode != "general_chat" and knowledge_base_id is None:
         raise BusinessException(message="knowledge base is required for this answer mode", code=4053)
@@ -274,6 +277,7 @@ async def answer_via_memory_agent(
         answer_mode=answer_mode,
         top_k=top_k,
         allow_model_fallback=model_config is None,
+        conversation=conversation or ConversationContextData(),
         model=_model_invocation_config(model_config),
     )
     async with MemoryAgentClient() as client:
@@ -480,6 +484,19 @@ async def ask_in_chat_session(
             session.last_message_at = datetime.now(timezone.utc)
     if answer_mode is not None:
         session.answer_mode = answer_mode
+    history = await list_chat_messages(db, session_id=session.id, user_id=current_user.id)
+    prepared_context = prepare_conversation_context(
+        history,
+        current_message_id=user_message.id,
+        existing_summary=session.context_summary or "",
+        summary_through_message_id=session.context_summary_through_message_id,
+        max_messages=settings.AGENT_HISTORY_MAX_TURNS * 2,
+        summary_max_chars=settings.AGENT_SUMMARY_MAX_CHARS,
+    )
+    session.context_summary = prepared_context.persisted_summary or None
+    session.context_summary_through_message_id = (
+        prepared_context.persisted_summary_through_message_id
+    )
     await db.commit()
 
     try:
@@ -495,6 +512,7 @@ async def ask_in_chat_session(
             idempotency_key=agent_run_id,
             trace_id=trace_id,
             event_callback=event_callback,
+            conversation=prepared_context.context,
         )
     except MemoryAgentRejected as exc:
         raise BusinessException(

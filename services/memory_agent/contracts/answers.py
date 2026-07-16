@@ -4,6 +4,20 @@ from pydantic import BaseModel, Field
 
 from services.memory_agent.contracts.common import AnswerMode, ModelInvocationConfig
 
+ConversationRole = Literal["user", "assistant"]
+
+
+class ConversationMessageData(BaseModel):
+    message_id: str = Field(min_length=1, max_length=128)
+    role: ConversationRole
+    content: str = Field(min_length=1, max_length=20_000)
+
+
+class ConversationContextData(BaseModel):
+    summary: str = Field(default="", max_length=20_000)
+    summary_through_message_id: str | None = Field(default=None, max_length=128)
+    messages: list[ConversationMessageData] = Field(default_factory=list, max_length=24)
+
 
 class AnswerRequest(BaseModel):
     request_id: str
@@ -16,6 +30,7 @@ class AnswerRequest(BaseModel):
     answer_mode: AnswerMode
     top_k: int = Field(default=4, ge=1, le=10)
     allow_model_fallback: bool = False
+    conversation: ConversationContextData = Field(default_factory=ConversationContextData)
     model: ModelInvocationConfig | None = Field(default=None, exclude=True)
 
 

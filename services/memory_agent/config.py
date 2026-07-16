@@ -43,6 +43,9 @@ class MemoryAgentSettings(BaseSettings):
     ANSWER_PROMPT_RESERVE_TOKENS: int = Field(default=1024, ge=256, le=16000)
     ANSWER_MAX_QUESTION_CHARS: int = Field(default=8000, ge=100, le=20000)
     ANSWER_MAX_OUTPUT_TOKENS: int = Field(default=1200, ge=100, le=8000)
+    ANSWER_REASONING_MAX_STEPS: int = Field(default=3, ge=1, le=5)
+    ANSWER_REASONING_SUMMARY_MAX_CHARS: int = Field(default=600, ge=100, le=2000)
+    ANSWER_REASONING_TOTAL_OUTPUT_TOKENS: int = Field(default=3600, ge=100, le=16000)
     ANSWER_RUN_STALE_SECONDS: int = Field(default=180, ge=30, le=86400)
     ANSWER_RUN_RECOVERY_BATCH_SIZE: int = Field(default=100, ge=1, le=1000)
 

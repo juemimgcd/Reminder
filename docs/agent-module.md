@@ -73,6 +73,46 @@ after the final response arrives. Model attempts, selected provider/model,
 fallback use, trace IDs, stale runs, and phase/token/cost metrics are persisted
 or exported without logging prompts or answers.
 
+## Conversation context
+
+Mneme owns conversation history, the rolling summary, and the message watermark
+covered by that summary. Before an answer request, the chat domain creates a
+bounded snapshot containing the summary plus recent user/assistant messages and
+persists any newly compacted summary in the same transaction as the user
+message. The Memory Agent receives this optional snapshot through its answer
+contract and never reads Mneme chat tables directly.
+
+Generation applies one model-window budget to the current question,
+conversation snapshot, and retrieved evidence. In private answer modes,
+conversation context may resolve intent and references, but prior assistant
+text is not retrieved evidence, cannot support a citation, and cannot override
+the current evidence-only answer policy. Callers that omit conversation context
+retain the previous single-turn behavior.
+
+The conversation-context layer itself does not execute tools, approve writes,
+or orchestrate multiple Agents. The bounded model-review loop built on this
+context is described below; action and delegation remain later milestones.
+
+## Bounded reasoning loop
+
+The Memory Agent may perform up to the configured number of model reasoning
+steps after one retrieval pass and before citation validation. Every step must
+return a complete candidate answer. A step may request another review only for
+a material correctness, grounding, or completeness issue, and only a bounded
+outcome-level progress note is carried into the next prompt. Hidden
+chain-of-thought is neither requested nor persisted.
+
+Execution stops when the model marks a candidate final, the step limit is
+reached, or the aggregate completion-token budget is exhausted. Prompt and
+completion usage is aggregated across successful steps. The existing
+`model_attempts` record stores only provider/model, retry attempt, reasoning
+step, decision, and terminal stop reason; it does not store prompts, progress
+notes, candidate answers, or credentials.
+
+Retrieval and citation validation remain single-pass in this milestone. The
+loop does not yet select or execute tools, mutate external state, or delegate
+work to another Agent.
+
 ## Operational checks
 
 Use `/health/readiness` for the API/database boundary, `/health/worker` for the
