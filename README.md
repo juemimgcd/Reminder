@@ -127,14 +127,14 @@ bash start.sh --backend-port 8001
 
 ## Docker
 
-Compose 同时运行现有 Mneme 服务和独立 Memory Agent 服务。在线回答已统一通过 Mneme 到
-Memory Agent 的 HTTP 契约；Memory Agent API 仅在 Compose 网络内通过 `memory-agent-api:8010`
+Compose 同时运行现有 Mneme 服务和独立 Memoria 服务。在线回答已统一通过 Mneme 到
+Memoria 的 HTTP 契约；Memoria API 仅在 Compose 网络内通过 `memory-agent-api:8010`
 提供 `/health` 和 `/health/readiness`；在线回答不再依赖迁移开关。
 
 服务所有权边界如下：
 
 - Mneme 拥有 `${POSTGRES_DB:-agentic}`、Redis DB 0/1 和现有 Celery 队列。
-- Memory Agent 拥有 `${MEMORY_AGENT_POSTGRES_DB:-memory_agent}`、Redis DB 2/3 和 `${MEMORY_AGENT_CELERY_QUEUE:-memory_agent}` 队列。
+- Memoria 拥有 `${MEMORY_AGENT_POSTGRES_DB:-memory_agent}`、Redis DB 2/3 和 `${MEMORY_AGENT_CELERY_QUEUE:-memory_agent}` 队列。
 - `JWT_SECRET` 与 `MEMORY_AGENT_SERVICE_JWT_SECRET` 必须是不同的生产密钥。
 - 服务之间只通过版本化 HTTP 契约通信；禁止直接读取对方数据库或执行跨数据库 join。
 
@@ -189,9 +189,9 @@ Python 编译检查：
 python -m compileall app/mneme alembic main.py
 ```
 
-## Memory Agent deletion and rebuild backfill
+## Memoria deletion and rebuild backfill
 
-When Memory Agent integration is enabled, document, knowledge-base, and conversation
+When Memoria integration is enabled, document, knowledge-base, and conversation
 deletions first write a version-1 deletion event to the caller-owned Mneme transaction.
 The Agent scopes every deletion by owner and nullable knowledge base. Document deletion
 removes all stored projection batches/chunks and document evidence; knowledge-base
@@ -206,7 +206,7 @@ Conversation deletion carries the complete stable message-ID list in one Postgre
 JSON/HTTP event; no arbitrary item cap can turn a large-conversation privacy deletion
 into a terminal validation failure.
 
-Memory Agent persists deletion fences ordered by the event envelope
+Memoria persists deletion fences ordered by the event envelope
 `(occurred_at, event_id)`. The envelope order is authoritative; document source version
 remains a provenance/snapshot identity and does not replace event ordering. Every
 document, conversation, and explicit-request write checks both its source fence and the
@@ -219,13 +219,13 @@ Celery delivery order.
 Dry-run a source rebuild without writing Outbox or Agent state:
 
 ```bash
-python -m app.mneme.cli.export_agent_projection --dry-run --owner-id 42 --knowledge-base-id kb_123 --batch-size 50
+python -m app.mneme.memoria.cli.export_projection --dry-run --owner-id 42 --knowledge-base-id kb_123 --batch-size 50
 ```
 
 Run the rebuild through the same version-1 online DTO builder and Outbox contract:
 
 ```bash
-python -m app.mneme.cli.export_agent_projection --owner-id 42 --knowledge-base-id kb_123 --batch-size 50 --checkpoint var/memory-agent-backfill.json
+python -m app.mneme.memoria.cli.export_projection --owner-id 42 --knowledge-base-id kb_123 --batch-size 50 --checkpoint var/memory-agent-backfill.json
 ```
 
 The checkpoint is atomically replaced after each durable projection batch/observation,
@@ -236,8 +236,8 @@ next run. To override it, resume a document at a projection/document ID (optiona
 after a batch) or resume legacy memory after a memory ID:
 
 ```bash
-python -m app.mneme.cli.export_agent_projection --resume-from PROJECTION_ID --resume-batch-index 3 --batch-size 50
-python -m app.mneme.cli.export_agent_projection --resume-kind legacy_memory --resume-from MEMORY_ID --batch-size 50
+python -m app.mneme.memoria.cli.export_projection --resume-from PROJECTION_ID --resume-batch-index 3 --batch-size 50
+python -m app.mneme.memoria.cli.export_projection --resume-kind legacy_memory --resume-from MEMORY_ID --batch-size 50
 ```
 
 Event and Outbox idempotency makes replay duplicate-safe. If a document keeps its
@@ -266,8 +266,8 @@ is never overwritten. Migration does not guess or backfill this provenance.
 Report Agent projection state without mutating projection or memory tables:
 
 ```bash
-python -m services.memory_agent.cli.backfill --owner-id 42 --knowledge-base-id kb_123 --batch-size 100
-python -m services.memory_agent.cli.backfill --resume-from PROJECTION_ID --batch-size 100 --dry-run
+python -m app.mneme.memoria.server.cli.backfill --owner-id 42 --knowledge-base-id kb_123 --batch-size 100
+python -m app.mneme.memoria.server.cli.backfill --resume-from PROJECTION_ID --batch-size 100 --dry-run
 ```
 
 The report includes staged, active, failed, superseded, hash, canonical per-batch payload
@@ -277,9 +277,9 @@ and scope-mismatch counts. Active chunks are mapped to staged payloads by
 version, owner, and knowledge-base checks. It prints only safe IDs, booleans, and
 counts; it never prints source content or failure text.
 
-## Memory Agent operations
+## Memoria operations
 
-Memory Agent exposes process-only `/health`, dependency-aware `/health/readiness`, a separate
+Memoria exposes process-only `/health`, dependency-aware `/health/readiness`, a separate
 broker/worker diagnostic at `/health/worker`, and low-cardinality persisted metrics at
 `/metrics`. Structured logs correlate `request_id`, `run_id`, and `event_id`; request content,
 answers, evidence, memory values, prompts and credentials are excluded by policy.
@@ -295,7 +295,7 @@ See `deploy/DEPLOY.md` for exact commands, thresholds, and inspection steps. Mne
 age/dead-letter diagnostics are available with:
 
 ```bash
-python -m app.mneme.cli.memory_agent_ops
+python -m app.mneme.memoria.cli.operations
 ```
 
 Outbox age uses immutable `enqueued_at`, not the retryable `next_attempt_at`. The initial

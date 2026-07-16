@@ -3,22 +3,22 @@ from pathlib import Path
 
 import pytest
 
-from app.mneme.agent.adapters.rag_answer import RagAnswerEngine
-from app.mneme.agent.contracts import AgentRequest, AgentResponse
-from app.mneme.agent.router import route_answer_mode
-from app.mneme.agent.service import MnemeAgent
+from app.mneme.memoria.adapters.rag_answer import RagAnswerEngine
+from app.mneme.memoria.contracts import AgentRequest, AgentResponse
+from app.mneme.memoria.router import route_answer_mode
+from app.mneme.memoria.service import MemoriaAgent
 
 ROOT = Path(__file__).resolve().parents[1]
 AGENT_CORE_FILES = (
-    ROOT / "app/mneme/agent/contracts.py",
-    ROOT / "app/mneme/agent/ports.py",
-    ROOT / "app/mneme/agent/service.py",
+    ROOT / "app/mneme/memoria/contracts.py",
+    ROOT / "app/mneme/memoria/ports.py",
+    ROOT / "app/mneme/memoria/service.py",
 )
 ONLINE_AGENT_CONSUMERS = (
+    ROOT / "app/mneme/memoria/chat_bridge.py",
+    ROOT / "app/mneme/memoria/api/retrieval.py",
     ROOT / "app/mneme/domains/chat/service.py",
-    ROOT / "app/mneme/domains/retrieval/router.py",
     ROOT / "app/mneme/domains/companion/router.py",
-    ROOT / "app/mneme/pipelines/companion_pipeline.py",
 )
 
 
@@ -51,7 +51,7 @@ def test_agent_run_uses_the_answer_engine_boundary():
         confidence="high",
     )
     engine = FakeAnswerEngine(response)
-    agent = MnemeAgent(answer_engine=engine)
+    agent = MemoriaAgent(answer_engine=engine)
     request = AgentRequest(
         question="What did I write?",
         knowledge_base_id="kb_1",
@@ -105,7 +105,7 @@ def test_rag_adapter_preserves_request_and_raw_response_fields(monkeypatch):
         }
 
     monkeypatch.setattr(
-        "app.mneme.agent.adapters.rag_answer.generate_rag_answer",
+        "app.mneme.memoria.adapters.rag_answer.generate_rag_answer",
         fake_generate_rag_answer,
     )
     db = object()

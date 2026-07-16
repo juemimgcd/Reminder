@@ -80,24 +80,24 @@ cp deploy/env/backend.production.example .env
 
 ## 5. 首次启动（从 GHCR 拉取镜像）
 
-### Memory Agent 独立服务边界
+### Memoria 独立服务边界
 
-Compose 文件定义了 Mneme 和 Memory Agent 两套服务，但本阶段不切换用户流量：`MEMORY_AGENT_ENABLED=false` 必须保持不变，Nginx 仍然只代理 `127.0.0.1:8000` 的 Mneme 应用。Memory Agent API 仅在 Compose 网络内监听 `memory-agent-api:8010`，不映射宿主机端口。
+Compose 文件定义了 Mneme 和 Memoria 两套服务，但本阶段不切换用户流量：`MEMORY_AGENT_ENABLED=false` 必须保持不变，Nginx 仍然只代理 `127.0.0.1:8000` 的 Mneme 应用。Memoria API 仅在 Compose 网络内监听 `memory-agent-api:8010`，不映射宿主机端口。
 
 两套服务的运行资源必须保持隔离：
 
-- Mneme 使用 `${POSTGRES_DB:-agentic}`，Memory Agent 使用 `${MEMORY_AGENT_POSTGRES_DB:-memory_agent}`；`memory-agent-db-init` 会幂等创建后者。
-- Mneme 的 Celery broker/result backend 使用 Redis DB 0/1 和现有队列，Memory Agent 使用 Redis DB 2/3 和独立的 `${MEMORY_AGENT_CELERY_QUEUE:-memory_agent}` 队列。
+- Mneme 使用 `${POSTGRES_DB:-agentic}`，Memoria 使用 `${MEMORY_AGENT_POSTGRES_DB:-memory_agent}`；`memory-agent-db-init` 会幂等创建后者。
+- Mneme 的 Celery broker/result backend 使用 Redis DB 0/1 和现有队列，Memoria 使用 Redis DB 2/3 和独立的 `${MEMORY_AGENT_CELERY_QUEUE:-memory_agent}` 队列。
 - 两个服务通过 HTTP 事件契约通信。禁止任一服务直接读取或连接另一服务拥有的数据库，也禁止跨数据库 join。
-- `JWT_SECRET` 用于 Mneme 用户令牌；`MEMORY_AGENT_SERVICE_JWT_SECRET` 是 Mneme 与 Memory Agent 之间的服务令牌密钥。两者必须使用不同的长随机值，并且只保存在服务器 `.env` 中。
+- `JWT_SECRET` 用于 Mneme 用户令牌；`MEMORY_AGENT_SERVICE_JWT_SECRET` 是 Mneme 与 Memoria 之间的服务令牌密钥。两者必须使用不同的长随机值，并且只保存在服务器 `.env` 中。
 
-启动顺序为：PostgreSQL 健康后创建 Agent 数据库，`memory-agent-migrate` 执行独立 Alembic 历史，随后启动 `memory-agent-api` 和 `memory-agent-worker`。Mneme 的 `app` 服务不依赖 Memory Agent readiness，因此 Agent 故障不会阻止当前用户入口启动。
+启动顺序为：PostgreSQL 健康后创建 Agent 数据库，`memory-agent-migrate` 执行独立 Alembic 历史，随后启动 `memory-agent-api` 和 `memory-agent-worker`。Mneme 的 `app` 服务不依赖 Memoria readiness，因此 Agent 故障不会阻止当前用户入口启动。
 
 健康检查地址：
 
 - Mneme：`http://127.0.0.1:8000/health`
-- Memory Agent liveness（Compose 网络内）：`http://memory-agent-api:8010/health`
-- Memory Agent readiness（包含其数据库检查）：`http://memory-agent-api:8010/health/readiness`
+- Memoria liveness（Compose 网络内）：`http://memory-agent-api:8010/health`
+- Memoria readiness（包含其数据库检查）：`http://memory-agent-api:8010/health/readiness`
 
 可从 Mneme 容器检查内部 Agent readiness：
 
@@ -113,7 +113,7 @@ IMAGE_TAG=v1.2.3 bash deploy/release-image.sh
 
 `docker login ghcr.io` 使用具有 package read 权限的 GitHub token；私有 GHCR 镜像首次拉取前只需登录一次。`IMAGE_TAG` 必须是已经由 GitHub Actions 发布的版本标签。
 
-`deploy/release-image.sh` 当前只管理 Mneme 的 `migrate`、`app` 和 `worker`，尚未拉起或更新 Memory Agent。脚本成功后必须继续执行以下补充序列；每条 `docker compose run` 都会把数据库初始化或迁移失败作为非零退出码返回，失败时不要继续启动 Agent API/worker：
+`deploy/release-image.sh` 当前只管理 Mneme 的 `migrate`、`app` 和 `worker`，尚未拉起或更新 Memoria。脚本成功后必须继续执行以下补充序列；每条 `docker compose run` 都会把数据库初始化或迁移失败作为非零退出码返回，失败时不要继续启动 Agent API/worker：
 
 ```bash
 set -euo pipefail
@@ -224,7 +224,7 @@ cd /opt/reminder
 IMAGE_TAG=v1.2.3 bash deploy/release-image.sh
 ```
 
-`release-image.sh` 尚不管理 Memory Agent。每次 Mneme 发布脚本成功后，都要执行与首次启动相同的 Agent 补充序列，保证 Agent 不会继续运行旧镜像：
+`release-image.sh` 尚不管理 Memoria。每次 Mneme 发布脚本成功后，都要执行与首次启动相同的 Agent 补充序列，保证 Agent 不会继续运行旧镜像：
 
 ```bash
 set -euo pipefail
@@ -255,21 +255,21 @@ docker compose up -d --wait --wait-timeout 180 --no-build --no-deps --force-recr
 docker compose exec memory-agent-api python -c "from urllib.request import urlopen; print(urlopen('http://127.0.0.1:8010/health/readiness').read().decode())"
 ```
 
-脚本和上述补充序列会分别更新 Mneme 与 Memory Agent；发布或回滚后检查：
+脚本和上述补充序列会分别更新 Mneme 与 Memoria；发布或回滚后检查：
 
 ```bash
 docker compose ps
 curl http://127.0.0.1:8000/health
 ```
 
-### Memory Agent rebuild and deletion operations
+### Memoria rebuild and deletion operations
 
 Take a Mneme database backup before a large backfill. Preview, then enqueue the
 rebuild from the Mneme application container; no Agent records are written by dry-run:
 
 ```bash
-docker compose exec app python -m app.mneme.cli.export_agent_projection --dry-run --owner-id 42 --knowledge-base-id kb_123 --batch-size 50
-docker compose exec app python -m app.mneme.cli.export_agent_projection --owner-id 42 --knowledge-base-id kb_123 --batch-size 50 --checkpoint /tmp/memory-agent-backfill.json
+docker compose exec app python -m app.mneme.memoria.cli.export_projection --dry-run --owner-id 42 --knowledge-base-id kb_123 --batch-size 50
+docker compose exec app python -m app.mneme.memoria.cli.export_projection --owner-id 42 --knowledge-base-id kb_123 --batch-size 50 --checkpoint /tmp/memory-agent-backfill.json
 ```
 
 Persist the checkpoint outside an ephemeral container if the job must survive
@@ -282,18 +282,18 @@ resume accepts a document or projection ID and optional completed
 batch index:
 
 ```bash
-docker compose exec app python -m app.mneme.cli.export_agent_projection --resume-from PROJECTION_ID --resume-batch-index 3 --batch-size 50 --checkpoint /tmp/memory-agent-backfill.json
+docker compose exec app python -m app.mneme.memoria.cli.export_projection --resume-from PROJECTION_ID --resume-batch-index 3 --batch-size 50 --checkpoint /tmp/memory-agent-backfill.json
 ```
 
 Inspect Agent state without bypassing event contracts or changing data:
 
 ```bash
-docker compose exec memory-agent-api python -m services.memory_agent.cli.backfill --owner-id 42 --knowledge-base-id kb_123 --batch-size 100
-docker compose exec memory-agent-api python -m services.memory_agent.cli.backfill --resume-from PROJECTION_ID --batch-size 100
+docker compose exec memory-agent-api python -m app.mneme.memoria.server.cli.backfill --owner-id 42 --knowledge-base-id kb_123 --batch-size 100
+docker compose exec memory-agent-api python -m app.mneme.memoria.server.cli.backfill --resume-from PROJECTION_ID --batch-size 100
 ```
 
 Source deletion is asynchronous after Mneme commits its deletion event. Keep the
-Outbox worker and Memory Agent worker running and monitor dead letters before treating
+Outbox worker and Memoria worker running and monitor dead letters before treating
 privacy deletion as complete. The event contains only owner/knowledge-base/session or
 document identifiers, stable message identifiers, source version/time, and no source
 text. The complete message-ID list is carried without an arbitrary item cap, including
@@ -303,7 +303,7 @@ provenance and original time, applies non-explicit governance, and skips secret-
 evidence; it cannot reconstruct Mneme content that
 was already deleted.
 
-Memory Agent migration `20260714_04` adds persistent source-deletion fences and verified
+Memoria migration `20260714_04` adds persistent source-deletion fences and verified
 document identity on evidence. Run the Agent migration before enabling the new workers.
 Fence order is the envelope `(occurred_at, event_id)`; source version is provenance only.
 Old/equal source events are idempotent skips, while strictly newer valid events may
@@ -381,12 +381,12 @@ APP_HOST_PORT=8000
 APP_HOST_PORT=127.0.0.1:8000
 ```
 
-## Memory Agent staged cutover and rollback
+## Memoria staged cutover and rollback
 
 The cutover switch is explicit and is read by both Mneme API and worker processes.
 There is no same-request fallback: an Agent error remains visible and retryable.
 
-1. Deploy the Mneme and Memory Agent images together. Create the Agent database, then run the
+1. Deploy the Mneme and Memoria images together. Create the Agent database, then run the
    Mneme and Agent expand migrations before starting either new binary:
 
 ```bash
@@ -405,7 +405,7 @@ docker compose up -d memory-agent-api memory-agent-worker app worker
 ```bash
 docker compose exec memory-agent-api python -c "from urllib.request import urlopen; print(urlopen('http://127.0.0.1:8010/health/readiness').read().decode())"
 docker compose exec memory-agent-api python -c "from urllib.request import urlopen; print(urlopen('http://127.0.0.1:8010/health/worker').read().decode())"
-docker compose exec app python -m app.mneme.cli.memory_agent_ops
+docker compose exec app python -m app.mneme.memoria.cli.operations
 ```
 
 3. Backfill with the documented projection exporter. Compare projection counts, aggregate
@@ -413,9 +413,9 @@ docker compose exec app python -m app.mneme.cli.memory_agent_ops
    Agent report before enabling traffic. Never print or export source content for this check.
 
 ```bash
-docker compose exec app python -m app.mneme.cli.export_agent_projection --dry-run --batch-size 50
-docker compose exec app python -m app.mneme.cli.export_agent_projection --batch-size 50 --checkpoint /app/storage/memory-agent-backfill.json
-docker compose exec memory-agent-api python -m services.memory_agent.cli.backfill --batch-size 100
+docker compose exec app python -m app.mneme.memoria.cli.export_projection --dry-run --batch-size 50
+docker compose exec app python -m app.mneme.memoria.cli.export_projection --batch-size 50 --checkpoint /app/storage/memory-agent-backfill.json
+docker compose exec memory-agent-api python -m app.mneme.memoria.server.cli.backfill --batch-size 100
 ```
 
 4. Online answer traffic already uses `MemoryAgentClient` exclusively. Recreate the Mneme
@@ -427,7 +427,7 @@ docker compose up -d --no-deps --force-recreate app worker
 
 For the first rollout window, alert on any dead letter, readiness failure, worker count zero,
 oldest Outbox/Inbox age over 120 seconds, projection lag over 300 seconds, or a five-minute
-failed-answer rate over 2%. Inspect Outbox with `app.mneme.cli.memory_agent_ops`; inspect
+failed-answer rate over 2%. Inspect Outbox with `app.mneme.memoria.cli.operations`; inspect
 Inbox/dead letters/projection lag/failed runs/token and cost totals at Agent `/metrics`.
 Correlated logs may contain request/run/event IDs, modes, phases, stable errors and durations,
 but never query, prompt, answer, evidence, memory values, API keys or service JWTs.
@@ -436,7 +436,7 @@ Outbox age is measured from immutable `outbox_events.enqueued_at`; retry schedul
 resets it. Migration `20260715_03` backfills legacy rows from `next_attempt_at`, then
 `locked_at`, then `processed_at`, or finally the migration timestamp. Therefore the first
 post-migration age for old rows is an approximation; all newly enqueued rows are exact.
-Memory Agent JSON logging emits only fixed event names and explicit safe fields. Uvicorn
+Memoria JSON logging emits only fixed event names and explicit safe fields. Uvicorn
 access logging is disabled (so query strings cannot leak), while Uvicorn errors and Celery
 API/worker processes use the same whitelist formatter and discard arbitrary messages,
 arguments, exception text, prompts, payloads, and credentials.

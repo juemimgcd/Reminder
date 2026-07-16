@@ -5,15 +5,15 @@ import jwt
 import pytest
 from pydantic import SecretStr
 
-from app.mneme.clients import memory_agent_client as client_module
-from app.mneme.clients.memory_agent_client import (
+from app.mneme.conf.config import settings
+from app.mneme.memoria.clients import memory_agent as client_module
+from app.mneme.memoria.clients.memory_agent import (
     MemoryAgentClient,
     MemoryAgentPermanentFailure,
     MemoryAgentRejected,
     MemoryAgentRetryable,
 )
-from app.mneme.conf.config import settings
-from app.mneme.schemas.memory_agent import MemoryAgentAnswerRequest
+from app.mneme.memoria.schemas.memory_agent import MemoryAgentAnswerRequest
 
 
 def _request():

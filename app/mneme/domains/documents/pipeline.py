@@ -6,13 +6,13 @@ from app.mneme.conf.database import open_write_session
 from app.mneme.conf.logging import log_event
 from app.mneme.crud.chunk import create_chunks
 from app.mneme.crud.document import update_document_status
-from app.mneme.domains.documents.agent_projection import (
-    build_document_memory_observation_events,
-    build_document_projection_batches,
-)
 from app.mneme.domains.tasks.outbox import (
     enqueue_document_agent_projection,
     enqueue_document_memory_observed,
+)
+from app.mneme.memoria.projections.documents import (
+    build_document_memory_observation_events,
+    build_document_projection_batches,
 )
 from app.mneme.models.document import Document
 from app.mneme.schemas.document import DocumentIndexPipelineResult

@@ -3,7 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.mneme.agent.contracts import AnswerMode
+from app.mneme.memoria.contracts import AnswerMode
 
 QueryType = Literal[
     "general_chat",

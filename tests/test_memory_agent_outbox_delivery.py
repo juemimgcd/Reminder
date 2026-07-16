@@ -3,8 +3,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.mneme.clients.memory_agent_client import MemoryAgentRetryable
 from app.mneme.domains.tasks import outbox
+from app.mneme.memoria.clients.memory_agent import MemoryAgentRetryable
 
 
 def _event(status="pending", attempt_count=0, max_attempts=3):

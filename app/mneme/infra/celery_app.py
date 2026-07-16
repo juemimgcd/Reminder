@@ -1,4 +1,5 @@
 from celery import Celery
+
 from app.mneme.conf.config import settings
 
 
@@ -30,8 +31,8 @@ def build_celery_app() -> Celery:
         imports=(
             "app.mneme.tasks.index_tasks",
             "app.mneme.tasks.outbox_tasks",
-            "app.mneme.tasks.agent_tasks",
-            "app.mneme.tasks.heartbeat_tasks",
+            "app.mneme.memoria.tasks.runs",
+            "app.mneme.memoria.tasks.heartbeats",
             "app.mneme.tasks.maintenance_tasks",
         ),
         beat_schedule={

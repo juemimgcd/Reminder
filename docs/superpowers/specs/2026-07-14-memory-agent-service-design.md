@@ -41,7 +41,7 @@ This design will:
 The repository becomes a monorepo containing two independently deployed services:
 
 - `app/mneme/`: the existing business backend;
-- `services/memory_agent/`: the new Memory Agent API and worker runtime.
+- `app/mneme/memoria/server/`: the new Memory Agent API and worker runtime.
 
 Each service owns its persistence model. Neither service may import the other's ORM models, CRUD modules, database session factories, or Celery task implementations. Cross-service communication uses versioned HTTP contracts only.
 

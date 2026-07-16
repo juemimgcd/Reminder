@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock
 import pytest
 
 import app.mneme.domains.retrieval.context_service as context_service
-from app.mneme.agent.orchestrator import generate_rag_answer, get_evidence_prompt_for_mode
-from app.mneme.agent.router import retrieval_scope_for_answer_mode, route_answer_mode
+from app.mneme.memoria.orchestrator import generate_rag_answer, get_evidence_prompt_for_mode
+from app.mneme.memoria.router import retrieval_scope_for_answer_mode, route_answer_mode
 
 
 @pytest.mark.parametrize(
@@ -84,7 +84,7 @@ def test_memory_answer_passes_memory_only_scope_to_context_builder(monkeypatch):
         }
 
     monkeypatch.setattr(
-        "app.mneme.agent.orchestrator.build_query_context",
+        "app.mneme.memoria.orchestrator.build_query_context",
         fake_build_query_context,
     )
 
