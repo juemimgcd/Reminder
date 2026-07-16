@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -13,6 +14,7 @@ from app.mneme.schemas.memory_agent import (
     MemoryAgentAnswerRequest,
     MemoryAgentAnswerResponse,
     MemoryAgentEvent,
+    MemoryAgentStreamEvent,
     MemoryCandidateData,
     MemoryDetailData,
 )
@@ -86,12 +88,74 @@ class MemoryAgentClient:
             scope="answers:write",
             owner_id=request.owner_id,
             knowledge_base_id=request.knowledge_base_id,
-            retry_transient=False,
+            retry_transient=True,
         )
         try:
             return MemoryAgentAnswerResponse.model_validate(response.json())
         except ValueError as exc:
             raise MemoryAgentPermanentFailure("memory agent returned an invalid answer response") from exc
+
+    async def stream_answer(self, request: MemoryAgentAnswerRequest) -> AsyncIterator[MemoryAgentStreamEvent]:
+        if not settings.MEMORY_AGENT_SERVICE_JWT_SECRET.get_secret_value():
+            raise MemoryAgentPermanentFailure("memory agent service credentials are not configured")
+        try:
+            service_token = _create_service_token(
+                scope="answers:write",
+                owner_id=request.owner_id,
+                knowledge_base_id=request.knowledge_base_id,
+            )
+        except Exception as exc:
+            raise MemoryAgentPermanentFailure("memory agent service token creation failed") from exc
+        headers = {
+            "Authorization": f"Bearer {service_token}",
+            "Content-Type": "application/json",
+            "Accept": "text/event-stream",
+            "X-Request-ID": request.request_id,
+            "X-Trace-ID": request.trace_id,
+        }
+        try:
+            async with self._client.stream(
+                "POST",
+                "/v1/answers/stream",
+                json=_answer_request_payload(request),
+                headers=headers,
+            ) as response:
+                if response.is_error:
+                    await response.aread()
+                    agent_code = _agent_error_code(response)
+                    message = f"memory agent HTTP {response.status_code}: {_http_error_reason(response.status_code)}"
+                    if response.status_code in RETRYABLE_STATUS_CODES:
+                        raise MemoryAgentRetryable(message, agent_code=agent_code)
+                    if 400 <= response.status_code < 500:
+                        raise MemoryAgentRejected(message, status_code=response.status_code)
+                    raise MemoryAgentPermanentFailure(message, agent_code=agent_code)
+
+                data_lines: list[str] = []
+                async for line in response.aiter_lines():
+                    if line.startswith("data:"):
+                        data_lines.append(line[5:].lstrip())
+                        continue
+                    if line or not data_lines:
+                        continue
+                    try:
+                        event = MemoryAgentStreamEvent.model_validate_json("\n".join(data_lines))
+                    except ValueError as exc:
+                        raise MemoryAgentPermanentFailure("memory agent returned an invalid stream event") from exc
+                    data_lines.clear()
+                    if event.type == "error":
+                        code = event.code or "AGENT_INTERNAL_ERROR"
+                        if code.endswith("_TIMEOUT") or code in {
+                            "AGENT_CAPACITY_EXCEEDED",
+                            "AGENT_REQUEST_IN_PROGRESS",
+                            "AGENT_UNAVAILABLE",
+                        }:
+                            raise MemoryAgentRetryable("memory agent stream failed", agent_code=code)
+                        raise MemoryAgentPermanentFailure("memory agent stream failed", agent_code=code)
+                    yield event
+        except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout) as exc:
+            raise MemoryAgentRetryable("memory agent connection failed") from exc
+        except httpx.HTTPError as exc:
+            raise MemoryAgentPermanentFailure("memory agent transport failed") from exc
 
     async def list_memories(self, *, owner_id: int, knowledge_base_id: str | None, params: dict[str, Any]) -> dict:
         return await self._json_request(
@@ -306,6 +370,9 @@ class MemoryAgentClient:
             "Content-Type": "application/json",
             "X-Request-ID": request_id,
         }
+        trace_id = json.get("trace_id") if isinstance(json, dict) else None
+        if isinstance(trace_id, str) and trace_id:
+            headers["X-Trace-ID"] = trace_id
         for attempt in range(1, attempts + 1):
             try:
                 safe_params = (
@@ -368,6 +435,7 @@ def _answer_request_payload(request: MemoryAgentAnswerRequest) -> dict[str, Any]
             "model_name": request.model.model_name,
             "api_key": request.model.api_key.get_secret_value(),
             "temperature": request.model.temperature,
+            "context_window": request.model.context_window,
         }
     return payload
 

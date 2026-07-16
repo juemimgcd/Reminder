@@ -2,9 +2,10 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from services.memory_agent.contracts.answers import AnswerRequest
+from services.memory_agent.contracts.answers import AnswerRequest, AnswerResponse
 from services.memory_agent.database import open_read_session, open_write_session
 from services.memory_agent.models.answer_run import AnswerRun
 from services.memory_agent.runtime.contracts import AnswerRunData, GeneratedAnswer, RunPhase
@@ -22,6 +23,7 @@ def _data(row: AnswerRun) -> AnswerRunData:
     return AnswerRunData(
         run_id=row.run_id,
         request_id=row.request_id,
+        trace_id=row.trace_id,
         owner_id=row.owner_id,
         knowledge_base_id=row.knowledge_base_id,
         session_id=row.session_id,
@@ -40,6 +42,11 @@ def _data(row: AnswerRun) -> AnswerRunData:
         total_tokens=row.total_tokens,
         cost=float(row.cost) if row.cost is not None else None,
         error_code=row.error_code,
+        response_json=dict(row.response_json) if row.response_json is not None else None,
+        model_attempts=list(row.model_attempts),
+        selected_provider=row.selected_provider,
+        selected_model=row.selected_model,
+        fallback_used=row.fallback_used,
         created_at=row.created_at,
         started_at=row.started_at,
         retrieval_completed_at=row.retrieval_completed_at,
@@ -65,6 +72,24 @@ def _require_running(row: AnswerRun, expected_phase: RunPhase) -> None:
 
 
 class AnswerRunRepository:
+    async def fail_stale(self, *, stale_before: datetime, limit: int) -> int:
+        async with open_write_session() as db:
+            rows = list(
+                await db.scalars(
+                    select(AnswerRun)
+                    .where(AnswerRun.status == "running", AnswerRun.started_at < stale_before)
+                    .order_by(AnswerRun.started_at)
+                    .limit(limit)
+                    .with_for_update(skip_locked=True)
+                )
+            )
+            now = datetime.now(UTC)
+            for row in rows:
+                row.status = "failed"
+                row.error_code = "AGENT_RUN_STALE"
+                row.failed_at = now
+            return len(rows)
+
     async def create(
         self,
         *,
@@ -73,24 +98,38 @@ class AnswerRunRepository:
         validation_duration_ms: int,
     ) -> AnswerRunData:
         # The request question and ephemeral model configuration are deliberately not copied.
-        row = AnswerRun(
-            run_id=run_id,
-            request_id=request.request_id,
-            owner_id=request.owner_id,
-            knowledge_base_id=request.knowledge_base_id,
-            session_id=request.session_id,
-            message_id=request.message_id,
-            mode=request.answer_mode,
-            status="running",
-            current_phase="validate",
-            phase_durations_ms={"validate": _duration(validation_duration_ms)},
-            source_ids=[],
-            expansion_count=0,
-        )
         async with open_write_session() as db:
-            db.add(row)
-            await db.flush()
-            await db.refresh(row)
+            statement = (
+                insert(AnswerRun)
+                .values(
+                    run_id=run_id,
+                    request_id=request.request_id,
+                    trace_id=request.trace_id or f"trace_{run_id}",
+                    owner_id=request.owner_id,
+                    knowledge_base_id=request.knowledge_base_id,
+                    session_id=request.session_id,
+                    message_id=request.message_id,
+                    mode=request.answer_mode,
+                    status="running",
+                    current_phase="validate",
+                    phase_durations_ms={"validate": _duration(validation_duration_ms)},
+                    source_ids=[],
+                    expansion_count=0,
+                    model_attempts=[],
+                )
+                .on_conflict_do_nothing(constraint="uq_answer_runs_owner_request")
+                .returning(AnswerRun)
+            )
+            row = (await db.execute(statement)).scalar_one_or_none()
+            if row is None:
+                row = await db.scalar(
+                    select(AnswerRun).where(
+                        AnswerRun.owner_id == request.owner_id,
+                        AnswerRun.request_id == request.request_id,
+                    )
+                )
+            if row is None:
+                raise RuntimeError("idempotent answer run could not be loaded")
             return _data(row)
 
     async def begin_phase(self, run_id: str, *, previous: RunPhase, phase: RunPhase) -> None:
@@ -139,6 +178,10 @@ class AnswerRunRepository:
             row.completion_tokens = answer.completion_tokens
             row.total_tokens = answer.total_tokens
             row.cost = Decimal(str(answer.cost))
+            row.model_attempts = list(answer.model_attempts)
+            row.selected_provider = answer.selected_provider
+            row.selected_model = answer.selected_model
+            row.fallback_used = answer.fallback_used
             row.generation_completed_at = datetime.now(UTC)
 
     async def complete(
@@ -149,6 +192,7 @@ class AnswerRunRepository:
         confidence: float,
         uncertainty: str | None,
         insufficient_evidence: bool,
+        response: AnswerResponse,
     ) -> None:
         now = datetime.now(UTC)
         async with open_write_session() as db:
@@ -161,6 +205,7 @@ class AnswerRunRepository:
             row.confidence = Decimal(str(confidence))
             row.uncertainty = uncertainty
             row.insufficient_evidence = insufficient_evidence
+            row.response_json = response.model_dump(mode="json")
             row.status = "completed"
             row.current_phase = "complete"
             row.citations_completed_at = now

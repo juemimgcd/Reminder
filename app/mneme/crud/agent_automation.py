@@ -114,6 +114,30 @@ async def list_recoverable_runs(
     return list(result.scalars().all())
 
 
+async def list_exhausted_runs(
+    db: AsyncSession,
+    *,
+    stale_before: datetime,
+    limit: int,
+) -> list[DurableAgentRun]:
+    result = await db.execute(
+        select(DurableAgentRun)
+        .where(
+            DurableAgentRun.attempt_count >= DurableAgentRun.max_attempts,
+            or_(
+                (DurableAgentRun.status == "queued") & (DurableAgentRun.updated_at < stale_before),
+                (DurableAgentRun.status == "running")
+                & or_(DurableAgentRun.heartbeat_at.is_(None), DurableAgentRun.heartbeat_at < stale_before),
+                (DurableAgentRun.status == "aborting") & (DurableAgentRun.updated_at < stale_before),
+            ),
+        )
+        .order_by(DurableAgentRun.created_at)
+        .limit(limit)
+        .with_for_update(skip_locked=True)
+    )
+    return list(result.scalars().all())
+
+
 async def create_heartbeat_job(db: AsyncSession, **values: Any) -> HeartbeatJob:
     job = HeartbeatJob(**values)
     db.add(job)

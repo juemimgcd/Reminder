@@ -15,6 +15,9 @@ class OperationalMetrics:
     oldest_inbox_age_seconds: float
     projection_lag_seconds: float
     failed_runs: int
+    stale_runs: int
+    model_retries: int
+    model_fallbacks: int
     governance_actions: dict[str, int]
     answer_runs: MetricRows = ()
     phase_duration_ms_count: MetricRows = ()
@@ -39,6 +42,9 @@ def render_metrics(metrics: OperationalMetrics) -> str:
         _line("memory_agent_oldest_inbox_age_seconds", metrics.oldest_inbox_age_seconds),
         _line("memory_agent_projection_lag_seconds", metrics.projection_lag_seconds),
         _line("memory_agent_failed_runs", metrics.failed_runs),
+        _line("memory_agent_stale_runs", metrics.stale_runs),
+        _line("memory_agent_model_retries_total", metrics.model_retries),
+        _line("memory_agent_model_fallbacks_total", metrics.model_fallbacks),
     ]
     families = (
         ("memory_agent_answer_runs_total", metrics.answer_runs),

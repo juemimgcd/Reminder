@@ -1,5 +1,5 @@
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -96,6 +96,24 @@ async def _operational_metrics(db: AsyncSession) -> OperationalMetrics:
     failed_runs = await db.scalar(
         select(func.count()).select_from(AnswerRun).where(AnswerRun.status == "failed")
     )
+    stale_runs = await db.scalar(
+        select(func.count())
+        .select_from(AnswerRun)
+        .where(
+            AnswerRun.status == "running",
+            AnswerRun.started_at < now - timedelta(seconds=settings.ANSWER_RUN_STALE_SECONDS),
+        )
+    )
+    model_stats = (
+        await db.execute(
+            text(
+                "SELECT "
+                "COALESCE(sum(GREATEST(jsonb_array_length(model_attempts) - 1, 0)), 0) AS retries, "
+                "count(*) FILTER (WHERE fallback_used IS TRUE) AS fallbacks "
+                "FROM answer_runs"
+            )
+        )
+    ).one()
     actions = dict(
         await db.execute(select(MemoryActionAudit.action, func.count()).group_by(MemoryActionAudit.action))
     )
@@ -132,6 +150,9 @@ async def _operational_metrics(db: AsyncSession) -> OperationalMetrics:
         oldest_inbox_age_seconds=max(0.0, (now - oldest_pending).total_seconds()) if oldest_pending else 0.0,
         projection_lag_seconds=max(0.0, (now - oldest_staging).total_seconds()) if oldest_staging else 0.0,
         failed_runs=failed_runs or 0,
+        stale_runs=stale_runs or 0,
+        model_retries=int(model_stats.retries or 0),
+        model_fallbacks=int(model_stats.fallbacks or 0),
         governance_actions={str(action): count for action, count in actions.items()},
         answer_runs=tuple(
             (labels(mode=row.mode, status=row.status, error=row.error), row.value) for row in run_rows

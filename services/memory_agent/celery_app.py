@@ -15,6 +15,7 @@ celery_app.conf.update(
     task_routes={
         "memory_agent.process_event": {"queue": settings.CELERY_QUEUE},
         "memory_agent.dispatch_pending_events": {"queue": settings.CELERY_QUEUE},
+        "memory_agent.fail_stale_answer_runs": {"queue": settings.CELERY_QUEUE},
     },
     task_acks_late=True,
     task_reject_on_worker_lost=True,
@@ -24,7 +25,11 @@ celery_app.conf.update(
             "task": "memory_agent.dispatch_pending_events",
             "schedule": 30.0,
             "kwargs": {"batch_limit": 100},
-        }
+        },
+        "fail-stale-memory-agent-answer-runs": {
+            "task": "memory_agent.fail_stale_answer_runs",
+            "schedule": 60.0,
+        },
     },
 )
 

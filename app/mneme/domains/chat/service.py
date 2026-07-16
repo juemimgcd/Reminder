@@ -1,6 +1,6 @@
 import asyncio
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
@@ -48,6 +48,7 @@ from app.mneme.schemas.chat_session import ChatMessageData
 from app.mneme.schemas.memory_agent import (
     MemoryAgentAnswerRequest,
     MemoryAgentAnswerResponse,
+    MemoryAgentStreamEvent,
     ModelInvocationConfig,
 )
 from app.mneme.utils.exceptions import BusinessException
@@ -242,6 +243,7 @@ def _model_invocation_config(model_config) -> ModelInvocationConfig | None:
         model_name=model_config.model_name,
         api_key=decrypt_api_key(model_config.api_key_ciphertext),
         temperature=model_config.temperature,
+        context_window=model_config.context_window,
     )
 
 
@@ -255,11 +257,15 @@ async def answer_via_memory_agent(
     session_id: str | None,
     message_id: str,
     model_config=None,
+    idempotency_key: str | None = None,
+    trace_id: str | None = None,
+    event_callback: Callable[[MemoryAgentStreamEvent], Awaitable[None]] | None = None,
 ) -> MemoryAgentAnswerResponse:
     if answer_mode != "general_chat" and knowledge_base_id is None:
         raise BusinessException(message="knowledge base is required for this answer mode", code=4053)
     request = MemoryAgentAnswerRequest(
-        request_id=f"answer_{message_id}",
+        request_id=f"answer_{message_id}_{idempotency_key or uuid.uuid4().hex}",
+        trace_id=trace_id or f"trace_{message_id}",
         owner_id=owner_id,
         knowledge_base_id=knowledge_base_id,
         session_id=session_id,
@@ -267,9 +273,22 @@ async def answer_via_memory_agent(
         question=question,
         answer_mode=answer_mode,
         top_k=top_k,
+        allow_model_fallback=model_config is None,
         model=_model_invocation_config(model_config),
     )
     async with MemoryAgentClient() as client:
+        if event_callback is not None:
+            final_response: MemoryAgentAnswerResponse | None = None
+            try:
+                async for event in client.stream_answer(request):
+                    await event_callback(event)
+                    if event.type == "final" and event.response is not None:
+                        final_response = event.response
+            except MemoryAgentUnavailable:
+                return await client.create_answer(request)
+            if final_response is None:
+                raise MemoryAgentUnavailable("memory agent stream ended without a final response")
+            return final_response
         return await client.create_answer(request)
 
 
@@ -344,6 +363,9 @@ async def ask_in_chat_session(
     retry_message_id: str | None = None,
     regenerate_message_id: str | None = None,
     agent_run_id: str | None = None,
+    abort_signal: asyncio.Event | None = None,
+    trace_id: str | None = None,
+    event_callback: Callable[[MemoryAgentStreamEvent], Awaitable[None]] | None = None,
 ) -> tuple[ChatSession, list[ChatMessage]]:
     session = await require_owned_chat_session(db, current_user=current_user, session_id=session_id)
     if (
@@ -470,6 +492,9 @@ async def ask_in_chat_session(
             session_id=session.id,
             message_id=user_message.id,
             model_config=model_config,
+            idempotency_key=agent_run_id,
+            trace_id=trace_id,
+            event_callback=event_callback,
         )
     except MemoryAgentRejected as exc:
         raise BusinessException(
@@ -485,6 +510,9 @@ async def ask_in_chat_session(
             status_code=503,
             data={"message_id": user_message.id, "retryable": True, "agent_code": exc.agent_code},
         ) from exc
+
+    if abort_signal is not None and abort_signal.is_set():
+        raise asyncio.CancelledError
 
     result = memory_agent_answer_to_chat_result(agent_response)
     assistant_message = await create_chat_message(
@@ -549,15 +577,54 @@ async def stream_in_chat_session(
         abort_signal=abort_signal,
         already_claimed=session_turn_claimed,
     ):
-        _session, messages = await ask_in_chat_session(
-            db,
-            current_user=current_user,
-            session_id=session_id,
-            question=question,
-            top_k=top_k,
-            answer_mode=answer_mode,
-            agent_run_id=agent_run_id,
+        progress_queue: asyncio.Queue[MemoryAgentStreamEvent] = asyncio.Queue()
+
+        async def observe(event: MemoryAgentStreamEvent) -> None:
+            await progress_queue.put(event)
+
+        answer_task = asyncio.create_task(
+            ask_in_chat_session(
+                db,
+                current_user=current_user,
+                session_id=session_id,
+                question=question,
+                top_k=top_k,
+                answer_mode=answer_mode,
+                agent_run_id=agent_run_id,
+                abort_signal=abort_signal,
+                trace_id=trace_id,
+                event_callback=observe,
+            )
         )
+        try:
+            while not answer_task.done():
+                try:
+                    progress = await asyncio.wait_for(progress_queue.get(), timeout=0.1)
+                except TimeoutError:
+                    continue
+                if progress.type == "phase":
+                    yield AgentEvent.lifecycle(
+                        f"memory_agent_{progress.phase}",
+                        status=progress.status,
+                        memory_agent_run_id=progress.run_id,
+                        trace_id=trace_id,
+                        run_id=agent_run_id,
+                    )
+            while not progress_queue.empty():
+                progress = progress_queue.get_nowait()
+                if progress.type == "phase":
+                    yield AgentEvent.lifecycle(
+                        f"memory_agent_{progress.phase}",
+                        status=progress.status,
+                        memory_agent_run_id=progress.run_id,
+                        trace_id=trace_id,
+                        run_id=agent_run_id,
+                    )
+            _session, messages = await answer_task
+        finally:
+            if not answer_task.done():
+                answer_task.cancel()
+            await asyncio.gather(answer_task, return_exceptions=True)
     if abort_signal is not None and abort_signal.is_set():
         yield AgentEvent.lifecycle("aborted", reason="abort_after_answer", trace_id=trace_id, run_id=agent_run_id)
         return

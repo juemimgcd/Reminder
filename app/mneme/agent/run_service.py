@@ -54,7 +54,7 @@ async def execute_agent_run(run_id: str) -> None:
     owner_task = asyncio.current_task()
     if owner_task is None:
         raise RuntimeError("agent run has no owning asyncio task")
-    abort_monitor = asyncio.create_task(_monitor_abort(run_id, abort_signal))
+    abort_monitor = asyncio.create_task(_monitor_abort(run_id, abort_signal, owner_task))
     lease_monitor = asyncio.create_task(
         _monitor_session_lease(
             record.run_id,
@@ -97,28 +97,41 @@ async def execute_agent_run(run_id: str) -> None:
             final_status = AgentRunStatus.FAILED
             record.error = "agent run ended without a terminal event"
     except asyncio.CancelledError:
-        if not lease_lost.is_set():
+        if abort_signal.is_set() and not lease_lost.is_set():
+            final_status = AgentRunStatus.ABORTED
+            record.error = None
+            await agent_run_store.append_event(
+                run_id,
+                AgentEvent.lifecycle(
+                    "aborted",
+                    reason="abort_during_execution",
+                    loop_index=0,
+                    loop_reason="abort_during_execution",
+                ),
+            )
+        elif not lease_lost.is_set():
             raise
-        final_status = AgentRunStatus.FAILED
-        record.error = "agent run lost its session lease"
-        await agent_run_store.append_event(
-            run_id,
-            AgentEvent.error_event(
-                "Agent run lost its session lease.",
-                error_type="SessionLeaseLost",
-                loop_index=0,
-                loop_reason="session_lease_lost",
-            ),
-        )
-        await agent_run_store.append_event(
-            run_id,
-            AgentEvent.lifecycle(
-                "error",
-                reason="session_lease_lost",
-                loop_index=0,
-                loop_reason="session_lease_lost",
-            ),
-        )
+        else:
+            final_status = AgentRunStatus.FAILED
+            record.error = "agent run lost its session lease"
+            await agent_run_store.append_event(
+                run_id,
+                AgentEvent.error_event(
+                    "Agent run lost its session lease.",
+                    error_type="SessionLeaseLost",
+                    loop_index=0,
+                    loop_reason="session_lease_lost",
+                ),
+            )
+            await agent_run_store.append_event(
+                run_id,
+                AgentEvent.lifecycle(
+                    "error",
+                    reason="session_lease_lost",
+                    loop_index=0,
+                    loop_reason="session_lease_lost",
+                ),
+            )
     except Exception as exc:
         final_status = AgentRunStatus.FAILED
         record.error = str(exc)
@@ -200,10 +213,11 @@ async def _mark_aborted(record: AgentRunRecord, *, loop_reason: str) -> None:
     await _save_record(latest or record)
 
 
-async def _monitor_abort(run_id: str, abort_signal: asyncio.Event) -> None:
+async def _monitor_abort(run_id: str, abort_signal: asyncio.Event, owner_task: asyncio.Task) -> None:
     while not abort_signal.is_set():
         if await agent_run_store.is_abort_requested(run_id):
             abort_signal.set()
+            owner_task.cancel()
             return
         await asyncio.sleep(settings.AGENT_RUN_POLL_INTERVAL_SECONDS)
 
