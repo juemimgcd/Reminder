@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from time import perf_counter
 from uuid import uuid4
@@ -20,6 +21,7 @@ from services.memory_agent.runtime.ports import AnswerGenerator, CitationValidat
 
 POSTGRES_INTEGER_MAX = 2_147_483_647
 logger = logging.getLogger(__name__)
+RunEventCallback = Callable[[str, str, str], Awaitable[None]]
 DEPENDENCY_ERROR_CODES = {
     "retrieve": frozenset(
         {
@@ -33,6 +35,8 @@ DEPENDENCY_ERROR_CODES = {
         {
             "AGENT_MODEL_TIMEOUT",
             "AGENT_MODEL_UNAVAILABLE",
+            "AGENT_MODEL_AUTH_FAILED",
+            "AGENT_MODEL_INVALID_RESPONSE",
             "AGENT_UNAVAILABLE",
             "AGENT_CAPACITY_EXCEEDED",
         }
@@ -182,7 +186,12 @@ class MemoryAgent:
             )
         return evidence, expansion_count
 
-    async def run(self, request: AnswerRequest) -> AnswerResponse:
+    async def run(
+        self,
+        request: AnswerRequest,
+        *,
+        event_callback: RunEventCallback | None = None,
+    ) -> AnswerResponse:
         validate_started = perf_counter()
         try:
             async with asyncio.timeout(self._timeouts.validate):
@@ -192,11 +201,22 @@ class MemoryAgent:
             raise RuntimeDependencyError("AGENT_VALIDATE_TIMEOUT") from None
 
         run_id = uuid4().hex
-        await self._runs.create(
+        persisted_run = await self._runs.create(
             run_id=run_id,
             request=request,
             validation_duration_ms=_elapsed_ms(validate_started),
         )
+        if isinstance(persisted_run, AnswerRunData) and persisted_run.run_id != run_id:
+            if persisted_run.status == "completed" and persisted_run.response_json is not None:
+                await _emit_run_event(event_callback, "complete", "replayed", persisted_run.run_id)
+                return AnswerResponse.model_validate(persisted_run.response_json)
+            error_code = (
+                persisted_run.error_code
+                if persisted_run.status == "failed" and persisted_run.error_code
+                else "AGENT_REQUEST_IN_PROGRESS"
+            )
+            raise AnswerRunExecutionError(run_id=persisted_run.run_id, error_code=error_code)
+        await _emit_run_event(event_callback, "validate", "completed", run_id)
         safe_log(
             logger,
             logging.INFO,
@@ -206,8 +226,13 @@ class MemoryAgent:
             status="completed",
             duration_ms=_elapsed_ms(validate_started),
         )
-        with observation_context(request_id=request.request_id, run_id=run_id):
-            return await self._run_created(request=request, plan=plan, run_id=run_id)
+        with observation_context(request_id=request.request_id, run_id=run_id, trace_id=request.trace_id):
+            return await self._run_created(
+                request=request,
+                plan=plan,
+                run_id=run_id,
+                event_callback=event_callback,
+            )
 
     async def _run_created(
         self,
@@ -215,11 +240,13 @@ class MemoryAgent:
         request: AnswerRequest,
         plan: RetrievalPlan,
         run_id: str,
+        event_callback: RunEventCallback | None,
     ) -> AnswerResponse:
         phase: RunPhase = "retrieve"
         phase_started = perf_counter()
         try:
             await self._runs.begin_phase(run_id, previous="validate", phase=phase)
+            await _emit_run_event(event_callback, phase, "started", run_id)
             try:
                 async with asyncio.timeout(self._timeouts.retrieve):
                     evidence, expansion_count = await self._retrieve(request, plan)
@@ -250,6 +277,7 @@ class MemoryAgent:
                 source_ids=[item.source_id for item in evidence],
                 expansion_count=expansion_count,
             )
+            await _emit_run_event(event_callback, phase, "completed", run_id)
             safe_log(
                 logger,
                 logging.INFO,
@@ -263,6 +291,7 @@ class MemoryAgent:
             phase = "generate"
             phase_started = perf_counter()
             await self._runs.begin_phase(run_id, previous="retrieve", phase=phase)
+            await _emit_run_event(event_callback, phase, "started", run_id)
             try:
                 async with asyncio.timeout(self._timeouts.generate):
                     generated = await self._generator.generate(
@@ -272,6 +301,7 @@ class MemoryAgent:
                             question=request.question,
                             evidence=evidence,
                             model=request.model,
+                            allow_model_fallback=request.allow_model_fallback,
                         )
                     )
             except TimeoutError:
@@ -300,6 +330,7 @@ class MemoryAgent:
                 duration_ms=_elapsed_ms(phase_started),
                 answer=generated,
             )
+            await _emit_run_event(event_callback, phase, "completed", run_id)
             safe_log(
                 logger,
                 logging.INFO,
@@ -313,6 +344,7 @@ class MemoryAgent:
             phase = "citations"
             phase_started = perf_counter()
             await self._runs.begin_phase(run_id, previous="generate", phase=phase)
+            await _emit_run_event(event_callback, phase, "started", run_id)
             try:
                 async with asyncio.timeout(self._timeouts.citations):
                     citation_result = await asyncio.to_thread(
@@ -346,13 +378,6 @@ class MemoryAgent:
                 or generated.insufficient_evidence
                 or (plan.uses_private_sources and not evidence)
             )
-            await self._runs.complete(
-                run_id,
-                citation_duration_ms=_elapsed_ms(phase_started),
-                confidence=citation_result.confidence,
-                uncertainty=citation_result.uncertainty,
-                insufficient_evidence=insufficient_evidence,
-            )
             citation_duration_ms = _elapsed_ms(phase_started)
             safe_log(
                 logger,
@@ -371,7 +396,7 @@ class MemoryAgent:
             document_ids = list(
                 dict.fromkeys(item.source_id for item in evidence if item.source_type == "document")
             )
-            return AnswerResponse(
+            response = AnswerResponse(
                 answer=generated.answer,
                 mode=request.answer_mode,
                 route=generated.route,
@@ -383,6 +408,16 @@ class MemoryAgent:
                 document_ids=document_ids,
                 run_id=run_id,
             )
+            await self._runs.complete(
+                run_id,
+                citation_duration_ms=citation_duration_ms,
+                confidence=citation_result.confidence,
+                uncertainty=citation_result.uncertainty,
+                insufficient_evidence=insufficient_evidence,
+                response=response,
+            )
+            await _emit_run_event(event_callback, "complete", "completed", run_id)
+            return response
         except asyncio.CancelledError:
             await self._record_failure(
                 run_id=run_id,
@@ -392,3 +427,19 @@ class MemoryAgent:
                 error_code="AGENT_RUN_CANCELLED",
             )
             raise
+
+
+async def _emit_run_event(
+    callback: RunEventCallback | None,
+    phase: str,
+    status: str,
+    run_id: str,
+) -> None:
+    if callback is None:
+        return
+    try:
+        await callback(phase, status, run_id)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        return

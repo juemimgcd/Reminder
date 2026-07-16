@@ -33,3 +33,21 @@ Initial release gates are deliberately small and explicit: pipeline accuracy
 must be 1.0, scope violations must be 0, citation precision must be 1.0, and
 no-evidence behaviour must be 1.0. Retrieval and prose quality remain baseline
 signals until a reviewed model-judged set is added.
+
+To evaluate a running Memory Agent instead of the stored fixture predictions,
+provide the service endpoint and a service-token environment variable:
+
+```powershell
+$env:MEMORY_AGENT_EVAL_TOKEN = "replace-with-service-token"
+python -m services.memory_agent.eval.runner `
+  --dataset evals/memory_agent/cases.jsonl `
+  --output .tmp/memory-agent-live-eval.json `
+  --live-endpoint http://localhost:8010 `
+  --service-token-env MEMORY_AGENT_EVAL_TOKEN `
+  --knowledge-base-id replace-with-eval-knowledge-base-id
+```
+
+Live mode keeps the same deterministic gates and replaces only the predicted
+answer, mode, citations, confidence, and evidence flags with the validated
+`/v1/answers` response. Each call receives its own request and trace IDs, so the
+result can be correlated with answer-run metrics and structured logs.

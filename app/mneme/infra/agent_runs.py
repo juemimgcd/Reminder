@@ -305,8 +305,10 @@ class AgentRunStore:
             )
             try:
                 await client.ping()
-            except Exception:
+            except Exception as exc:
                 await client.aclose()
+                if not settings.AGENT_RUN_ALLOW_MEMORY_FALLBACK:
+                    raise RuntimeError("Redis agent-run coordination is unavailable") from exc
                 self._backend = "memory"
             else:
                 self._redis = client

@@ -17,3 +17,4 @@ class ModelInvocationConfig(BaseModel):
     model_name: str
     api_key: SecretStr = Field(exclude=True)
     temperature: float = 0.0
+    context_window: int = Field(default=64000, ge=1000, le=1000000)

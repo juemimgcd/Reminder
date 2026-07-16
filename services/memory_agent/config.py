@@ -28,9 +28,23 @@ class MemoryAgentSettings(BaseSettings):
     ANSWER_LLM_API_KEY: SecretStr = SecretStr("")
     ANSWER_LLM_MODEL: str = ""
     ANSWER_LLM_TEMPERATURE: float = 0.0
+    ANSWER_LLM_CONTEXT_WINDOW: int = Field(default=64000, ge=1000, le=1000000)
+    ANSWER_LLM_MAX_ATTEMPTS: int = Field(default=3, ge=1, le=5)
+    ANSWER_LLM_RETRY_BASE_SECONDS: float = Field(default=0.5, ge=0, le=30)
+    ANSWER_LLM_RETRY_MAX_SECONDS: float = Field(default=4.0, ge=0, le=60)
+    ANSWER_LLM_FALLBACK_PROVIDER: str = ""
+    ANSWER_LLM_FALLBACK_BASE_URL: str = ""
+    ANSWER_LLM_FALLBACK_API_KEY: SecretStr = SecretStr("")
+    ANSWER_LLM_FALLBACK_MODEL: str = ""
+    ANSWER_LLM_FALLBACK_TEMPERATURE: float = 0.0
+    ANSWER_LLM_FALLBACK_CONTEXT_WINDOW: int = Field(default=64000, ge=1000, le=1000000)
     ANSWER_MAX_CONTEXT_CHARS: int = Field(default=24000, ge=1000, le=100000)
+    ANSWER_CONTEXT_CHARS_PER_TOKEN: float = Field(default=3.0, ge=1, le=8)
+    ANSWER_PROMPT_RESERVE_TOKENS: int = Field(default=1024, ge=256, le=16000)
     ANSWER_MAX_QUESTION_CHARS: int = Field(default=8000, ge=100, le=20000)
     ANSWER_MAX_OUTPUT_TOKENS: int = Field(default=1200, ge=100, le=8000)
+    ANSWER_RUN_STALE_SECONDS: int = Field(default=180, ge=30, le=86400)
+    ANSWER_RUN_RECOVERY_BATCH_SIZE: int = Field(default=100, ge=1, le=1000)
 
 
 settings = MemoryAgentSettings()

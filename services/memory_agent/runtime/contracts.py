@@ -43,6 +43,7 @@ class GenerationRequest(BaseModel):
     question: str = Field(exclude=True, repr=False)
     evidence: list[RetrievedEvidence] = Field(repr=False)
     model: ModelInvocationConfig | None = Field(default=None, exclude=True)
+    allow_model_fallback: bool = False
 
 
 class GeneratedAnswer(BaseModel):
@@ -55,6 +56,10 @@ class GeneratedAnswer(BaseModel):
     prompt_tokens: int = Field(default=0, ge=0)
     completion_tokens: int = Field(default=0, ge=0)
     cost: float = Field(default=0, ge=0)
+    model_attempts: list[dict[str, Any]] = Field(default_factory=list)
+    selected_provider: str | None = None
+    selected_model: str | None = None
+    fallback_used: bool = False
 
     @property
     def total_tokens(self) -> int:
@@ -71,6 +76,7 @@ class CitationResult(BaseModel):
 class AnswerRunData(BaseModel):
     run_id: str
     request_id: str
+    trace_id: str
     owner_id: int
     knowledge_base_id: str | None
     session_id: str | None
@@ -89,6 +95,11 @@ class AnswerRunData(BaseModel):
     total_tokens: int | None
     cost: float | None
     error_code: str | None
+    response_json: dict[str, Any] | None
+    model_attempts: list[dict[str, Any]]
+    selected_provider: str | None
+    selected_model: str | None
+    fallback_used: bool
     created_at: datetime
     started_at: datetime
     retrieval_completed_at: datetime | None

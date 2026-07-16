@@ -7,9 +7,11 @@ from typing import Any
 from sqlalchemy import select
 
 from services.memory_agent.celery_app import celery_app
+from services.memory_agent.config import settings
 from services.memory_agent.database import engine, open_write_session
 from services.memory_agent.models.inbox_event import InboxEvent
 from services.memory_agent.observability.context import observation_context, safe_log
+from services.memory_agent.repositories.runs import AnswerRunRepository
 from services.memory_agent.services.event_dispatcher import EventProcessResult, dispatch_inbox_event
 
 logger = logging.getLogger(__name__)
@@ -65,5 +67,21 @@ def dispatch_pending_events_task(batch_limit: int = DEFAULT_PENDING_EVENT_BATCH_
 async def _dispatch_pending_events_and_dispose(batch_limit: int) -> int:
     try:
         return await _dispatch_pending_events(batch_limit)
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(name="memory_agent.fail_stale_answer_runs")
+def fail_stale_answer_runs_task() -> int:
+    return asyncio.run(_fail_stale_answer_runs_and_dispose())
+
+
+async def _fail_stale_answer_runs_and_dispose() -> int:
+    try:
+        cutoff = datetime.now(UTC) - timedelta(seconds=settings.ANSWER_RUN_STALE_SECONDS)
+        return await AnswerRunRepository().fail_stale(
+            stale_before=cutoff,
+            limit=settings.ANSWER_RUN_RECOVERY_BATCH_SIZE,
+        )
     finally:
         await engine.dispose()

@@ -1,4 +1,4 @@
-"""In-process Agent runtime for online AI requests."""
+"""Mneme orchestration contracts; online answers are owned by Memory Agent."""
 
 from app.mneme.agent.contracts import AgentRequest, AgentResponse
 from app.mneme.agent.service import MnemeAgent

@@ -54,15 +54,39 @@ the service-token HTTP contract, and persist the validated response and run ID.
 The Agent owns retrieval, answer modes, citations, memory policy, and answer
 quality evaluation in its own database and worker.
 
-The old `app.mneme.agent` contracts and compatibility retrieval modules remain
-only for migration-era tests and document-pipeline cleanup; they are not an
-online fallback. Removing those compatibility files is a follow-up after the
-remaining document/resource branches are migrated.
+`app.mneme.agent` now contains only backend orchestration contracts, durable-run
+coordination, and the narrow RAG adapter used by document resources. The old
+in-process prompt, history, context, capability, and tool runtime was removed;
+online answer ownership is no longer duplicated across the backend and Memory
+Agent service.
 
-Within that compatibility layer, `agent/capabilities.py` indexes trusted
-backend capabilities and records eligible, selected, and excluded capability
-IDs. `agent/runtime_events.py` provides trace-aware structured logging,
-bounded metrics, and best-effort PostgreSQL audit subscribers without storing
-prompts, answers, tool arguments, or evidence payloads. Public SSE lifecycle
-events carry the same trace and run identifiers while online answers continue
-to use the independent Memory Agent service.
+The Memory Agent answer contract is idempotent per owner and request ID. The
+backend sends a stable request ID for durable-run retries, while explicit user
+retries receive a new request ID. Completed responses can therefore be replayed
+after a lost HTTP response without making a failed user retry permanently
+unusable.
+
+The streaming endpoint publishes validated phase transitions and a final
+response. Cancellation propagates from the backend run through the HTTP stream
+to the Memory Agent task, and the backend persists the assistant message only
+after the final response arrives. Model attempts, selected provider/model,
+fallback use, trace IDs, stale runs, and phase/token/cost metrics are persisted
+or exported without logging prompts or answers.
+
+## Operational checks
+
+Use `/health/readiness` for the API/database boundary, `/health/worker` for the
+queue consumer boundary, and `/metrics` for run outcomes. Production should
+alert when `memory_agent_stale_runs` remains above zero for two recovery
+intervals, when no Memory Agent worker is ready, or when the increase in
+`memory_agent_failed_runs` is sustained. Track
+`memory_agent_model_retries_total` and `memory_agent_model_fallbacks_total`
+together: a rising fallback ratio is an early provider-health signal even when
+answers still complete successfully. Phase-duration sum/count, token, and cost
+series should be compared by answer mode so a retrieval slowdown is not hidden
+inside model latency.
+
+The backend must set `AGENT_RUN_ALLOW_MEMORY_FALLBACK=false` in production.
+With that policy, loss of Redis coordination fails requests visibly and later
+calls retry initialization instead of silently splitting session queues across
+process-local stores.
