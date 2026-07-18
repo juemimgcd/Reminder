@@ -16,6 +16,7 @@ from app.mneme.memoria.server.runtime.orchestrator import (
     RuntimeDependencyError,
 )
 from app.mneme.memoria.server.runtime.retriever import ScopedEvidenceRetriever
+from app.mneme.memoria.server.runtime.streaming import answer_chunks, phase_event_name
 from app.mneme.memoria.server.runtime.tools import ScopedToolExecutor
 from app.mneme.memoria.server.security.service_tokens import ANSWERS_WRITE_SCOPE
 
@@ -82,27 +83,107 @@ async def stream_answer(
 
     async def event_source() -> AsyncIterator[str]:
         queue: asyncio.Queue[AnswerStreamEvent | None] = asyncio.Queue()
+        next_sequence = 0
 
-        async def emit(phase: str, status: str, run_id: str) -> None:
+        def build_event(**values: Any) -> AnswerStreamEvent:
+            nonlocal next_sequence
+            next_sequence += 1
+            return AnswerStreamEvent(sequence=next_sequence, **values)
+
+        async def emit(
+            phase: str,
+            status: str,
+            run_id: str,
+            public_payload: dict[str, Any],
+        ) -> None:
+            if phase == "retrieve" and status == "completed":
+                source_counts = public_payload.get("source_counts")
+                if isinstance(source_counts, dict):
+                    for source_type, result_count in sorted(source_counts.items()):
+                        if not isinstance(source_type, str) or not isinstance(result_count, int):
+                            continue
+                        await queue.put(
+                            build_event(
+                                type="phase",
+                                name="retrieval.source_completed",
+                                run_id=run_id,
+                                phase=phase,
+                                status=status,
+                                public_payload={
+                                    "source_type": source_type,
+                                    "result_count": result_count,
+                                },
+                            )
+                        )
+                await queue.put(
+                    build_event(
+                        type="phase",
+                        name="evidence.selected",
+                        run_id=run_id,
+                        phase=phase,
+                        status=status,
+                        public_payload=public_payload,
+                    )
+                )
+                return
+            name = phase_event_name(phase, status)
+            if name is None:
+                return
             await queue.put(
-                AnswerStreamEvent(
+                build_event(
                     type="phase",
+                    name=name,
                     run_id=run_id,
                     phase=phase,
                     status=status,
+                    public_payload=public_payload,
                 )
             )
 
         async def execute() -> None:
             try:
                 response = await agent.run(request, event_callback=emit)
-                await queue.put(AnswerStreamEvent(type="final", run_id=response.run_id, response=response))
+                for content in answer_chunks(response.answer):
+                    await queue.put(
+                        build_event(
+                            type="delta",
+                            name="answer.delta",
+                            run_id=response.run_id,
+                            phase="answer",
+                            status="streaming",
+                            content=content,
+                        )
+                    )
+                    # Give the transport a scheduling point so validated chunks are
+                    # flushed as observable deltas instead of one coalesced frame.
+                    await asyncio.sleep(0.02)
+                await queue.put(
+                    build_event(
+                        type="final",
+                        name="answer.completed",
+                        run_id=response.run_id,
+                        phase="answer",
+                        status="completed",
+                        response=response,
+                        public_payload={
+                            "citation_count": len(response.citations),
+                            "insufficient_evidence": response.insufficient_evidence,
+                        },
+                    )
+                )
             except ValueError:
-                await queue.put(AnswerStreamEvent(type="error", code="AGENT_VALIDATION_ERROR"))
+                await queue.put(
+                    build_event(
+                        type="error",
+                        name="run.failed",
+                        code="AGENT_VALIDATION_ERROR",
+                    )
+                )
             except (AnswerRunExecutionError, RuntimeDependencyError) as exc:
                 await queue.put(
-                    AnswerStreamEvent(
+                    build_event(
                         type="error",
+                        name="run.failed",
                         run_id=getattr(exc, "run_id", None),
                         code=exc.error_code,
                     )
@@ -110,7 +191,13 @@ async def stream_answer(
             except asyncio.CancelledError:
                 raise
             except Exception:
-                await queue.put(AnswerStreamEvent(type="error", code="AGENT_INTERNAL_ERROR"))
+                await queue.put(
+                    build_event(
+                        type="error",
+                        name="run.failed",
+                        code="AGENT_INTERNAL_ERROR",
+                    )
+                )
             finally:
                 await queue.put(None)
 
@@ -121,7 +208,7 @@ async def stream_answer(
                 if event is None:
                     break
                 payload = json.dumps(event.model_dump(mode="json", exclude_none=True), separators=(",", ":"))
-                yield f"event: {event.type}\ndata: {payload}\n\n"
+                yield f"id: {event.sequence}\nevent: {event.name}\ndata: {payload}\n\n"
         finally:
             if not task.done():
                 task.cancel()

@@ -50,9 +50,14 @@ class AnswerResponse(BaseModel):
 
 
 class AnswerStreamEvent(BaseModel):
-    type: Literal["phase", "final", "error"]
+    type: Literal["phase", "delta", "final", "error"]
+    schema_version: Literal["2"] = "2"
+    sequence: int = Field(ge=1)
+    name: str
     run_id: str | None = None
     phase: str | None = None
     status: str | None = None
+    content: str | None = None
+    public_payload: dict[str, Any] = Field(default_factory=dict)
     code: str | None = None
     response: AnswerResponse | None = None

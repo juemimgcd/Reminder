@@ -340,11 +340,50 @@ export interface ChatSessionDetailData {
 
 export interface AgentStreamEvent {
   type: "lifecycle" | "assistant" | "tool" | "compaction" | "error";
+  name?:
+    | "run.queued"
+    | "run.started"
+    | "query.rewritten"
+    | "retrieval.started"
+    | "retrieval.source_completed"
+    | "evidence.selected"
+    | "answer.started"
+    | "answer.delta"
+    | "citation.resolved"
+    | "answer.completed"
+    | "tool.started"
+    | "tool.completed"
+    | "context.compacted"
+    | "run.failed"
+    | "run.cancelled";
+  schema_version?: string;
+  event_id?: string;
+  run_id?: string;
+  sequence?: number;
+  created_at?: string;
+  agent_role?: string;
   phase?: string;
   content?: string;
   tool?: string;
   error?: string;
   metadata?: Record<string, unknown>;
+}
+
+export type AgentStreamConnectionState =
+  | "idle"
+  | "connecting"
+  | "streaming"
+  | "reconnecting"
+  | "completed"
+  | "cancelled"
+  | "failed";
+
+export interface AgentRunTraceItem {
+  id: string;
+  name: string;
+  label: string;
+  sequence?: number;
+  state: "active" | "complete" | "warning";
 }
 
 export type AgentRunStatus = "queued" | "running" | "completed" | "failed" | "aborting" | "aborted";
@@ -363,7 +402,63 @@ export interface AgentRunData {
   completed_at: string | null;
   error: string | null;
   last_event_id: string | null;
+  last_event_sequence: number;
   queue_wait_ms: number | null;
+}
+
+export interface ChannelGatewayConfigurationData {
+  channel: "feishu";
+  enabled: boolean;
+  ready: boolean;
+  account_id: string;
+  app_id_configured: boolean;
+  app_secret_configured: boolean;
+  verification_token_configured: boolean;
+  callback_path: string;
+  delivery_queue: string;
+  max_text_chars: number;
+}
+
+export interface ChannelLinkCodeData {
+  channel: "feishu";
+  account_id: string;
+  code: string;
+  expires_at: string;
+  binding_command: string;
+}
+
+export interface ChannelIdentityData {
+  id: string;
+  channel: string;
+  account_id: string;
+  external_user_id: string;
+  verified_at: string;
+  status: string;
+}
+
+export interface ChannelConversationData {
+  id: string;
+  channel: string;
+  account_id: string;
+  external_conversation_id: string;
+  external_thread_id: string | null;
+  chat_session_id: string;
+  knowledge_base_id: string | null;
+  answer_mode: AnswerMode;
+}
+
+export interface ChannelDeliveryData {
+  id: string;
+  channel: string;
+  agent_run_id: string | null;
+  assistant_message_id: string | null;
+  status: string;
+  parts_sent: number;
+  part_count: number;
+  attempt_count: number;
+  next_attempt_at: string | null;
+  processed_at: string | null;
+  last_error: string | null;
 }
 
 export interface NotificationData {

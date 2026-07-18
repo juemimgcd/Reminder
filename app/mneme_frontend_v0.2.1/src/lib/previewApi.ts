@@ -10,6 +10,11 @@
   ChatSessionData,
   ChatSessionDetailData,
   CompanionAnswerResult,
+  ChannelConversationData,
+  ChannelDeliveryData,
+  ChannelGatewayConfigurationData,
+  ChannelIdentityData,
+  ChannelLinkCodeData,
   DocumentContentData,
   DocumentDeleteData,
   DocumentFolderData,
@@ -222,6 +227,69 @@ let aiModelConfigs: AiModelConfigData[] = [
     has_api_key: true,
     created_at: now,
     updated_at: now,
+  },
+];
+
+const previewChannelConfiguration: ChannelGatewayConfigurationData = {
+  channel: "feishu",
+  enabled: true,
+  ready: true,
+  account_id: "default",
+  app_id_configured: true,
+  app_secret_configured: true,
+  verification_token_configured: true,
+  callback_path: "/channels/feishu/webhook",
+  delivery_queue: "channel_delivery",
+  max_text_chars: 3500,
+};
+let previewChannelIdentities: ChannelIdentityData[] = [
+  {
+    id: "identity-preview-feishu",
+    channel: "feishu",
+    account_id: "default",
+    external_user_id: "ou_preview_operator",
+    verified_at: now,
+    status: "active",
+  },
+];
+let previewChannelConversations: ChannelConversationData[] = [
+  {
+    id: "conversation-preview-feishu",
+    channel: "feishu",
+    account_id: "default",
+    external_conversation_id: "oc_preview_research",
+    external_thread_id: null,
+    chat_session_id: "chat-preview-vault-review",
+    knowledge_base_id: "kb-demo-research",
+    answer_mode: "kb_qa",
+  },
+];
+let previewChannelDeliveries: ChannelDeliveryData[] = [
+  {
+    id: "delivery-preview-success",
+    channel: "feishu",
+    agent_run_id: "run-preview-heartbeat",
+    assistant_message_id: "message-preview",
+    status: "succeeded",
+    parts_sent: 2,
+    part_count: 2,
+    attempt_count: 1,
+    next_attempt_at: null,
+    processed_at: now,
+    last_error: null,
+  },
+  {
+    id: "delivery-preview-retry",
+    channel: "feishu",
+    agent_run_id: "run-preview-retry",
+    assistant_message_id: null,
+    status: "dead_letter",
+    parts_sent: 0,
+    part_count: 1,
+    attempt_count: 5,
+    next_attempt_at: null,
+    processed_at: null,
+    last_error: "Feishu API temporarily unavailable",
   },
 ];
 
@@ -738,11 +806,26 @@ const previewApi = {
     payload: { question: string; answer_mode: AnswerMode; top_k?: number },
     onEvent: (event: import("../types").AgentStreamEvent) => void,
   ): Promise<void> {
-    onEvent({ type: "lifecycle", phase: "start" });
+    onEvent({ type: "lifecycle", name: "run.started", phase: "started" });
+    onEvent({ type: "lifecycle", name: "retrieval.started", phase: "retrieve" });
     const detail = await this.sendChatSessionMessage(token, sessionId, payload);
     const answer = detail.messages.find((item) => item.role === "assistant")?.content ?? "";
-    if (answer) onEvent({ type: "assistant", content: answer });
-      onEvent({ type: "lifecycle", phase: "end" });
+    onEvent({
+      type: "lifecycle",
+      name: "retrieval.source_completed",
+      phase: "retrieve",
+      metadata: { source_type: "document", result_count: 2 },
+    });
+    onEvent({
+      type: "lifecycle",
+      name: "evidence.selected",
+      phase: "retrieve",
+      metadata: { evidence_count: 2, source_counts: { document: 2 } },
+    });
+    for (let index = 0; index < answer.length; index += 24) {
+      onEvent({ type: "assistant", name: "answer.delta", content: answer.slice(index, index + 24) });
+    }
+    onEvent({ type: "lifecycle", name: "answer.completed", phase: "completed" });
     },
     createAgentRun(
       _token: string,
@@ -768,6 +851,7 @@ const previewApi = {
         completed_at: null,
         error: null,
         last_event_id: null,
+        last_event_sequence: 0,
         queue_wait_ms: null,
         payload,
       };
@@ -778,13 +862,24 @@ const previewApi = {
       token: string,
       runId: string,
       onEvent: (event: AgentStreamEvent) => void,
+      options: {
+        signal?: AbortSignal;
+        cursor?: string;
+        onConnectionState?: (
+          state: "connecting" | "streaming" | "reconnecting" | "completed",
+          attempt: number,
+        ) => void;
+      } = {},
     ): Promise<void> {
       const run = previewAgentRuns.get(runId);
       if (!run) return;
+      options.onConnectionState?.("connecting", 0);
       run.status = "running";
+      options.onConnectionState?.("streaming", 0);
       await this.streamChatSessionMessage(token, run.session_id, run.payload, onEvent);
       run.status = "completed";
       run.completed_at = new Date().toISOString();
+      options.onConnectionState?.("completed", 0);
     },
     getAgentRun(_token: string, runId: string): Promise<AgentRunData> {
       return delay(previewAgentRuns.get(runId) ?? [...previewAgentRuns.values()][0]);
@@ -795,6 +890,62 @@ const previewApi = {
       run.completed_at = new Date().toISOString();
       return delay(run);
     },
+  getChannelConfiguration(): Promise<ChannelGatewayConfigurationData> {
+    return delay(previewChannelConfiguration);
+  },
+  createChannelLinkCode(_token: string, accountId: string): Promise<ChannelLinkCodeData> {
+    return delay({
+      channel: "feishu",
+      account_id: accountId,
+      code: "MNEME-4821",
+      expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
+      binding_command: "/bind MNEME-4821",
+    });
+  },
+  listChannelIdentities(): Promise<ChannelIdentityData[]> {
+    return delay(previewChannelIdentities);
+  },
+  listChannelConversations(): Promise<ChannelConversationData[]> {
+    return delay(previewChannelConversations);
+  },
+  configureChannelConversation(
+    _token: string,
+    conversationId: string,
+    payload: {
+      chat_session_id?: string | null;
+      knowledge_base_id?: string | null;
+      answer_mode: AnswerMode;
+    },
+  ): Promise<ChannelConversationData> {
+    previewChannelConversations = previewChannelConversations.map((item) =>
+      item.id === conversationId
+        ? {
+            ...item,
+            chat_session_id: payload.chat_session_id ?? item.chat_session_id,
+            knowledge_base_id: payload.knowledge_base_id ?? null,
+            answer_mode: payload.answer_mode,
+          }
+        : item,
+    );
+    return delay(
+      previewChannelConversations.find((item) => item.id === conversationId)
+        ?? previewChannelConversations[0],
+    );
+  },
+  listChannelDeliveries(): Promise<ChannelDeliveryData[]> {
+    return delay(previewChannelDeliveries);
+  },
+  retryChannelDelivery(_token: string, deliveryId: string): Promise<ChannelDeliveryData> {
+    previewChannelDeliveries = previewChannelDeliveries.map((item) =>
+      item.id === deliveryId
+        ? { ...item, status: "pending", attempt_count: 0, last_error: null }
+        : item,
+    );
+    return delay(
+      previewChannelDeliveries.find((item) => item.id === deliveryId)
+        ?? previewChannelDeliveries[0],
+    );
+  },
   listNotifications(): Promise<NotificationListData> {
     return delay({
       items: previewNotifications,
@@ -879,7 +1030,9 @@ const previewApi = {
     return delay(memoryGovernanceData);
   },
   rebuildMemory(_token: string, knowledgeBaseId: string): Promise<TaskRecordData> {
-    return delay(createTask("task-preview-memory-kb", knowledgeBaseId));
+    const task = createTask("task-preview-memory-kb", knowledgeBaseId);
+    task.result_summary = "Memory rebuild processed 2 documents";
+    return delay(task);
   },
   documentMemory(): Promise<MemoryLibraryData> {
     return delay(memoryLibraryData);

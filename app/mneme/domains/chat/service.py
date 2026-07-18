@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.mneme.channels.delivery import enqueue_answer_channel_delivery
 from app.mneme.conf.config import settings
 from app.mneme.crud.chat_message import (
     create_chat_message,
@@ -41,9 +42,10 @@ from app.mneme.memoria.chat_bridge import (
 )
 from app.mneme.memoria.clients.memory_agent import MemoryAgentRejected, MemoryAgentUnavailable
 from app.mneme.memoria.contracts import AnswerMode
-from app.mneme.memoria.events import AgentEvent
+from app.mneme.memoria.events import AgentEvent, AgentRunEventType
 from app.mneme.memoria.persistence.runs import agent_run_store
 from app.mneme.memoria.schemas.memory_agent import MemoryAgentStreamEvent
+from app.mneme.memoria.server.runtime.streaming import answer_chunks
 from app.mneme.models.chat_message import ChatMessage
 from app.mneme.models.chat_session import ChatSession
 from app.mneme.models.knowledge_base import KnowledgeBase
@@ -448,6 +450,12 @@ async def ask_in_chat_session(
         assistant_content=assistant_message.content,
         assistant_created_at=assistant_message.created_at,
     )
+    if assistant_message.agent_run_id:
+        await enqueue_answer_channel_delivery(
+            db,
+            agent_run_id=assistant_message.agent_run_id,
+            assistant_message=assistant_message,
+        )
     await db.refresh(session)
     return session, [user_message, assistant_message]
 
@@ -466,15 +474,27 @@ async def stream_in_chat_session(
     session_turn_claimed: bool = False,
 ) -> AsyncIterator[AgentEvent]:
     if abort_signal is not None and abort_signal.is_set():
-        yield AgentEvent.lifecycle("aborted", reason="abort_before_start", trace_id=trace_id, run_id=agent_run_id)
+        yield AgentEvent.rag_progress(
+            AgentRunEventType.RUN_CANCELLED,
+            phase="cancelled",
+            run_id=agent_run_id,
+            reason="abort_before_start",
+            trace_id=trace_id,
+        )
         return
-    yield AgentEvent.lifecycle("start", trace_id=trace_id, run_id=agent_run_id)
+    yield AgentEvent.rag_progress(
+        AgentRunEventType.RUN_STARTED,
+        phase="started",
+        run_id=agent_run_id,
+        trace_id=trace_id,
+    )
     async with _chat_session_turn(
         session_id,
         abort_signal=abort_signal,
         already_claimed=session_turn_claimed,
     ):
         progress_queue: asyncio.Queue[MemoryAgentStreamEvent] = asyncio.Queue()
+        saw_answer_delta = False
 
         async def observe(event: MemoryAgentStreamEvent) -> None:
             await progress_queue.put(event)
@@ -499,36 +519,87 @@ async def stream_in_chat_session(
                     progress = await asyncio.wait_for(progress_queue.get(), timeout=0.1)
                 except TimeoutError:
                     continue
-                if progress.type == "phase":
-                    yield AgentEvent.lifecycle(
-                        f"memory_agent_{progress.phase}",
-                        status=progress.status,
-                        memory_agent_run_id=progress.run_id,
-                        trace_id=trace_id,
-                        run_id=agent_run_id,
+                event = _memory_agent_progress_to_event(
+                    progress,
+                    agent_run_id=agent_run_id,
+                    trace_id=trace_id,
+                )
+                if event is not None:
+                    saw_answer_delta = (
+                        saw_answer_delta
+                        or event.name == AgentRunEventType.ANSWER_DELTA
                     )
+                    yield event
             while not progress_queue.empty():
                 progress = progress_queue.get_nowait()
-                if progress.type == "phase":
-                    yield AgentEvent.lifecycle(
-                        f"memory_agent_{progress.phase}",
-                        status=progress.status,
-                        memory_agent_run_id=progress.run_id,
-                        trace_id=trace_id,
-                        run_id=agent_run_id,
+                event = _memory_agent_progress_to_event(
+                    progress,
+                    agent_run_id=agent_run_id,
+                    trace_id=trace_id,
+                )
+                if event is not None:
+                    saw_answer_delta = (
+                        saw_answer_delta
+                        or event.name == AgentRunEventType.ANSWER_DELTA
                     )
+                    yield event
             _session, messages = await answer_task
         finally:
             if not answer_task.done():
                 answer_task.cancel()
             await asyncio.gather(answer_task, return_exceptions=True)
     if abort_signal is not None and abort_signal.is_set():
-        yield AgentEvent.lifecycle("aborted", reason="abort_after_answer", trace_id=trace_id, run_id=agent_run_id)
+        yield AgentEvent.rag_progress(
+            AgentRunEventType.RUN_CANCELLED,
+            phase="cancelled",
+            run_id=agent_run_id,
+            reason="abort_after_answer",
+            trace_id=trace_id,
+        )
         return
-    yield AgentEvent.assistant_delta(messages[-1].content, trace_id=trace_id, run_id=agent_run_id)
-    yield AgentEvent.lifecycle("end", trace_id=trace_id, run_id=agent_run_id)
+    if not saw_answer_delta:
+        for content in answer_chunks(messages[-1].content):
+            yield AgentEvent.assistant_delta(
+                content,
+                trace_id=trace_id,
+                run_id=agent_run_id,
+            )
+    yield AgentEvent.rag_progress(
+        AgentRunEventType.ANSWER_COMPLETED,
+        phase="completed",
+        run_id=agent_run_id,
+        trace_id=trace_id,
+    )
 
 
+def _memory_agent_progress_to_event(
+    progress: MemoryAgentStreamEvent,
+    *,
+    agent_run_id: str | None,
+    trace_id: str | None,
+) -> AgentEvent | None:
+    if progress.type == "delta" and progress.content:
+        return AgentEvent.assistant_delta(
+            progress.content,
+            memory_agent_run_id=progress.run_id,
+            trace_id=trace_id,
+            run_id=agent_run_id,
+        )
+    if progress.type != "phase":
+        return None
+    try:
+        name = AgentRunEventType(progress.name)
+    except ValueError:
+        return None
+    return AgentEvent.rag_progress(
+        name,
+        phase=progress.phase or "",
+        run_id=agent_run_id,
+        status=progress.status,
+        memory_agent_run_id=progress.run_id,
+        trace_id=trace_id,
+        **progress.public_payload,
+    )
 @asynccontextmanager
 async def _chat_session_turn(
     session_id: str,

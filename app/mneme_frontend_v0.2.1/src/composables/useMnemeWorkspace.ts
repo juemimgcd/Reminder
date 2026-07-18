@@ -8,12 +8,19 @@ import { safeStorageGet, safeStorageRemove, safeStorageSet } from "../lib/safeSt
 import type {
   AiModelConfigData,
   AiModelProviderPreset,
+  AgentRunTraceItem,
+  AgentStreamConnectionState,
   AgentStreamEvent,
   AnswerMode,
   AuthMode,
   ChatQueryData,
   ChatMessageData,
   ChatSessionData,
+  ChannelConversationData,
+  ChannelDeliveryData,
+  ChannelGatewayConfigurationData,
+  ChannelIdentityData,
+  ChannelLinkCodeData,
   CompanionAnswerResult,
   DocumentListItem,
   EvidenceProfileData,
@@ -94,11 +101,23 @@ export function useMnemeWorkspace() {
   const notificationUnreadCount = ref(0);
   const notificationPanelOpen = ref(false);
   const chatPending = ref(false);
+  const activeChatRunId = ref("");
+  const chatRunProgress = ref("");
+  const chatStreamState = ref<AgentStreamConnectionState>("idle");
+  const chatRunTrace = ref<AgentRunTraceItem[]>([]);
   const chatError = ref<{ message: string; messageId: string | null; retryable: boolean } | null>(null);
+  const channelConfiguration = ref<ChannelGatewayConfigurationData | null>(null);
+  const channelIdentities = ref<ChannelIdentityData[]>([]);
+  const channelConversations = ref<ChannelConversationData[]>([]);
+  const channelDeliveries = ref<ChannelDeliveryData[]>([]);
+  const channelLinkCode = ref<ChannelLinkCodeData | null>(null);
+  const channelPending = ref(false);
+  const channelActionStatus = ref("");
   const indexTaskMonitors = new Map<string, AbortController>();
   const maintenanceTaskMonitors = new Set<AbortController>();
   let documentPreviewGeneration = 0;
   let notificationPoll: ReturnType<typeof setInterval> | null = null;
+  let activeChatController: AbortController | null = null;
 
   const loginForm = ref({ username: "", password: "" });
   const registerForm = ref({ username: "", displayName: "", password: "", confirmPassword: "" });
@@ -220,7 +239,32 @@ export function useMnemeWorkspace() {
     const graphRequest = activeKnowledgeBaseId.value
       ? applyRequest(generation, api.getKnowledgeBaseGraph(token.value, activeKnowledgeBaseId.value, { include_memory: true, include_relationships: true }), (data) => { graphData.value = data; })
       : Promise.resolve(true);
-    const outcomes = [await modelRequest, await neo4jRequest, await graphRequest];
+    const channelRequest = (async () => {
+      try {
+        const [configuration, identities, conversations, deliveries] =
+          await Promise.all([
+            api.getChannelConfiguration(token.value),
+            api.listChannelIdentities(token.value),
+            api.listChannelConversations(token.value),
+            api.listChannelDeliveries(token.value),
+          ]);
+        if (workspaceLoaders.isCurrent(generation)) {
+          channelConfiguration.value = configuration;
+          channelIdentities.value = identities;
+          channelConversations.value = conversations;
+          channelDeliveries.value = deliveries;
+        }
+        return true;
+      } catch {
+        return false;
+      }
+    })();
+    const outcomes = [
+      await modelRequest,
+      await neo4jRequest,
+      await graphRequest,
+      await channelRequest,
+    ];
     return loadResult(outcomes);
   }
 
@@ -575,6 +619,22 @@ export function useMnemeWorkspace() {
     chatMessages.value = [...merged.values()].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
   }
 
+  function recordRunTrace(
+    event: AgentStreamEvent,
+    label: string,
+    state: AgentRunTraceItem["state"] = "complete",
+  ) {
+    const id = event.event_id ?? `${event.name ?? event.type}-${event.sequence ?? Date.now()}`;
+    const next: AgentRunTraceItem = {
+      id,
+      name: event.name ?? event.type,
+      label,
+      sequence: event.sequence,
+      state,
+    };
+    chatRunTrace.value = [...chatRunTrace.value.filter((item) => item.id !== id), next].slice(-12);
+  }
+
   async function sendChatMessage(options: { retryMessageId?: string; regenerateMessageId?: string; mode?: AnswerMode } = {}) {
     if (!token.value || !chatQuestion.value.trim() || chatPending.value) {
       return;
@@ -589,8 +649,10 @@ export function useMnemeWorkspace() {
     if (!options.retryMessageId && !options.regenerateMessageId) chatQuestion.value = "";
     chatPending.value = true;
     chatError.value = null;
+    chatRunTrace.value = [];
+    chatStreamState.value = "connecting";
     try {
-      if (!options.retryMessageId && !options.regenerateMessageId && !IS_PREVIEW_MODE) {
+      if (!options.retryMessageId && !options.regenerateMessageId) {
         const sessionId = activeChatSessionId.value;
         const session = chatSessions.value.find((item) => item.id === sessionId);
         const now = new Date().toISOString();
@@ -616,10 +678,56 @@ export function useMnemeWorkspace() {
           { ...pendingBase, id: pendingAssistantId, role: "assistant", content: "" },
         ];
         const handleEvent = (event: AgentStreamEvent) => {
-          if (event.type === "assistant" && event.content) {
+          if ((event.name === "answer.delta" || event.type === "assistant") && event.content) {
             chatMessages.value = chatMessages.value.map((message) =>
               message.id === pendingAssistantId ? { ...message, content: message.content + event.content } : message,
             );
+          } else if (event.name === "retrieval.started") {
+            chatRunProgress.value = "Searching memory and document evidence…";
+            recordRunTrace(event, "Retrieval started", "active");
+          } else if (event.name === "retrieval.source_completed") {
+            const source = String(event.metadata?.source_type ?? "source");
+            const count = Number(event.metadata?.result_count ?? 0);
+            chatRunProgress.value = `${source} retrieval completed (${count} items)`;
+            recordRunTrace(event, `${source} · ${count} results`);
+          } else if (event.name === "evidence.selected") {
+            const count = Number(event.metadata?.evidence_count ?? 0);
+            const sourceCounts = event.metadata?.source_counts;
+            const sourceSummary =
+              sourceCounts && typeof sourceCounts === "object"
+                ? Object.entries(sourceCounts)
+                    .filter(([, value]) => Number(value) > 0)
+                    .map(([source, value]) => `${source} ${Number(value)}`)
+                    .join(", ")
+                : "";
+            chatRunProgress.value =
+              count > 0
+                ? `Selected ${count} evidence items${sourceSummary ? ` (${sourceSummary})` : ""}`
+                : "No supporting evidence selected";
+            recordRunTrace(event, count > 0 ? `${count} evidence items selected` : "No evidence selected", count > 0 ? "complete" : "warning");
+          } else if (event.name === "answer.started") {
+            chatRunProgress.value = "Composing an evidence-backed answer…";
+            recordRunTrace(event, "Answer generation started", "active");
+          } else if (event.name === "citation.resolved") {
+            chatRunProgress.value = "Checking citations…";
+            recordRunTrace(event, "Citations resolved");
+          } else if (event.name === "answer.completed") {
+            chatRunProgress.value = "Answer completed";
+            recordRunTrace(event, "Answer completed");
+            chatStreamState.value = "completed";
+          } else if (event.name === "run.cancelled") {
+            chatRunProgress.value = "Cancelled";
+            recordRunTrace(event, "Run cancelled", "warning");
+            chatStreamState.value = "cancelled";
+          } else if (event.name === "run.queued") {
+            recordRunTrace(event, "Run queued", "active");
+          } else if (event.name === "run.started") {
+            recordRunTrace(event, "Run started", "active");
+          } else if (event.name === "query.rewritten") {
+            recordRunTrace(event, "Query normalized");
+          } else if (event.name === "run.failed") {
+            recordRunTrace(event, event.error || "Run failed", "warning");
+            chatStreamState.value = "failed";
           } else if (event.type === "tool" && event.tool) {
             banner.value = event.phase === "start" ? `Running ${event.tool}...` : `${event.tool} completed`;
           } else if (event.type === "error" && event.error) {
@@ -633,7 +741,22 @@ export function useMnemeWorkspace() {
           client_request_id:
             globalThis.crypto?.randomUUID?.() ?? `request-${Date.now()}-${Math.random().toString(16).slice(2)}`,
         });
-        await api.streamAgentRun(token.value, run.run_id, handleEvent);
+        activeChatRunId.value = run.run_id;
+        chatRunProgress.value = "Queued";
+        recordRunTrace({ type: "lifecycle", name: "run.queued", run_id: run.run_id }, "Run queued", "active");
+        const controller = new AbortController();
+        activeChatController = controller;
+        await api.streamAgentRun(token.value, run.run_id, handleEvent, {
+          signal: controller.signal,
+          onConnectionState: (state, attempt) => {
+            chatStreamState.value = state;
+            if (state === "reconnecting") {
+              chatRunProgress.value = `Connection interrupted · reconnecting (${attempt}/3)…`;
+            } else if (state === "streaming") {
+              chatRunProgress.value = attempt > 0 ? "Stream resumed" : "Live stream connected";
+            }
+          },
+        });
         const detail = await api.getChatSession(token.value, sessionId);
         chatMessages.value = detail.messages;
         chatAnswerMode.value = detail.session.answer_mode;
@@ -652,11 +775,38 @@ export function useMnemeWorkspace() {
       chatSessions.value = chatSessions.value.map((session) => (session.id === detail.session.id ? detail.session : session));
       chatAnswerMode.value = detail.session.answer_mode;
     } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        chatError.value = null;
+        banner.value = "Agent run cancelled";
+        chatStreamState.value = "cancelled";
+        const detail = await api.getChatSession(token.value, activeChatSessionId.value);
+        chatMessages.value = detail.messages;
+        return;
+      }
       const data = error instanceof ApiError && error.data && typeof error.data === "object" ? error.data as Record<string, unknown> : {};
+      chatStreamState.value = "failed";
       chatError.value = { message: errorMessage(error, "Unable to answer."), messageId: typeof data.message_id === "string" ? data.message_id : null, retryable: data.retryable === true };
       const detail = await api.getChatSession(token.value, activeChatSessionId.value);
       mergeChatMessages(detail.messages);
-    } finally { chatPending.value = false; }
+    } finally {
+      chatPending.value = false;
+      activeChatController = null;
+      activeChatRunId.value = "";
+      if (!["cancelled", "failed"].includes(chatStreamState.value)) {
+        chatStreamState.value = "completed";
+      }
+    }
+  }
+
+  async function cancelActiveChatRun() {
+    if (!token.value || !activeChatRunId.value) return;
+    chatRunProgress.value = "Cancelling…";
+    try {
+      await api.abortAgentRun(token.value, activeChatRunId.value);
+      activeChatController?.abort();
+    } catch (error) {
+      banner.value = errorMessage(error, "Unable to cancel the agent run.");
+    }
   }
 
   async function regenerateChatMessage(messageId: string, mode: AnswerMode) {
@@ -700,6 +850,90 @@ export function useMnemeWorkspace() {
       const page = await api.listMemoryCandidates(token.value, activeKnowledgeBaseId.value || null);
       memoryPendingCount.value = page.pending_count ?? page.total;
     } catch { memoryPendingCount.value = 0; }
+  }
+
+  async function refreshChannelGateway() {
+    if (!token.value) return;
+    channelPending.value = true;
+    channelActionStatus.value = "";
+    try {
+      const [configuration, identities, conversations, deliveries] =
+        await Promise.all([
+          api.getChannelConfiguration(token.value),
+          api.listChannelIdentities(token.value),
+          api.listChannelConversations(token.value),
+          api.listChannelDeliveries(token.value),
+        ]);
+      channelConfiguration.value = configuration;
+      channelIdentities.value = identities;
+      channelConversations.value = conversations;
+      channelDeliveries.value = deliveries;
+      channelActionStatus.value = "Channel state refreshed";
+    } catch (error) {
+      channelActionStatus.value = errorMessage(error, "Unable to refresh channel state.");
+    } finally {
+      channelPending.value = false;
+    }
+  }
+
+  async function createFeishuLinkCode() {
+    if (!token.value || !channelConfiguration.value) return;
+    channelPending.value = true;
+    channelActionStatus.value = "";
+    try {
+      channelLinkCode.value = await api.createChannelLinkCode(
+        token.value,
+        channelConfiguration.value.account_id,
+      );
+      channelActionStatus.value = "Binding command generated";
+    } catch (error) {
+      channelActionStatus.value = errorMessage(error, "Unable to create a binding code.");
+    } finally {
+      channelPending.value = false;
+    }
+  }
+
+  async function updateChannelConversation(
+    conversationId: string,
+    payload: {
+      chat_session_id?: string | null;
+      knowledge_base_id?: string | null;
+      answer_mode: AnswerMode;
+    },
+  ) {
+    if (!token.value) return;
+    channelPending.value = true;
+    try {
+      const updated = await api.configureChannelConversation(
+        token.value,
+        conversationId,
+        payload,
+      );
+      channelConversations.value = channelConversations.value.map((item) =>
+        item.id === updated.id ? updated : item,
+      );
+      channelActionStatus.value = "Conversation route saved";
+    } catch (error) {
+      channelActionStatus.value = errorMessage(error, "Unable to save the conversation route.");
+    } finally {
+      channelPending.value = false;
+    }
+  }
+
+  async function retryChannelDelivery(deliveryId: string) {
+    if (!token.value) return;
+    channelPending.value = true;
+    try {
+      const updated = await api.retryChannelDelivery(token.value, deliveryId);
+      channelDeliveries.value = channelDeliveries.value.map((item) =>
+        item.id === updated.id ? updated : item,
+      );
+      channelActionStatus.value = "Delivery queued for retry";
+    } catch (error) {
+      channelActionStatus.value = errorMessage(error, "Unable to retry the delivery.");
+    } finally {
+      channelPending.value = false;
+    }
   }
 
   async function loadAiModelConfigs() {
@@ -788,8 +1022,8 @@ export function useMnemeWorkspace() {
     try {
       const result = await api.rebuildMemory(token.value, activeKnowledgeBaseId.value);
       syncStatus.value = "Memory rebuild queued";
-      await waitForMaintenanceTask(result.id);
-      syncStatus.value = "Memory rebuild completed";
+      const task = await waitForMaintenanceTask(result.id);
+      syncStatus.value = task.result_summary || "Memory rebuild completed";
       memoryLibrary.value = await api.memoryLibrary(token.value, activeKnowledgeBaseId.value);
       memoryGovernance.value = await api.memoryGovernance(token.value, activeKnowledgeBaseId.value);
     } finally {
@@ -867,6 +1101,7 @@ export function useMnemeWorkspace() {
     notificationPoll = setInterval(() => void refreshNotifications(), 60_000);
   });
   onBeforeUnmount(() => {
+    activeChatController?.abort();
     cancelIndexTaskMonitors();
     for (const controller of maintenanceTaskMonitors) controller.abort();
     maintenanceTaskMonitors.clear();
@@ -907,6 +1142,10 @@ export function useMnemeWorkspace() {
     notificationUnreadCount,
     notificationPanelOpen,
     chatPending,
+    activeChatRunId,
+    chatRunProgress,
+    chatRunTrace,
+    chatStreamState,
     chatError,
     chatResult,
     chatMessages,
@@ -914,6 +1153,14 @@ export function useMnemeWorkspace() {
     chatSessions,
     companionQuestion,
     companionResult,
+    channelActionStatus,
+    channelConfiguration,
+    channelConversations,
+    channelDeliveries,
+    channelIdentities,
+    channelLinkCode,
+    channelPending,
+    createFeishuLinkCode,
     createChatSession,
     createKnowledgeBase,
     clearDocumentPreview,
@@ -958,9 +1205,11 @@ export function useMnemeWorkspace() {
     selectKnowledgeBase,
     selectChatSession,
     sendChatMessage,
+    cancelActiveChatRun,
     regenerateChatMessage,
     retryFailedChatMessage,
     refreshMemoryPendingCount,
+    refreshChannelGateway,
     refreshNotifications,
     toggleNotificationPanel,
     readNotification,
@@ -974,6 +1223,8 @@ export function useMnemeWorkspace() {
     syncStatus,
     testAiModelConfig,
     updateActiveModelContextWindow,
+    updateChannelConversation,
+    retryChannelDelivery,
     uploadFile,
     uploadInputKey,
     user,

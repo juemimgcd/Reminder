@@ -8,7 +8,7 @@ from app.mneme.conf.database import open_read_session, open_write_session
 from app.mneme.crud.user import get_user_by_id
 from app.mneme.domains.chat.service import stream_in_chat_session
 from app.mneme.memoria.automation.service import emit_domain_event, finish_heartbeat_run
-from app.mneme.memoria.events import AgentEvent, AgentEventType
+from app.mneme.memoria.events import AgentEvent, AgentEventType, AgentRunEventType
 from app.mneme.memoria.persistence.automation import durable_run_to_record, get_durable_run, save_durable_run
 from app.mneme.memoria.persistence.runs import agent_run_store
 from app.mneme.memoria.run_models import TERMINAL_AGENT_RUN_STATUSES, AgentRunRecord, AgentRunStatus
@@ -87,12 +87,11 @@ async def execute_agent_run(run_id: str) -> None:
                 await agent_run_store.append_event(run_id, event)
                 if event.type == AgentEventType.ASSISTANT and event.content:
                     answer_parts.append(event.content)
-                if event.type == AgentEventType.LIFECYCLE:
-                    final_status = {
-                        "end": AgentRunStatus.COMPLETED,
-                        "error": AgentRunStatus.FAILED,
-                        "aborted": AgentRunStatus.ABORTED,
-                    }.get(event.phase, final_status)
+                final_status = {
+                    AgentRunEventType.ANSWER_COMPLETED: AgentRunStatus.COMPLETED,
+                    AgentRunEventType.RUN_FAILED: AgentRunStatus.FAILED,
+                    AgentRunEventType.RUN_CANCELLED: AgentRunStatus.ABORTED,
+                }.get(event.name, final_status)
         if final_status is None:
             final_status = AgentRunStatus.FAILED
             record.error = "agent run ended without a terminal event"

@@ -3,6 +3,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from time import perf_counter
+from typing import Any
 from uuid import uuid4
 
 from app.mneme.memoria.server.contracts.answers import AnswerRequest, AnswerResponse
@@ -22,7 +23,7 @@ from app.mneme.memoria.server.runtime.ports import AnswerGenerator, CitationVali
 
 POSTGRES_INTEGER_MAX = 2_147_483_647
 logger = logging.getLogger(__name__)
-RunEventCallback = Callable[[str, str, str], Awaitable[None]]
+RunEventCallback = Callable[[str, str, str, dict[str, Any]], Awaitable[None]]
 DEPENDENCY_ERROR_CODES = {
     "retrieve": frozenset(
         {
@@ -278,7 +279,18 @@ class MemoryAgent:
                 source_ids=[item.source_id for item in evidence],
                 expansion_count=expansion_count,
             )
-            await _emit_run_event(event_callback, phase, "completed", run_id)
+            source_counts: dict[str, int] = {}
+            for item in evidence:
+                source_counts[item.source_type] = source_counts.get(item.source_type, 0) + 1
+            await _emit_run_event(
+                event_callback,
+                phase,
+                "completed",
+                run_id,
+                evidence_count=len(evidence),
+                expansion_count=expansion_count,
+                source_counts=source_counts,
+            )
             safe_log(
                 logger,
                 logging.INFO,
@@ -345,7 +357,13 @@ class MemoryAgent:
                 duration_ms=_elapsed_ms(phase_started),
                 answer=generated,
             )
-            await _emit_run_event(event_callback, phase, "completed", run_id)
+            await _emit_run_event(
+                event_callback,
+                phase,
+                "completed",
+                run_id,
+                tool_call_count=len(generated.tool_calls),
+            )
             safe_log(
                 logger,
                 logging.INFO,
@@ -433,7 +451,14 @@ class MemoryAgent:
                 insufficient_evidence=insufficient_evidence,
                 response=response,
             )
-            await _emit_run_event(event_callback, "complete", "completed", run_id)
+            await _emit_run_event(
+                event_callback,
+                "complete",
+                "completed",
+                run_id,
+                citation_count=len(citation_result.citations),
+                insufficient_evidence=insufficient_evidence,
+            )
             return response
         except asyncio.CancelledError:
             await self._record_failure(
@@ -451,11 +476,12 @@ async def _emit_run_event(
     phase: str,
     status: str,
     run_id: str,
+    **public_payload: Any,
 ) -> None:
     if callback is None:
         return
     try:
-        await callback(phase, status, run_id)
+        await callback(phase, status, run_id, public_payload)
     except asyncio.CancelledError:
         raise
     except Exception:

@@ -43,6 +43,7 @@ class AgentRunRecord(BaseModel):
     completed_at: datetime | None = None
     error: str | None = None
     last_event_id: str | None = None
+    last_event_sequence: int = Field(default=0, ge=0)
     queue_wait_ms: int | None = None
 
     @classmethod

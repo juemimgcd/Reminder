@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Bot, ChevronLeft, MessageSquare, Search, Send, Trash2 } from "@lucide/vue";
+import { Activity, Bot, ChevronLeft, MessageSquare, Search, Send, Square, Trash2 } from "@lucide/vue";
 import { computed, ref } from "vue";
 import type { MnemeWorkspace } from "../composables/useMnemeWorkspace";
 import UiEmptyState from "../components/ui/UiEmptyState.vue";
@@ -135,6 +135,30 @@ const modeDescription = computed(() => ({
           description="Choose an answer mode, then ask a question."
           ><template #icon><Bot /></template
         ></UiEmptyState>
+        <aside
+          v-if="workspace.chatRunTrace.value.length"
+          data-testid="agent-run-trace"
+          class="run-trace"
+          aria-live="polite"
+        >
+          <header>
+            <div><Activity /><strong>Live run trace</strong></div>
+            <span :data-state="workspace.chatStreamState.value">{{
+              workspace.chatStreamState.value
+            }}</span>
+          </header>
+          <ol>
+            <li
+              v-for="item in workspace.chatRunTrace.value"
+              :key="item.id"
+              :data-state="item.state"
+            >
+              <i></i>
+              <span>{{ item.label }}</span>
+              <small v-if="item.sequence">#{{ item.sequence }}</small>
+            </li>
+          </ol>
+        </aside>
       </main>
       <div v-if="workspace.chatError.value" class="error" role="alert">
         {{ workspace.chatError.value.message }}
@@ -164,10 +188,22 @@ const modeDescription = computed(() => ({
             v-model="workspace.chatQuestion.value"
             :disabled="workspace.chatPending.value"
             placeholder="Ask Mneme…"
-          /><button aria-label="Send message" :disabled="workspace.chatPending.value">
+          /><button
+            v-if="workspace.chatPending.value"
+            type="button"
+            class="stop-run"
+            aria-label="Stop generating"
+            @click="workspace.cancelActiveChatRun"
+          >
+            <Square />
+          </button>
+          <button v-else aria-label="Send message">
             <Send />
           </button>
         </div>
+        <small v-if="workspace.chatRunProgress.value" class="run-progress" role="status">
+          {{ workspace.chatRunProgress.value }}
+        </small>
         <small data-testid="answer-mode-description">{{ modeDescription }}</small>
       </form>
     </section>
@@ -367,6 +403,98 @@ form {
   color: var(--accent-contrast);
   background: var(--accent);
 }
+.composer button.stop-run {
+  color: var(--text-primary);
+  background: var(--bg-panel);
+  border-color: var(--border-strong);
+}
+.composer button.stop-run:hover {
+  background: var(--bg-active);
+}
+.composer button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.run-progress {
+  display: block;
+  min-height: 1.25rem;
+  margin-top: 0.35rem;
+  color: var(--text-secondary);
+}
+.run-trace {
+  margin: 0.75rem 0 1.25rem 2.75rem;
+  padding: 0.75rem 0.9rem;
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border-muted);
+  border-radius: 0.45rem;
+}
+.run-trace header,
+.run-trace header > div {
+  display: flex;
+  align-items: center;
+}
+.run-trace header {
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.run-trace header > div {
+  gap: 0.4rem;
+}
+.run-trace header svg {
+  width: 0.9rem;
+  color: var(--accent);
+}
+.run-trace header strong {
+  font-size: 0.72rem;
+}
+.run-trace header > span {
+  padding: 0.15rem 0.4rem;
+  color: var(--text-tertiary);
+  border: 1px solid var(--border-muted);
+  border-radius: 1rem;
+  font: 0.6rem var(--font-mono);
+  text-transform: uppercase;
+}
+.run-trace header > span[data-state="streaming"],
+.run-trace header > span[data-state="completed"] {
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 45%, var(--border-muted));
+}
+.run-trace header > span[data-state="reconnecting"],
+.run-trace header > span[data-state="failed"] {
+  color: var(--danger);
+}
+.run-trace ol {
+  display: grid;
+  margin: 0.65rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.run-trace li {
+  display: grid;
+  min-height: 1.65rem;
+  grid-template-columns: 0.75rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+}
+.run-trace li i {
+  width: 0.38rem;
+  height: 0.38rem;
+  background: var(--success);
+  border-radius: 50%;
+}
+.run-trace li[data-state="active"] i {
+  background: var(--accent);
+  box-shadow: 0 0 0 0.2rem var(--accent-soft);
+}
+.run-trace li[data-state="warning"] i {
+  background: var(--danger);
+}
+.run-trace li small {
+  font: 0.58rem var(--font-mono);
+}
 .composer svg {
   width: 1rem;
 }
@@ -386,6 +514,11 @@ form {
   }
   .rail-toggle {
     left: 0.4rem;
+  }
+}
+@media (max-width: 560px) {
+  .run-trace {
+    margin-left: 0;
   }
 }
 </style>

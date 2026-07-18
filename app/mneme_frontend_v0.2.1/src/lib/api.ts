@@ -11,6 +11,11 @@ import type {
   ChatSessionData,
   ChatSessionListData,
   ChatQueryData,
+  ChannelConversationData,
+  ChannelDeliveryData,
+  ChannelGatewayConfigurationData,
+  ChannelIdentityData,
+  ChannelLinkCodeData,
   CompanionAnswerResult,
   DocumentContentData,
   DocumentDeleteData,
@@ -245,27 +250,39 @@ async function streamAgentEvents(
 async function consumeAgentEventStream(
   response: Response,
   onEvent: (event: AgentStreamEvent) => void,
-): Promise<void> {
+): Promise<string | undefined> {
   if (!response.body) throw new ApiError("Streaming response has no body.", response.status);
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let lastEventId: string | undefined;
   while (true) {
     const { done, value } = await reader.read();
     buffer += decoder.decode(value, { stream: !done }).replace(/\r\n/g, "\n");
     const frames = buffer.split("\n\n");
     buffer = frames.pop() ?? "";
     for (const frame of frames) {
-      const data = frame
-        .split("\n")
+      const lines = frame.split("\n");
+      const eventId = lines.find((line) => line.startsWith("id:"))?.slice(3).trim();
+      const eventName = lines.find((line) => line.startsWith("event:"))?.slice(6).trim();
+      const data = lines
         .filter((line) => line.startsWith("data:"))
         .map((line) => line.slice(5).trimStart())
         .join("\n");
-      if (data) onEvent(JSON.parse(data) as AgentStreamEvent);
+      if (data) {
+        const event = JSON.parse(data) as AgentStreamEvent;
+        if (eventId) {
+          event.event_id = eventId;
+          lastEventId = eventId;
+        }
+        if (!event.name && eventName) event.name = eventName as AgentStreamEvent["name"];
+        onEvent(event);
+      }
     }
     if (done) break;
   }
+  return lastEventId;
 }
 
 const realApi = {
@@ -528,25 +545,90 @@ const realApi = {
     token: string,
     runId: string,
     onEvent: (event: AgentStreamEvent) => void,
-    options: { signal?: AbortSignal; cursor?: string } = {},
+    options: {
+      signal?: AbortSignal;
+      cursor?: string;
+      onConnectionState?: (
+        state: "connecting" | "streaming" | "reconnecting" | "completed",
+        attempt: number,
+      ) => void;
+    } = {},
   ) {
-    const response = await fetch(`${API_BASE_URL}/kb/chat/runs/${runId}/stream`, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "text/event-stream",
-        ...(options.cursor ? { "Last-Event-ID": options.cursor } : {}),
-      },
-      signal: options.signal,
-    });
-    if (!response.ok) throw await responseError(response);
-    await consumeAgentEventStream(response, onEvent);
+    let cursor = options.cursor;
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      try {
+        options.onConnectionState?.(
+          attempt === 0 ? "connecting" : "reconnecting",
+          attempt,
+        );
+        const response = await fetch(`${API_BASE_URL}/kb/chat/runs/${runId}/stream`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "text/event-stream",
+            ...(cursor ? { "Last-Event-ID": cursor } : {}),
+          },
+          signal: options.signal,
+        });
+        if (!response.ok) throw await responseError(response);
+        options.onConnectionState?.("streaming", attempt);
+        await consumeAgentEventStream(response, (event) => {
+          if (event.event_id) cursor = event.event_id;
+          onEvent(event);
+        });
+        options.onConnectionState?.("completed", attempt);
+        return;
+      } catch (error) {
+        if (options.signal?.aborted || attempt === 3) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 300 * 2 ** attempt));
+      }
+    }
   },
   getAgentRun(token: string, runId: string) {
     return request<AgentRunData>(`/kb/chat/runs/${runId}`, { token });
   },
   abortAgentRun(token: string, runId: string) {
     return request<AgentRunData>(`/kb/chat/runs/${runId}/abort`, { method: "POST", token });
+  },
+  getChannelConfiguration(token: string) {
+    return request<ChannelGatewayConfigurationData>("/channels/configuration", { token });
+  },
+  createChannelLinkCode(token: string, accountId: string) {
+    return request<ChannelLinkCodeData>("/channels/link-codes", {
+      method: "POST",
+      token,
+      body: { channel: "feishu", account_id: accountId },
+    });
+  },
+  listChannelIdentities(token: string) {
+    return request<ChannelIdentityData[]>("/channels/identities", { token });
+  },
+  listChannelConversations(token: string) {
+    return request<ChannelConversationData[]>("/channels/conversations", { token });
+  },
+  configureChannelConversation(
+    token: string,
+    conversationId: string,
+    payload: {
+      chat_session_id?: string | null;
+      knowledge_base_id?: string | null;
+      answer_mode: AnswerMode;
+    },
+  ) {
+    return request<ChannelConversationData>(`/channels/conversations/${conversationId}`, {
+      method: "PATCH",
+      token,
+      body: payload,
+    });
+  },
+  listChannelDeliveries(token: string) {
+    return request<ChannelDeliveryData[]>("/channels/deliveries", { token });
+  },
+  retryChannelDelivery(token: string, deliveryId: string) {
+    return request<ChannelDeliveryData>(`/channels/deliveries/${deliveryId}/retry`, {
+      method: "POST",
+      token,
+    });
   },
   listNotifications(token: string, limit = 30) {
     return request<NotificationListData>(`/agent/notifications${buildQuery({ limit })}`, { token });

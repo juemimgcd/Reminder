@@ -1,4 +1,11 @@
 from app.mneme.models.base import Base
+from app.mneme.models.channel import (
+    ChannelConversation,
+    ChannelDelivery,
+    ChannelIdentity,
+    ChannelInboundMessage,
+    ChannelLinkCode,
+)
 from app.mneme.models.chat_message import ChatMessage
 from app.mneme.models.chat_session import ChatSession
 from app.mneme.models.chunk import Chunk
@@ -19,6 +26,11 @@ __all__ = [
     "Chunk",
     "ChatSession",
     "ChatMessage",
+    "ChannelIdentity",
+    "ChannelLinkCode",
+    "ChannelConversation",
+    "ChannelInboundMessage",
+    "ChannelDelivery",
     "TaskRecord",
     "MemoryEntry",
     "CanonicalMemory",
