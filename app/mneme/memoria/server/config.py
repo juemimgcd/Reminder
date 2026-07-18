@@ -50,6 +50,13 @@ class MemoryAgentSettings(BaseSettings):
     ANSWER_TOOL_OBSERVATION_MAX_CHARS: int = Field(default=2000, ge=200, le=8000)
     ANSWER_RUN_STALE_SECONDS: int = Field(default=180, ge=30, le=86400)
     ANSWER_RUN_RECOVERY_BATCH_SIZE: int = Field(default=100, ge=1, le=1000)
+    MULTI_AGENT_DEADLINE_SECONDS: float = Field(default=20, gt=0, le=120)
+    MULTI_AGENT_SOURCE_TIMEOUT_SECONDS: float = Field(default=8, gt=0, le=60)
+    MULTI_AGENT_MAX_MODEL_CALLS: int = Field(default=4, ge=1, le=16)
+    MULTI_AGENT_MAX_PROMPT_TOKENS: int = Field(default=12000, ge=512, le=200000)
+    MULTI_AGENT_MAX_COMPLETION_TOKENS: int = Field(default=3600, ge=128, le=32000)
+    MULTI_AGENT_MAX_RETRIEVAL_TOP_K: int = Field(default=24, ge=1, le=40)
+    MULTI_AGENT_MAX_ESTIMATED_COST: float = Field(default=1.0, ge=0, le=100)
 
 
 settings = MemoryAgentSettings()

@@ -144,6 +144,18 @@ async def _operational_metrics(db: AsyncSession) -> OperationalMetrics:
             )
         )
     ).all()
+    role_rows = (
+        await db.execute(
+            text(
+                "SELECT attempt->>'role' AS role, attempt->>'status' AS status, "
+                "count(*) AS attempts, "
+                "COALESCE(sum((attempt->>'elapsed_ms')::numeric), 0) AS duration_sum "
+                "FROM answer_runs CROSS JOIN LATERAL "
+                "jsonb_array_elements(role_attempts) AS attempt "
+                "GROUP BY attempt->>'role', attempt->>'status'"
+            )
+        )
+    ).all()
     return OperationalMetrics(
         inbox_backlog=inbox[0] or 0,
         dead_letters=inbox[1] or 0,
@@ -168,6 +180,14 @@ async def _operational_metrics(db: AsyncSession) -> OperationalMetrics:
         ),
         answer_tokens=tuple((labels(mode=row.mode), row.tokens) for row in outcome_rows),
         answer_cost=tuple((labels(mode=row.mode), float(row.cost)) for row in outcome_rows),
+        role_attempts=tuple(
+            (labels(role=row.role, status=row.status), row.attempts)
+            for row in role_rows
+        ),
+        role_duration_ms_sum=tuple(
+            (labels(role=row.role, status=row.status), float(row.duration_sum))
+            for row in role_rows
+        ),
     )
 
 

@@ -80,6 +80,7 @@ class ConfiguredModelGateway:
         configs = self._resolve_configs(request)
         attempts: list[dict[str, Any]] = []
         last_failure = _Failure("AGENT_MODEL_UNAVAILABLE", False)
+        provider_model_calls = 0
 
         for config in configs:
             reasoning_summary = ""
@@ -88,7 +89,11 @@ class ConfiguredModelGateway:
             tool_trace: list[dict[str, Any]] = []
             observations: list[dict[str, Any]] = []
             tool_call_count = 0
-            remaining_output_tokens = settings.ANSWER_REASONING_TOTAL_OUTPUT_TOKENS
+            remaining_output_tokens = min(
+                settings.ANSWER_REASONING_TOTAL_OUTPUT_TOKENS,
+                request.max_completion_tokens,
+            )
+            remaining_prompt_tokens = request.max_prompt_tokens
             prompt_tokens = 0
             completion_tokens = 0
             try:
@@ -108,6 +113,7 @@ class ConfiguredModelGateway:
                         reasoning_summary,
                         reserve_evidence=request.mode != "general_chat",
                         output_token_limit=remaining_output_tokens,
+                        input_token_limit=remaining_prompt_tokens,
                     )
                     messages = build_messages(
                         mode=request.mode,
@@ -132,6 +138,9 @@ class ConfiguredModelGateway:
                     )
                     step_completed = False
                     for attempt in range(1, settings.ANSWER_LLM_MAX_ATTEMPTS + 1):
+                        if provider_model_calls >= request.max_model_calls:
+                            raise RuntimeDependencyError("AGENT_CAPACITY_EXCEEDED")
+                        provider_model_calls += 1
                         try:
                             response = await client.chat.completions.create(
                                 model=config.model_name,
@@ -164,6 +173,22 @@ class ConfiguredModelGateway:
                             )
                             prompt_tokens += step_prompt_tokens
                             completion_tokens += step_completion_tokens
+                            remaining_prompt_tokens = max(
+                                0,
+                                remaining_prompt_tokens
+                                - (
+                                    step_prompt_tokens
+                                    if usage
+                                    else max(
+                                        1,
+                                        sum(
+                                            len(str(message.get("content", "")))
+                                            for message in messages
+                                        )
+                                        // 3,
+                                    )
+                                ),
+                            )
                             charged_output_tokens = (
                                 max(1, step_completion_tokens)
                                 if usage
@@ -192,6 +217,11 @@ class ConfiguredModelGateway:
                                     tool_names=[item.name for item in parsed.tool_calls],
                                 )
                             )
+                            if (
+                                prompt_tokens > request.max_prompt_tokens
+                                or completion_tokens > request.max_completion_tokens
+                            ):
+                                raise RuntimeDependencyError("AGENT_CAPACITY_EXCEEDED")
                             if not transition.should_continue:
                                 return GeneratedAnswer(
                                     answer=parsed.answer,
@@ -409,6 +439,7 @@ def _prompt_budget(
     *,
     reserve_evidence: bool,
     output_token_limit: int | None = None,
+    input_token_limit: int | None = None,
 ) -> _PromptBudget:
     per_call_output_tokens = min(
         settings.ANSWER_MAX_OUTPUT_TOKENS,
@@ -419,6 +450,8 @@ def _prompt_budget(
         max(1, output_token_limit) if output_token_limit is not None else per_call_output_tokens,
     )
     input_tokens = max(0, config.context_window - output_tokens)
+    if input_token_limit is not None:
+        input_tokens = min(input_tokens, max(0, input_token_limit))
     prompt_reserve = min(
         settings.ANSWER_PROMPT_RESERVE_TOKENS,
         max(128, input_tokens // 4),

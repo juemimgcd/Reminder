@@ -91,3 +91,33 @@ def test_public_retrieval_metadata_survives_bridge_without_private_inputs():
     assert event.metadata["source_counts"] == {"memory": 2, "document": 3}
     assert "question" not in event.metadata
     assert "model" not in event.metadata
+
+
+def test_multi_agent_role_progress_survives_bridge_without_private_payloads():
+    progress = MemoryAgentStreamEvent(
+        type="phase",
+        sequence=5,
+        name="multi_agent.role.completed",
+        run_id="memory-run-1",
+        phase="multi_agent.retrieve",
+        status="completed",
+        public_payload={
+            "agent_role": "memory_retriever",
+            "source_type": "memory",
+            "result_count": 3,
+            "elapsed_ms": 14,
+        },
+    )
+
+    event = _memory_agent_progress_to_event(
+        progress,
+        agent_run_id="run-1",
+        trace_id="trace-1",
+    )
+
+    assert event is not None
+    assert event.name == AgentRunEventType.MULTI_AGENT_ROLE_COMPLETED
+    assert event.agent_role == "memory_retriever"
+    assert event.metadata["result_count"] == 3
+    assert "question" not in event.metadata
+    assert "evidence" not in event.metadata

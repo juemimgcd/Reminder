@@ -111,6 +111,7 @@ class MemoryAgentAnswerRequest(BaseModel):
     message_id: str
     question: str = Field(min_length=1)
     answer_mode: AnswerMode
+    execution_mode: Literal["auto", "single", "multi"] = "auto"
     top_k: int = Field(default=4, ge=1, le=10)
     allow_model_fallback: bool = False
     conversation: ConversationContextData = Field(default_factory=ConversationContextData)
@@ -129,6 +130,8 @@ class MemoryAgentAnswerResponse(BaseModel):
     document_ids: list[str] = Field(default_factory=list)
     tool_calls: list[dict[str, Any]] = Field(default_factory=list)
     stop_reason: str | None = None
+    execution_mode: Literal["single", "multi"] = "single"
+    degraded: bool = False
     run_id: str
 
 

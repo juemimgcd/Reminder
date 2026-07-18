@@ -20,6 +20,10 @@ class AnswerRun(Base):
             name="ck_answer_runs_status",
         ),
         CheckConstraint(
+            "execution_mode IN ('single', 'multi')",
+            name="ck_answer_runs_execution_mode",
+        ),
+        CheckConstraint(
             "current_phase IN ('validate', 'retrieve', 'generate', 'citations', 'complete')",
             name="ck_answer_runs_phase",
         ),
@@ -58,6 +62,21 @@ class AnswerRun(Base):
     selected_provider: Mapped[str | None] = mapped_column(String(64))
     selected_model: Mapped[str | None] = mapped_column(String(255))
     fallback_used: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    execution_mode: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="single",
+        server_default="single",
+    )
+    role_attempts: Mapped[list[dict]] = mapped_column(JSONB, nullable=False, default=list)
+    budget_usage: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    degraded: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
+    stop_reason: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

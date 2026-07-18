@@ -105,6 +105,7 @@ export function useMnemeWorkspace() {
   const chatRunProgress = ref("");
   const chatStreamState = ref<AgentStreamConnectionState>("idle");
   const chatRunTrace = ref<AgentRunTraceItem[]>([]);
+  let runTraceFallbackSequence = 0;
   const chatError = ref<{ message: string; messageId: string | null; retryable: boolean } | null>(null);
   const channelConfiguration = ref<ChannelGatewayConfigurationData | null>(null);
   const channelIdentities = ref<ChannelIdentityData[]>([]);
@@ -624,7 +625,9 @@ export function useMnemeWorkspace() {
     label: string,
     state: AgentRunTraceItem["state"] = "complete",
   ) {
-    const id = event.event_id ?? `${event.name ?? event.type}-${event.sequence ?? Date.now()}`;
+    const id =
+      event.event_id ??
+      `${event.name ?? event.type}-${event.sequence ?? `local-${++runTraceFallbackSequence}`}`;
     const next: AgentRunTraceItem = {
       id,
       name: event.name ?? event.type,
@@ -632,7 +635,7 @@ export function useMnemeWorkspace() {
       sequence: event.sequence,
       state,
     };
-    chatRunTrace.value = [...chatRunTrace.value.filter((item) => item.id !== id), next].slice(-12);
+    chatRunTrace.value = [...chatRunTrace.value.filter((item) => item.id !== id), next].slice(-24);
   }
 
   async function sendChatMessage(options: { retryMessageId?: string; regenerateMessageId?: string; mode?: AnswerMode } = {}) {
@@ -708,6 +711,26 @@ export function useMnemeWorkspace() {
           } else if (event.name === "answer.started") {
             chatRunProgress.value = "Composing an evidence-backed answer…";
             recordRunTrace(event, "Answer generation started", "active");
+          } else if (event.name === "multi_agent.coordinator.completed") {
+            const count = Number(event.metadata?.source_count ?? 0);
+            chatRunProgress.value = `Coordinator assigned ${count} retrieval roles`;
+            recordRunTrace(event, `Coordinator · ${count} sources`);
+          } else if (event.name === "multi_agent.role.started") {
+            const role = event.agent_role || String(event.metadata?.source_type ?? "retriever");
+            chatRunProgress.value = `${role} is retrieving evidence…`;
+            recordRunTrace(event, `${role} started`, "active");
+          } else if (event.name === "multi_agent.role.completed") {
+            const role = event.agent_role || String(event.metadata?.source_type ?? "retriever");
+            const count = Number(event.metadata?.result_count ?? 0);
+            recordRunTrace(event, `${role} · ${count} results`);
+          } else if (event.name === "multi_agent.role.failed") {
+            const role = event.agent_role || String(event.metadata?.source_type ?? "retriever");
+            recordRunTrace(event, `${role} unavailable · degraded`, "warning");
+          } else if (event.name === "multi_agent.judge.completed") {
+            const kept = Number(event.metadata?.kept_count ?? 0);
+            const conflicts = Number(event.metadata?.conflict_count ?? 0);
+            chatRunProgress.value = `Evidence Judge kept ${kept} items`;
+            recordRunTrace(event, `Evidence Judge · ${kept} kept${conflicts ? ` · ${conflicts} conflicts` : ""}`);
           } else if (event.name === "citation.resolved") {
             chatRunProgress.value = "Checking citations…";
             recordRunTrace(event, "Citations resolved");
