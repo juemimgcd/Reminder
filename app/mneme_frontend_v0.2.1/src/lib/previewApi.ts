@@ -808,6 +808,41 @@ const previewApi = {
   ): Promise<void> {
     onEvent({ type: "lifecycle", name: "run.started", phase: "started" });
     onEvent({ type: "lifecycle", name: "retrieval.started", phase: "retrieve" });
+    if (payload.answer_mode === "analysis_query") {
+      onEvent({
+        type: "lifecycle",
+        name: "multi_agent.coordinator.completed",
+        phase: "multi_agent.coordinate",
+        metadata: { source_count: 4 },
+      });
+      for (const [agent_role, source_type, result_count] of [
+        ["document_retriever", "document", 2],
+        ["memory_retriever", "memory", 2],
+        ["profile_retriever", "profile", 1],
+        ["relation_retriever", "relation", 1],
+      ] as const) {
+        onEvent({
+          type: "lifecycle",
+          name: "multi_agent.role.started",
+          agent_role,
+          phase: "multi_agent.retrieve",
+          metadata: { source_type },
+        });
+        onEvent({
+          type: "lifecycle",
+          name: "multi_agent.role.completed",
+          agent_role,
+          phase: "multi_agent.retrieve",
+          metadata: { source_type, result_count },
+        });
+      }
+      onEvent({
+        type: "lifecycle",
+        name: "multi_agent.judge.completed",
+        phase: "multi_agent.judge",
+        metadata: { kept_count: 4, conflict_count: 1 },
+      });
+    }
     const detail = await this.sendChatSessionMessage(token, sessionId, payload);
     const answer = detail.messages.find((item) => item.role === "assistant")?.content ?? "";
     onEvent({

@@ -96,6 +96,24 @@ async def stream_answer(
             run_id: str,
             public_payload: dict[str, Any],
         ) -> None:
+            if phase.startswith("multi_agent."):
+                event_name = public_payload.get("event_name")
+                if isinstance(event_name, str):
+                    await queue.put(
+                        build_event(
+                            type="phase",
+                            name=event_name,
+                            run_id=run_id,
+                            phase=phase,
+                            status=status,
+                            public_payload={
+                                key: value
+                                for key, value in public_payload.items()
+                                if key != "event_name" and value is not None
+                            },
+                        )
+                    )
+                return
             if phase == "retrieve" and status == "completed":
                 source_counts = public_payload.get("source_counts")
                 if isinstance(source_counts, dict):

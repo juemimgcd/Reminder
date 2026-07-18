@@ -20,6 +20,11 @@ class AgentRunEventType(str, Enum):
     RETRIEVAL_STARTED = "retrieval.started"
     RETRIEVAL_SOURCE_COMPLETED = "retrieval.source_completed"
     EVIDENCE_SELECTED = "evidence.selected"
+    MULTI_AGENT_COORDINATOR_COMPLETED = "multi_agent.coordinator.completed"
+    MULTI_AGENT_ROLE_STARTED = "multi_agent.role.started"
+    MULTI_AGENT_ROLE_COMPLETED = "multi_agent.role.completed"
+    MULTI_AGENT_ROLE_FAILED = "multi_agent.role.failed"
+    MULTI_AGENT_JUDGE_COMPLETED = "multi_agent.judge.completed"
     ANSWER_STARTED = "answer.started"
     ANSWER_DELTA = "answer.delta"
     CITATION_RESOLVED = "citation.resolved"
@@ -134,11 +139,13 @@ class AgentEvent(BaseModel):
         run_id: str | None = None,
         **metadata: Any,
     ) -> "AgentEvent":
+        agent_role = _pop_optional_string(metadata, "agent_role") or "memory_agent"
         return cls(
             type=AgentEventType.LIFECYCLE,
             name=name,
             run_id=run_id,
             phase=phase,
+            agent_role=agent_role,
             metadata=metadata,
         )
 

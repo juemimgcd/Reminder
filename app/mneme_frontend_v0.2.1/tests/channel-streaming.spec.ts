@@ -20,6 +20,20 @@ test("AI Laboratory exposes the durable SSE run trace", async ({ page }) => {
   await expect(trace.locator("header > span")).toHaveAttribute("data-state", "completed");
 });
 
+test("analysis mode exposes bounded multi-agent role progress", async ({ page }) => {
+  await page.getByRole("button", { name: "AI Laboratory", exact: true }).click();
+
+  const composer = page.getByTestId("workspace-chat-command");
+  await page.getByTestId("answer-mode-selector").getByRole("button", { name: "Analysis" }).click();
+  await composer.locator("textarea").fill("Compare all available evidence");
+  await composer.getByRole("button", { name: "Send message" }).click();
+
+  const trace = page.getByTestId("agent-run-trace");
+  await expect(trace).toContainText("Coordinator · 4 sources");
+  await expect(trace).toContainText("document_retriever · 2 results");
+  await expect(trace).toContainText("Evidence Judge · 4 kept · 1 conflicts");
+});
+
 test("settings manages Feishu binding, routing, and delivery retry", async ({ page }) => {
   await page.getByRole("button", { name: "System Settings", exact: true }).click();
 

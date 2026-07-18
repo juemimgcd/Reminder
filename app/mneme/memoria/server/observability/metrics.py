@@ -25,6 +25,8 @@ class OperationalMetrics:
     insufficient_evidence: MetricRows = ()
     answer_tokens: MetricRows = ()
     answer_cost: MetricRows = ()
+    role_attempts: MetricRows = ()
+    role_duration_ms_sum: MetricRows = ()
 
 
 def _line(name: str, value: int | float, metric_labels: Labels = ()) -> str:
@@ -53,6 +55,8 @@ def render_metrics(metrics: OperationalMetrics) -> str:
         ("memory_agent_evidence_insufficient_total", metrics.insufficient_evidence),
         ("memory_agent_answer_tokens_total", metrics.answer_tokens),
         ("memory_agent_answer_cost_total", metrics.answer_cost),
+        ("memory_agent_role_attempts_total", metrics.role_attempts),
+        ("memory_agent_role_duration_ms_sum", metrics.role_duration_ms_sum),
     )
     for name, rows in families:
         lines.extend(_line(name, value, metric_labels) for metric_labels, value in rows)
