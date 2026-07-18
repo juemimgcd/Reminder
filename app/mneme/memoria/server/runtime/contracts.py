@@ -24,6 +24,17 @@ class RetrievalPlan(BaseModel):
     def uses_private_sources(self) -> bool:
         return self.document or self.memory or self.profile or self.relations
 
+    def for_source(self, source_type: str) -> "RetrievalPlan":
+        if source_type not in {"document", "memory", "profile", "relation"}:
+            raise ValueError("unsupported retrieval source")
+        return RetrievalPlan(
+            document=source_type == "document",
+            memory=source_type == "memory",
+            profile=source_type == "profile",
+            relations=source_type == "relation",
+            max_expansions=0,
+        )
+
 
 class RetrievalRequest(BaseModel):
     request_id: str
@@ -55,6 +66,10 @@ class GenerationRequest(BaseModel):
     conversation: ConversationContextData = Field(default_factory=ConversationContextData, repr=False)
     model: ModelInvocationConfig | None = Field(default=None, exclude=True)
     allow_model_fallback: bool = False
+    execution_mode: Literal["single", "multi"] = "single"
+    max_model_calls: int = Field(default=12, ge=1, le=32)
+    max_prompt_tokens: int = Field(default=200_000, ge=512, le=1_000_000)
+    max_completion_tokens: int = Field(default=32_000, ge=128, le=100_000)
     tool_context: ToolExecutionContext | None = Field(default=None, exclude=True, repr=False)
 
 
@@ -75,6 +90,10 @@ class GeneratedAnswer(BaseModel):
     selected_model: str | None = None
     fallback_used: bool = False
     stop_reason: str | None = None
+    execution_mode: Literal["single", "multi"] = "single"
+    degraded: bool = False
+    role_attempts: list[dict[str, Any]] = Field(default_factory=list)
+    budget_usage: dict[str, Any] = Field(default_factory=dict)
 
     @property
     def total_tokens(self) -> int:
@@ -115,6 +134,11 @@ class AnswerRunData(BaseModel):
     selected_provider: str | None
     selected_model: str | None
     fallback_used: bool
+    execution_mode: Literal["single", "multi"]
+    role_attempts: list[dict[str, Any]]
+    budget_usage: dict[str, Any]
+    degraded: bool
+    stop_reason: str | None
     created_at: datetime
     started_at: datetime
     retrieval_completed_at: datetime | None

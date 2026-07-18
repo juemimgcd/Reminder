@@ -670,16 +670,16 @@ app/mneme/memoria/server/multi_agent/
 
 ### 6.8 验收标准
 
-- [ ] 简单问题默认不进入 multi-agent 路径。
-- [ ] 多来源问题可以并行检索。
-- [ ] 所有 Retrieval Agent 都继承同一个 owner/KB scope。
-- [ ] 子 Agent 不能创建新的 Agent。
-- [ ] 总调用数、token、费用和 deadline 都有硬上限。
-- [ ] 单个非必需来源失败时可以返回降级答案。
-- [ ] Evidence Judge 能输出保留、淘汰和冲突信息。
-- [ ] 最终引用只来自 JudgedEvidenceSet。
-- [ ] 多 Agent 事件可以通过 Phase 1 的事件流展示。
-- [ ] 不记录 chain-of-thought、原始 prompt 或未裁剪证据。
+- [x] 简单问题默认不进入 multi-agent 路径。
+- [x] 多来源问题可以并行检索。
+- [x] 所有 Retrieval Agent 都继承同一个 owner/KB scope。
+- [x] 子 Agent 不能创建新的 Agent。
+- [x] 总调用数、token、费用和 deadline 都有硬上限。
+- [x] 单个非必需来源失败时可以返回降级答案。
+- [x] Evidence Judge 能输出保留、淘汰和冲突信息。
+- [x] 最终引用只来自 JudgedEvidenceSet。
+- [x] 多 Agent 事件可以通过 Phase 1 的事件流展示。
+- [x] 不记录 chain-of-thought、原始 prompt 或未裁剪证据。
 
 ---
 

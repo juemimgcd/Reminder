@@ -47,6 +47,11 @@ def _data(row: AnswerRun) -> AnswerRunData:
         selected_provider=row.selected_provider,
         selected_model=row.selected_model,
         fallback_used=row.fallback_used,
+        execution_mode=row.execution_mode,  # type: ignore[arg-type]
+        role_attempts=list(row.role_attempts),
+        budget_usage=dict(row.budget_usage),
+        degraded=row.degraded,
+        stop_reason=row.stop_reason,
         created_at=row.created_at,
         started_at=row.started_at,
         retrieval_completed_at=row.retrieval_completed_at,
@@ -116,6 +121,10 @@ class AnswerRunRepository:
                     source_ids=[],
                     expansion_count=0,
                     model_attempts=[],
+                    execution_mode="single",
+                    role_attempts=[],
+                    budget_usage={},
+                    degraded=False,
                 )
                 .on_conflict_do_nothing(constraint="uq_answer_runs_owner_request")
                 .returning(AnswerRun)
@@ -145,6 +154,10 @@ class AnswerRunRepository:
         duration_ms: int,
         source_ids: list[str],
         expansion_count: int,
+        execution_mode: str = "single",
+        role_attempts: list[dict] | None = None,
+        budget_usage: dict | None = None,
+        degraded: bool = False,
     ) -> None:
         async with open_write_session() as db:
             row = await _locked(db, run_id)
@@ -155,6 +168,10 @@ class AnswerRunRepository:
             }
             row.source_ids = list(dict.fromkeys(source_ids))
             row.expansion_count = expansion_count
+            row.execution_mode = execution_mode
+            row.role_attempts = list(role_attempts or [])
+            row.budget_usage = dict(budget_usage or {})
+            row.degraded = degraded
             row.retrieval_completed_at = datetime.now(UTC)
 
     async def record_generation(
@@ -187,6 +204,11 @@ class AnswerRunRepository:
             row.selected_provider = answer.selected_provider
             row.selected_model = answer.selected_model
             row.fallback_used = answer.fallback_used
+            row.execution_mode = answer.execution_mode
+            row.role_attempts = list(answer.role_attempts)
+            row.budget_usage = dict(answer.budget_usage)
+            row.degraded = answer.degraded
+            row.stop_reason = answer.stop_reason
             row.generation_completed_at = datetime.now(UTC)
 
     async def complete(

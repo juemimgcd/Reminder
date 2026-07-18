@@ -6,7 +6,13 @@ from time import perf_counter
 from typing import Any
 from uuid import uuid4
 
+from app.mneme.memoria.server.config import settings
 from app.mneme.memoria.server.contracts.answers import AnswerRequest, AnswerResponse
+from app.mneme.memoria.server.multi_agent.contracts import (
+    MultiAgentBudgetLimits,
+    MultiAgentExecutionResult,
+)
+from app.mneme.memoria.server.multi_agent.executor import BoundedMultiAgentExecutor
 from app.mneme.memoria.server.observability.context import observation_context, safe_log
 from app.mneme.memoria.server.repositories.runs import AnswerRunRepository
 from app.mneme.memoria.server.retrieval.contracts import RetrievedEvidence
@@ -128,12 +134,25 @@ class MemoryAgent:
         citation_validator: CitationValidator,
         runs: AnswerRunRepository | None = None,
         timeouts: PhaseTimeouts | None = None,
+        multi_agent_executor: BoundedMultiAgentExecutor | None = None,
     ) -> None:
         self._retriever = retriever
         self._generator = generator
         self._citation_validator = citation_validator
         self._runs = runs or AnswerRunRepository()
         self._timeouts = timeouts or PhaseTimeouts()
+        self._multi_agent = multi_agent_executor or BoundedMultiAgentExecutor(
+            retriever=retriever,
+            limits=MultiAgentBudgetLimits(
+                deadline_seconds=settings.MULTI_AGENT_DEADLINE_SECONDS,
+                source_timeout_seconds=settings.MULTI_AGENT_SOURCE_TIMEOUT_SECONDS,
+                max_model_calls=settings.MULTI_AGENT_MAX_MODEL_CALLS,
+                max_prompt_tokens=settings.MULTI_AGENT_MAX_PROMPT_TOKENS,
+                max_completion_tokens=settings.MULTI_AGENT_MAX_COMPLETION_TOKENS,
+                max_retrieval_top_k=settings.MULTI_AGENT_MAX_RETRIEVAL_TOP_K,
+                max_estimated_cost=settings.MULTI_AGENT_MAX_ESTIMATED_COST,
+            ),
+        )
 
     async def get_run(self, run_id: str) -> AnswerRunData:
         return await self._runs.get(run_id)
@@ -174,9 +193,37 @@ class MemoryAgent:
         self,
         request: AnswerRequest,
         plan: RetrievalPlan,
-    ) -> tuple[list[RetrievedEvidence], int]:
+        *,
+        run_id: str,
+        event_callback: RunEventCallback | None,
+    ) -> tuple[list[RetrievedEvidence], int, MultiAgentExecutionResult | None]:
         if not plan.uses_private_sources:
-            return [], 0
+            return [], 0, None
+        decision = self._multi_agent.plan(request, plan)
+        if decision.execution_mode == "multi":
+            async def emit_multi_agent(
+                phase: str,
+                status: str,
+                payload: dict[str, Any],
+            ) -> None:
+                await _emit_run_event(
+                    event_callback,
+                    phase,
+                    status,
+                    run_id,
+                    **payload,
+                )
+
+            result = await self._multi_agent.execute(
+                request,
+                plan,
+                event_callback=emit_multi_agent,
+            )
+            return (
+                result.judged.evidence,
+                result.budget_usage.supplemental_rounds,
+                result,
+            )
         evidence = await self._retriever.retrieve(
             retrieval_request(request, plan, expansion_index=0)
         )
@@ -186,7 +233,7 @@ class MemoryAgent:
             evidence = await self._retriever.retrieve(
                 retrieval_request(request, plan, expansion_index=1)
             )
-        return evidence, expansion_count
+        return evidence, expansion_count, None
 
     async def run(
         self,
@@ -251,7 +298,12 @@ class MemoryAgent:
             await _emit_run_event(event_callback, phase, "started", run_id)
             try:
                 async with asyncio.timeout(self._timeouts.retrieve):
-                    evidence, expansion_count = await self._retrieve(request, plan)
+                    evidence, expansion_count, multi_agent_result = await self._retrieve(
+                        request,
+                        plan,
+                        run_id=run_id,
+                        event_callback=event_callback,
+                    )
             except TimeoutError:
                 code = "AGENT_RETRIEVAL_TIMEOUT"
                 await self._record_failure(
@@ -278,6 +330,21 @@ class MemoryAgent:
                 duration_ms=_elapsed_ms(phase_started),
                 source_ids=[item.source_id for item in evidence],
                 expansion_count=expansion_count,
+                execution_mode="multi" if multi_agent_result else "single",
+                role_attempts=(
+                    [
+                        item.model_dump(mode="json")
+                        for item in multi_agent_result.role_attempts
+                    ]
+                    if multi_agent_result
+                    else []
+                ),
+                budget_usage=(
+                    multi_agent_result.budget_usage.model_dump(mode="json")
+                    if multi_agent_result
+                    else {}
+                ),
+                degraded=multi_agent_result.degraded if multi_agent_result else False,
             )
             source_counts: dict[str, int] = {}
             for item in evidence:
@@ -289,7 +356,14 @@ class MemoryAgent:
                 run_id,
                 evidence_count=len(evidence),
                 expansion_count=expansion_count,
+                execution_mode="multi" if multi_agent_result else "single",
                 source_counts=source_counts,
+                degraded=multi_agent_result.degraded if multi_agent_result else False,
+                conflict_count=(
+                    len(multi_agent_result.judged.conflicts)
+                    if multi_agent_result
+                    else 0
+                ),
             )
             safe_log(
                 logger,
@@ -307,6 +381,16 @@ class MemoryAgent:
             await _emit_run_event(event_callback, phase, "started", run_id)
             try:
                 async with asyncio.timeout(self._timeouts.generate):
+                    generation_values: dict[str, Any] = {}
+                    if multi_agent_result:
+                        generation_values = {
+                            "execution_mode": "multi",
+                            "max_model_calls": self._multi_agent.limits.max_model_calls,
+                            "max_prompt_tokens": self._multi_agent.limits.max_prompt_tokens,
+                            "max_completion_tokens": (
+                                self._multi_agent.limits.max_completion_tokens
+                            ),
+                        }
                     generated = await self._generator.generate(
                         GenerationRequest(
                             request_id=request.request_id,
@@ -316,17 +400,31 @@ class MemoryAgent:
                             conversation=request.conversation,
                             model=request.model,
                             allow_model_fallback=request.allow_model_fallback,
-                            tool_context=ToolExecutionContext(
-                                request_id=request.request_id,
-                                owner_id=request.owner_id,
-                                knowledge_base_id=request.knowledge_base_id,
-                                mode=request.answer_mode,
-                                top_k=request.top_k,
-                                plan=plan,
-                                allow_action_proposals=request.session_id is not None,
+                            tool_context=(
+                                None
+                                if multi_agent_result
+                                else ToolExecutionContext(
+                                    request_id=request.request_id,
+                                    owner_id=request.owner_id,
+                                    knowledge_base_id=request.knowledge_base_id,
+                                    mode=request.answer_mode,
+                                    top_k=request.top_k,
+                                    plan=plan,
+                                    allow_action_proposals=request.session_id is not None,
+                                )
                             ),
+                            **generation_values,
                         )
                     )
+                    if multi_agent_result and (
+                        generated.prompt_tokens
+                        > self._multi_agent.limits.max_prompt_tokens
+                        or generated.completion_tokens
+                        > self._multi_agent.limits.max_completion_tokens
+                        or generated.cost
+                        > self._multi_agent.limits.max_estimated_cost
+                    ):
+                        raise RuntimeDependencyError("AGENT_CAPACITY_EXCEEDED")
             except TimeoutError:
                 code = "AGENT_MODEL_TIMEOUT"
                 await self._record_failure(
@@ -351,6 +449,40 @@ class MemoryAgent:
             for item in generated.tool_evidence:
                 if all(existing.evidence_id != item.evidence_id for existing in evidence):
                     evidence.append(item)
+
+            if multi_agent_result:
+                uncertainty = "; ".join(
+                    [
+                        value
+                        for value in (
+                            generated.uncertainty,
+                            *multi_agent_result.judged.uncertainty,
+                        )
+                        if value
+                    ]
+                ) or None
+                model_calls = len(generated.model_attempts)
+                budget_usage = multi_agent_result.budget_usage.model_copy(
+                    update={
+                        "model_calls": model_calls,
+                        "prompt_tokens": generated.prompt_tokens,
+                        "completion_tokens": generated.completion_tokens,
+                        "estimated_cost": generated.cost,
+                    }
+                )
+                generated = generated.model_copy(
+                    update={
+                        "uncertainty": uncertainty,
+                        "execution_mode": "multi",
+                        "degraded": multi_agent_result.degraded,
+                        "role_attempts": [
+                            item.model_dump(mode="json")
+                            for item in multi_agent_result.role_attempts
+                        ],
+                        "budget_usage": budget_usage.model_dump(mode="json"),
+                        "stop_reason": multi_agent_result.stop_reason,
+                    }
+                )
 
             await self._runs.record_generation(
                 run_id=run_id,
@@ -441,6 +573,8 @@ class MemoryAgent:
                 document_ids=document_ids,
                 tool_calls=generated.tool_calls,
                 stop_reason=generated.stop_reason,
+                execution_mode=generated.execution_mode,
+                degraded=generated.degraded,
                 run_id=run_id,
             )
             await self._runs.complete(
