@@ -6,7 +6,13 @@ from collections import defaultdict, deque
 from redis.asyncio import Redis
 
 from app.mneme.conf.config import settings
+from app.mneme.conf.database import open_read_session, open_write_session
 from app.mneme.memoria.events import AgentEvent
+from app.mneme.memoria.persistence.runtime_events import (
+    append_durable_runtime_event,
+    list_durable_runtime_events,
+    parse_event_sequence,
+)
 from app.mneme.memoria.run_models import (
     TERMINAL_AGENT_RUN_STATUSES,
     AgentRunRecord,
@@ -214,45 +220,44 @@ class AgentRunStore:
         self._memory_records[record.run_id] = record.model_copy(deep=True)
 
     async def append_event(self, run_id: str, event: AgentEvent) -> AgentStoredEvent:
+        async with open_write_session() as db:
+            stored = await append_durable_runtime_event(
+                db,
+                run_id=run_id,
+                event=event,
+            )
+
         await self._ensure_backend()
         if self._backend == "redis":
             client = self._redis_client()
-            event_id = await client.xadd(
+            await client.xadd(
                 self._events_key(run_id),
-                {"event": event.model_dump_json()},
+                {
+                    "event": stored.event.model_dump_json(),
+                    "sequence": stored.event_id,
+                },
                 maxlen=settings.AGENT_RUN_EVENT_MAXLEN,
                 approximate=True,
             )
             await client.expire(self._events_key(run_id), settings.AGENT_RUN_TTL_SECONDS)
-            stored = AgentStoredEvent(event_id=str(event_id), event=event)
         else:
-            events = self._memory_events[run_id]
-            stored = AgentStoredEvent(event_id=f"{len(events) + 1}-0", event=event)
-            events.append(stored)
+            self._memory_events[run_id].append(stored.model_copy(deep=True))
 
         record = await self.get(run_id)
         if record:
             record.last_event_id = stored.event_id
+            record.last_event_sequence = int(stored.event_id)
             await self.save(record)
         return stored
 
     async def list_events(self, run_id: str, *, after_id: str | None = None) -> list[AgentStoredEvent]:
-        await self._ensure_backend()
-        if self._backend == "redis":
-            minimum = f"({after_id}" if after_id else "-"
-            rows = await self._redis_client().xrange(self._events_key(run_id), min=minimum, max="+")
-            return [
-                AgentStoredEvent(event_id=str(event_id), event=AgentEvent.model_validate_json(fields["event"]))
-                for event_id, fields in rows
-            ]
-        events = self._memory_events.get(run_id, [])
-        if not after_id:
-            return [item.model_copy(deep=True) for item in events]
-        return [
-            item.model_copy(deep=True)
-            for item in events
-            if _stream_id_number(item.event_id) > _stream_id_number(after_id)
-        ]
+        after_sequence = parse_event_sequence(after_id)
+        async with open_read_session() as db:
+            return await list_durable_runtime_events(
+                db,
+                run_id=run_id,
+                after_sequence=after_sequence,
+            )
 
     async def request_abort(self, run_id: str) -> None:
         await self._ensure_backend()
@@ -352,12 +357,6 @@ class AgentRunStore:
     @staticmethod
     def _session_lease_key(session_id: str) -> str:
         return f"mneme:agent-session:{session_id}:lease"
-
-
-def _stream_id_number(value: str) -> tuple[int, int]:
-    major, _, minor = value.partition("-")
-    return int(major), int(minor or 0)
-
 
 agent_run_store = AgentRunStore()
 

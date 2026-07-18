@@ -22,6 +22,7 @@ ROUTER_MODULE_NAMES = [
     "app.mneme.domains.tasks.router",
     "app.mneme.domains.graph.router",
     "app.mneme.domains.support.router",
+    "app.mneme.domains.channels.router",
 ]
 
 

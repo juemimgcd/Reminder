@@ -4,8 +4,13 @@ import { ref } from "vue";
 import type { MnemeWorkspace } from "../composables/useMnemeWorkspace";
 import { useI18n } from "../composables/useI18n";
 import { usePreferences, type Locale, type ThemeMode } from "../composables/usePreferences";
+import ChannelGatewayPanel from "../components/channels/ChannelGatewayPanel.vue";
 
-defineProps<{ workspace: MnemeWorkspace; healthLabel: string }>();
+defineProps<{
+  workspace: MnemeWorkspace;
+  healthLabel: string;
+  formatDate: (value: string | number | Date) => string;
+}>();
 const preferences = usePreferences();
 const { t } = useI18n();
 const contextWindow = ref(32);
@@ -15,13 +20,15 @@ const locales: Array<{ value: Locale; label: string }> = [{ value: "en-US", labe
 
 <template>
   <div data-testid="stitch-settings-layout" class="settings-layout">
-    <aside class="settings-section-nav"><small>{{ t("settings.preferences") }}</small><nav><a href="#appearance">{{ t("settings.appearance") }}</a><a href="#models">{{ t("settings.models") }}</a><a href="#sync">{{ t("settings.sync") }}</a><a href="#health">{{ t("settings.health") }}</a></nav></aside>
+    <aside class="settings-section-nav"><small>{{ t("settings.preferences") }}</small><nav><a href="#appearance">{{ t("settings.appearance") }}</a><a href="#channels">Channels</a><a href="#models">{{ t("settings.models") }}</a><a href="#sync">{{ t("settings.sync") }}</a><a href="#health">{{ t("settings.health") }}</a></nav></aside>
     <section>
       <article id="appearance">
         <header><div><small>{{ t("settings.appearance") }}</small><h2>{{ t("settings.appearanceDescription") }}</h2></div></header>
         <fieldset><legend>{{ t("settings.theme") }}</legend><div class="choice-grid"><button v-for="theme in themes" :key="theme.value" :class="{ active: preferences.themeMode.value === theme.value }" :aria-label="t(`settings.theme.${theme.value}Label`)" :aria-pressed="preferences.themeMode.value === theme.value" @click="preferences.setThemeMode(theme.value)"><component :is="theme.icon" /><span>{{ t(`settings.theme.${theme.value}`) }}</span></button></div></fieldset>
         <fieldset><legend>{{ t("settings.language") }}</legend><div class="choice-grid locale-grid"><button v-for="locale in locales" :key="locale.value" :class="{ active: preferences.locale.value === locale.value }" :aria-pressed="preferences.locale.value === locale.value" @click="preferences.setLocale(locale.value)">{{ locale.label }}</button></div></fieldset>
       </article>
+
+      <ChannelGatewayPanel :workspace="workspace" :format-date="formatDate" />
 
       <article id="models">
         <header><div><small>Intelligence</small><h2>AI Models Configuration</h2></div><BrainCircuit /></header>

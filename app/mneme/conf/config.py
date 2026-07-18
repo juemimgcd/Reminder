@@ -126,6 +126,7 @@ class Settings(BaseSettings):
     CELERY_AGENT_QUEUE: str = "agent_run"
     CELERY_AUTOMATION_QUEUE: str = "agent_automation"
     CELERY_MAINTENANCE_QUEUE: str = "maintenance"
+    CELERY_CHANNEL_QUEUE: str = "channel_delivery"
     MAINTENANCE_PENDING_RECOVERY_SECONDS: int = 30
     MAINTENANCE_TASK_STALE_SECONDS: int = 1800
     MAINTENANCE_RECOVERY_BATCH_SIZE: int = 20
@@ -141,6 +142,19 @@ class Settings(BaseSettings):
     INDEX_VECTOR_BATCH_SIZE: int = 64
     OUTBOX_EVENT_MAX_ATTEMPTS: int = 5
     OUTBOX_RETRY_BASE_DELAY_SECONDS: int = 30
+
+    FEISHU_ENABLED: bool = False
+    FEISHU_ACCOUNT_ID: str = "default"
+    FEISHU_APP_ID: str = ""
+    FEISHU_APP_SECRET: SecretStr = SecretStr("")
+    FEISHU_VERIFICATION_TOKEN: SecretStr = SecretStr("")
+    FEISHU_API_BASE_URL: str = "https://open.feishu.cn"
+    FEISHU_MAX_TEXT_CHARS: int = 3500
+    CHANNEL_LINK_CODE_TTL_SECONDS: int = 600
+    CHANNEL_DELIVERY_MAX_ATTEMPTS: int = 5
+    CHANNEL_DELIVERY_RETRY_BASE_SECONDS: int = 15
+    CHANNEL_DELIVERY_DISPATCH_BATCH_SIZE: int = 20
+    CHANNEL_DELIVERY_STALE_SECONDS: int = 300
 
     RATE_LIMIT_WINDOW_SECONDS: int = 60
     UPLOAD_RATE_LIMIT_MAX: int = 10

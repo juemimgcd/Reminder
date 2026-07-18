@@ -188,7 +188,7 @@ function openCreateCommand() {
           <GraphView v-else-if="workspace.view.value === 'graph'" :workspace="workspace" />
           <AiLabView v-else-if="workspace.view.value === 'ai'" :workspace="workspace" :format-date="formatDate" />
           <MemoryCenterView v-else-if="workspace.view.value === 'memory'" :workspace="workspace" />
-          <SettingsView v-else :workspace="workspace" :health-label="activeHealthLabel" />
+          <SettingsView v-else :workspace="workspace" :health-label="activeHealthLabel" :format-date="formatDate" />
         </section>
 
         <StatusBar :status="activeHealthLabel" :detail="workspace.selectedKnowledgeBase.value?.name" />

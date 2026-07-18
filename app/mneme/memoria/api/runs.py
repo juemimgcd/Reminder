@@ -10,9 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.mneme.conf.config import settings
 from app.mneme.conf.database import get_database, get_write_database
 from app.mneme.domains.chat.service import require_owned_chat_session
-from app.mneme.memoria.events import AgentEvent
+from app.mneme.memoria.events import AgentEvent, AgentRunEventType
 from app.mneme.memoria.persistence.automation import durable_run_to_record, get_durable_run, save_durable_run
 from app.mneme.memoria.persistence.runs import agent_run_store
+from app.mneme.memoria.persistence.runtime_events import parse_event_sequence
 from app.mneme.memoria.run_models import TERMINAL_AGENT_RUN_STATUSES, AgentRunRecord, AgentRunStatus
 from app.mneme.memoria.run_submission import submit_agent_run
 from app.mneme.models.user import User
@@ -79,7 +80,13 @@ async def abort_agent_run_api(
             await agent_run_store.remove_from_session_queue(session_id=record.session_id, run_id=record.run_id)
             await agent_run_store.append_event(
                 record.run_id,
-                AgentEvent.lifecycle("aborted", loop_index=0, loop_reason="abort_while_queued"),
+                AgentEvent.rag_progress(
+                    AgentRunEventType.RUN_CANCELLED,
+                    phase="cancelled",
+                    run_id=record.run_id,
+                    loop_index=0,
+                    loop_reason="abort_while_queued",
+                ),
             )
             record = await agent_run_store.get(record.run_id) or record
         await save_durable_run(db, record)
@@ -96,6 +103,14 @@ async def stream_agent_run_api(
 ):
     await _require_owned_run(run_id, current_user.id, db=db)
     starting_cursor = last_event_id or cursor
+    try:
+        parse_event_sequence(starting_cursor)
+    except ValueError as exc:
+        raise BusinessException(
+            message=str(exc),
+            code=4053,
+            status_code=400,
+        ) from exc
 
     async def event_stream():
         active_cursor = starting_cursor
@@ -105,9 +120,14 @@ async def stream_agent_run_api(
                 active_cursor = stored.event_id
                 event = stored.event
                 data = json.dumps(event.to_stream_dict(), ensure_ascii=False)
-                yield f"id: {stored.event_id}\nevent: {event.type.value}\ndata: {data}\n\n"
+                yield f"id: {stored.event_id}\nevent: {event.name.value}\ndata: {data}\n\n"
             record = await agent_run_store.get(run_id)
-            if record is None or (record.status in TERMINAL_AGENT_RUN_STATUSES and not events):
+            if record is None:
+                durable = await get_durable_run(db, run_id=run_id)
+                record = durable_run_to_record(durable) if durable else None
+            if record is None or (
+                record.status in TERMINAL_AGENT_RUN_STATUSES and not events
+            ):
                 break
             await asyncio.sleep(settings.AGENT_RUN_POLL_INTERVAL_SECONDS)
 

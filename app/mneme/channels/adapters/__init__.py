@@ -1,0 +1,1 @@
+"""Concrete external-channel adapters."""

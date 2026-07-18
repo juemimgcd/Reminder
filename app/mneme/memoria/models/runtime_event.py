@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import JSON, BigInteger, DateTime, Index, String
+from sqlalchemy import JSON, BigInteger, DateTime, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.mneme.models.base import Base
@@ -14,16 +14,26 @@ class AgentRuntimeEvent(Base):
         Index("idx_agent_runtime_events_session_id", "session_id"),
         Index("idx_agent_runtime_events_user_id", "user_id"),
         Index("idx_agent_runtime_events_event_type", "event_type"),
+        Index(
+            "uq_agent_runtime_events_run_sequence",
+            "run_id",
+            "sequence",
+            unique=True,
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    schema_version: Mapped[str] = mapped_column(String(16), nullable=False, default="2")
+    sequence: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    agent_role: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    phase: Mapped[str | None] = mapped_column(String(64), nullable=True)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     trace_id: Mapped[str] = mapped_column(String(64), nullable=False)
     run_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     session_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    loop_index: Mapped[int | None] = mapped_column(nullable=True)
+    loop_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
     tool_call_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     duration_ms: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     input_tokens: Mapped[int | None] = mapped_column(BigInteger, nullable=True)

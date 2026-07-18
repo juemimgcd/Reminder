@@ -19,6 +19,9 @@ def build_celery_app() -> Celery:
             "tasks.dispatch_due_heartbeat_jobs_task": {"queue": settings.CELERY_AUTOMATION_QUEUE},
             "tasks.execute_maintenance_task": {"queue": settings.CELERY_MAINTENANCE_QUEUE},
             "tasks.recover_maintenance_tasks": {"queue": settings.CELERY_AUTOMATION_QUEUE},
+            "tasks.process_channel_delivery_task": {"queue": settings.CELERY_CHANNEL_QUEUE},
+            "tasks.dispatch_channel_deliveries_task": {"queue": settings.CELERY_CHANNEL_QUEUE},
+            "tasks.process_channel_inbound_task": {"queue": settings.CELERY_CHANNEL_QUEUE},
         },
         task_serializer="json",
         result_serializer="json",
@@ -34,6 +37,7 @@ def build_celery_app() -> Celery:
             "app.mneme.memoria.tasks.runs",
             "app.mneme.memoria.tasks.heartbeats",
             "app.mneme.tasks.maintenance_tasks",
+            "app.mneme.channels.tasks",
         ),
         beat_schedule={
             "recover-agent-runs": {
@@ -51,6 +55,10 @@ def build_celery_app() -> Celery:
             "recover-maintenance-tasks": {
                 "task": "tasks.recover_maintenance_tasks",
                 "schedule": 60.0,
+            },
+            "dispatch-channel-deliveries": {
+                "task": "tasks.dispatch_channel_deliveries_task",
+                "schedule": 10.0,
             },
         },
     )

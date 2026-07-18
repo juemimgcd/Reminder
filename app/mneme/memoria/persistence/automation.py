@@ -29,6 +29,7 @@ def durable_run_to_record(row: DurableAgentRun) -> AgentRunRecord:
         completed_at=row.completed_at,
         error=row.error,
         last_event_id=row.last_event_id,
+        last_event_sequence=row.last_event_sequence,
         queue_wait_ms=row.queue_wait_ms,
     )
 
@@ -82,7 +83,9 @@ async def save_durable_run(db: AsyncSession, record: AgentRunRecord, *, touch_he
     row.started_at = record.started_at
     row.completed_at = record.completed_at
     row.error = record.error
-    row.last_event_id = record.last_event_id
+    if record.last_event_sequence >= int(row.last_event_sequence or 0):
+        row.last_event_id = record.last_event_id
+        row.last_event_sequence = record.last_event_sequence
     row.queue_wait_ms = record.queue_wait_ms
     row.attempt_count = record.attempt_count
     if touch_heartbeat:
