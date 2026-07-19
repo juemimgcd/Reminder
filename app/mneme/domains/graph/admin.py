@@ -4,7 +4,6 @@ from app.mneme.clients.neo4j_client import is_neo4j_projection_enabled, probe_ne
 from app.mneme.crud.document import list_documents
 from app.mneme.crud.knowledge_base import get_knowledge_base_by_id, list_knowledge_bases_by_user_id
 from app.mneme.crud.memory_entry import list_memory_entries_by_document_id
-from app.mneme.models.user import User
 from app.mneme.domains.graph.projection import (
     rebuild_user_related_projection,
     reset_user_projection,
@@ -12,6 +11,7 @@ from app.mneme.domains.graph.projection import (
     sync_knowledge_base_projection,
     sync_user_projection,
 )
+from app.mneme.models.user import User
 from app.mneme.utils.exceptions import BusinessException
 
 
@@ -92,7 +92,11 @@ async def rebuild_graph_projection_for_knowledge_base(
         knowledge_base_id=knowledge_base_id,
     )
     if not knowledge_base or knowledge_base.user_id != current_user.id:
-        raise BusinessException(message="knowledge base not found or not owned by current user", code=4042, status_code=404)
+        raise BusinessException(
+            message="knowledge base not found or not owned by current user",
+            code=4042,
+            status_code=404,
+        )
 
     await sync_user_projection(user=current_user)
     await sync_knowledge_base_projection(

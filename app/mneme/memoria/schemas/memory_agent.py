@@ -111,7 +111,7 @@ class MemoryAgentAnswerRequest(BaseModel):
     message_id: str
     question: str = Field(min_length=1)
     answer_mode: AnswerMode
-    execution_mode: Literal["auto", "single", "multi"] = "auto"
+    execution_mode: Literal["auto", "single", "multi"] = "single"
     top_k: int = Field(default=4, ge=1, le=10)
     allow_model_fallback: bool = False
     conversation: ConversationContextData = Field(default_factory=ConversationContextData)

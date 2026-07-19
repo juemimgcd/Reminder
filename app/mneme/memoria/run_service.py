@@ -79,6 +79,7 @@ async def execute_agent_run(run_id: str) -> None:
                 question=record.question,
                 top_k=record.top_k,
                 answer_mode=record.answer_mode,
+                execution_mode=record.execution_mode,
                 abort_signal=abort_signal,
                 agent_run_id=record.run_id,
                 trace_id=record.trace_id,

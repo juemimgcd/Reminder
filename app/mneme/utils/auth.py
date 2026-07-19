@@ -10,7 +10,6 @@ from app.mneme.conf.config import settings
 from app.mneme.conf.database import get_database
 from app.mneme.models.user import User
 
-
 bearer_scheme = HTTPBearer(auto_error=False)
 
 

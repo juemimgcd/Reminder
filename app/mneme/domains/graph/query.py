@@ -109,10 +109,12 @@ async def _fetch_user_graph_records(*, user_id: int) -> dict[str, list[SimpleNam
 async def _fetch_related_edges_for_user(*, user_id: int) -> list[dict[str, Any]]:
     rows = await fetch_neo4j_records(
         """
-        MATCH (:User {id: $user_id})-[:OWNS]->(:KnowledgeBase)-[:CONTAINS]->(source:Document)-[r:RELATED]->(target:Document)
+        MATCH (:User {id: $user_id})-[:OWNS]->(:KnowledgeBase)
+              -[:CONTAINS]->(source:Document)-[r:RELATED]->(target:Document)
         MATCH (:User {id: $user_id})-[:OWNS]->(:KnowledgeBase)-[:CONTAINS]->(target)
         RETURN source.id AS source_document_id, target.id AS target_document_id, properties(r) AS metadata
-        ORDER BY r.relationship_score DESC, r.shared_memory_count DESC, r.jaccard_similarity DESC, source.id ASC, target.id ASC
+        ORDER BY r.relationship_score DESC, r.shared_memory_count DESC,
+                 r.jaccard_similarity DESC, source.id ASC, target.id ASC
         """,
         {"user_id": user_id},
     )
@@ -314,10 +316,12 @@ async def build_knowledge_base_graph_payload_from_neo4j(
         if include_relationships:
             related_rows = await fetch_neo4j_records(
                 """
-                MATCH (:KnowledgeBase {id: $knowledge_base_id})-[:CONTAINS]->(source:Document)-[r:RELATED]->(target:Document)
+                MATCH (:KnowledgeBase {id: $knowledge_base_id})
+                      -[:CONTAINS]->(source:Document)-[r:RELATED]->(target:Document)
                 MATCH (:KnowledgeBase {id: $knowledge_base_id})-[:CONTAINS]->(target)
                 RETURN source.id AS source_document_id, target.id AS target_document_id, properties(r) AS metadata
-                ORDER BY r.relationship_score DESC, r.shared_memory_count DESC, r.jaccard_similarity DESC, source.id ASC, target.id ASC
+                ORDER BY r.relationship_score DESC, r.shared_memory_count DESC,
+                         r.jaccard_similarity DESC, source.id ASC, target.id ASC
                 """,
                 {"knowledge_base_id": knowledge_base.id},
             )
@@ -477,7 +481,15 @@ async def build_document_graph_payload_from_neo4j(
         nodes = [build_user_node(user=user)]
         edges: list[dict[str, Any]] = []
         knowledge_base_nodes: dict[str, dict[str, Any]] = {}
-        visible_knowledge_bases = knowledge_bases if relationship_scope == "user" else [item for item in knowledge_bases if item.id == root_knowledge_base.id]
+        visible_knowledge_bases = (
+            knowledge_bases
+            if relationship_scope == "user"
+            else [
+                item
+                for item in knowledge_bases
+                if item.id == root_knowledge_base.id
+            ]
+        )
         for knowledge_base in visible_knowledge_bases:
             if knowledge_base.id not in included_document_count_by_kb_id:
                 continue
@@ -496,7 +508,14 @@ async def build_document_graph_payload_from_neo4j(
                 )
             )
 
-        for document in sorted(included_documents, key=lambda item: (item.id != root_document.id, item.created_at, item.id)):
+        for document in sorted(
+            included_documents,
+            key=lambda item: (
+                item.id != root_document.id,
+                item.created_at,
+                item.id,
+            ),
+        ):
             kb_node = knowledge_base_nodes.get(document.knowledge_base_id)
             if kb_node is None:
                 continue

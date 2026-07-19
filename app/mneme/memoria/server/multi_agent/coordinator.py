@@ -1,3 +1,6 @@
+import hashlib
+
+from app.mneme.memoria.server.config import settings
 from app.mneme.memoria.server.contracts.answers import AnswerRequest
 from app.mneme.memoria.server.multi_agent.contracts import (
     CoordinatorDecision,
@@ -36,17 +39,36 @@ class RAGCoordinator:
             if selected
         ]
         requested = request.execution_mode
+        allowed_modes = {item.strip() for item in settings.MULTI_AGENT_ALLOWED_MODES.split(",") if item.strip()}
+        rollout_key = f"{request.owner_id}:{request.session_id or request.request_id}"
+        rollout_bucket = int(hashlib.sha256(rollout_key.encode("utf-8")).hexdigest()[:8], 16) % 100
+        rollout_enabled = rollout_bucket < settings.MULTI_AGENT_ROLLOUT_PERCENT
         use_multi = (
-            requested == "multi"
-            or (requested == "auto" and request.answer_mode == "analysis_query")
-        ) and len(enabled) >= 2
+            settings.MULTI_AGENT_FEATURE_ENABLED
+            and rollout_enabled
+            and request.answer_mode in allowed_modes
+            and requested == "multi"
+            and len(enabled) >= 2
+        )
         if not use_multi:
             return CoordinatorDecision(
                 execution_mode="single",
                 reason_code=(
                     "explicit_single"
                     if requested == "single"
-                    else "single_source_or_fast_path"
+                    else (
+                        "feature_disabled"
+                        if requested == "multi" and not settings.MULTI_AGENT_FEATURE_ENABLED
+                        else (
+                            "rollout_excluded"
+                            if requested == "multi" and not rollout_enabled
+                            else (
+                                "mode_not_enabled"
+                                if requested == "multi" and request.answer_mode not in allowed_modes
+                                else "single_source_or_fast_path"
+                            )
+                        )
+                    )
                 ),
             )
 
@@ -63,11 +85,7 @@ class RAGCoordinator:
         ]
         return CoordinatorDecision(
             execution_mode="multi",
-            reason_code=(
-                "explicit_multi"
-                if requested == "multi"
-                else "analysis_requires_cross_source_coverage"
-            ),
+            reason_code="explicit_multi",
             assignments=assignments,
             allow_supplemental=limits.max_supplemental_rounds == 1,
         )

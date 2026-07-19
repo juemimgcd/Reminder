@@ -470,7 +470,7 @@ const realApi = {
   listChatSessions(token: string, knowledgeBaseId: string | null) {
     return request<ChatSessionListData>(`/kb/chat/sessions${buildQuery({ knowledge_base_id: knowledgeBaseId })}`, { token });
   },
-  createChatSession(token: string, payload: { knowledge_base_id: string | null; title?: string | null; answer_mode: AnswerMode }) {
+  createChatSession(token: string, payload: { knowledge_base_id: string | null; title?: string | null; answer_mode: AnswerMode; multi_agent_enabled?: boolean }) {
     return request<ChatSessionDetailData["session"]>("/kb/chat/sessions", {
       method: "POST",
       token,
@@ -478,14 +478,15 @@ const realApi = {
         knowledge_base_id: payload.knowledge_base_id,
         title: payload.title ?? null,
         answer_mode: payload.answer_mode,
+        multi_agent_enabled: payload.multi_agent_enabled ?? false,
       },
     });
   },
   getChatSession(token: string, sessionId: string) {
     return request<ChatSessionDetailData>(`/kb/chat/sessions/${sessionId}`, { token });
   },
-  updateChatSession(token: string, sessionId: string, answerMode: AnswerMode) {
-    return request<ChatSessionData>(`/kb/chat/sessions/${sessionId}`, { method: "PATCH", token, body: { answer_mode: answerMode } });
+  updateChatSession(token: string, sessionId: string, payload: { answer_mode?: AnswerMode; multi_agent_enabled?: boolean }) {
+    return request<ChatSessionData>(`/kb/chat/sessions/${sessionId}`, { method: "PATCH", token, body: payload });
   },
   deleteChatSession(token: string, sessionId: string) {
     return request<{ session_id: string; deleted_count: number }>(`/kb/chat/sessions/${sessionId}`, {
@@ -493,13 +494,14 @@ const realApi = {
       token,
     });
   },
-  sendChatSessionMessage(token: string, sessionId: string, payload: { question: string; answer_mode: AnswerMode; top_k?: number; retry_message_id?: string; regenerate_message_id?: string }) {
+  sendChatSessionMessage(token: string, sessionId: string, payload: { question: string; answer_mode: AnswerMode; execution_mode?: "single" | "multi"; top_k?: number; retry_message_id?: string; regenerate_message_id?: string }) {
     return request<ChatSessionDetailData>(`/kb/chat/sessions/${sessionId}/messages`, {
       method: "POST",
       token,
       body: {
         question: payload.question,
         answer_mode: payload.answer_mode,
+        execution_mode: payload.execution_mode,
         top_k: payload.top_k ?? 4,
         retry_message_id: payload.retry_message_id ?? null,
         regenerate_message_id: payload.regenerate_message_id ?? null,
@@ -509,7 +511,7 @@ const realApi = {
   streamChatSessionMessage(
     token: string,
     sessionId: string,
-    payload: { question: string; answer_mode: AnswerMode; top_k?: number },
+    payload: { question: string; answer_mode: AnswerMode; execution_mode?: "single" | "multi"; top_k?: number },
     onEvent: (event: AgentStreamEvent) => void,
     options: { signal?: AbortSignal } = {},
   ) {
@@ -519,6 +521,7 @@ const realApi = {
       {
         question: payload.question,
         answer_mode: payload.answer_mode,
+        execution_mode: payload.execution_mode,
         top_k: payload.top_k ?? 4,
       },
       onEvent,
@@ -528,7 +531,7 @@ const realApi = {
   createAgentRun(
     token: string,
     sessionId: string,
-    payload: { question: string; answer_mode: AnswerMode; top_k?: number; client_request_id: string },
+    payload: { question: string; answer_mode: AnswerMode; execution_mode?: "single" | "multi"; top_k?: number; client_request_id: string },
   ) {
     return request<AgentRunData>(`/kb/chat/sessions/${sessionId}/runs`, {
       method: "POST",
@@ -536,6 +539,7 @@ const realApi = {
       body: {
         question: payload.question,
         answer_mode: payload.answer_mode,
+        execution_mode: payload.execution_mode,
         top_k: payload.top_k ?? 4,
         client_request_id: payload.client_request_id,
       },

@@ -3,7 +3,6 @@ from collections.abc import Iterable
 from app.mneme.conf.config import settings
 from app.mneme.schemas.production import FrameworkDecisionData, ProductionReadinessReportData, ReadinessCheckData
 
-
 DEFAULT_STACK = [
     "FastAPI",
     "PostgreSQL",
@@ -53,27 +52,42 @@ def build_framework_decisions() -> list[FrameworkDecisionData]:
         FrameworkDecisionData(
             area="retrieval_core",
             decision="keep_self_built",
-            reason="Query routing, hybrid recall, fusion, rerank, evidence answer, and debug/eval hooks are project-specific and already integrated.",
+            reason=(
+                "Query routing, hybrid recall, fusion, rerank, evidence answer, "
+                "and debug/eval hooks are project-specific and already integrated."
+            ),
         ),
         FrameworkDecisionData(
             area="document_ingestion",
             decision="optional_poc",
-            reason="LlamaIndex can be evaluated for ingestion convenience, but should not replace the current pipeline without eval evidence.",
+            reason=(
+                "LlamaIndex can be evaluated for ingestion convenience, but should "
+                "not replace the current pipeline without eval evidence."
+            ),
         ),
         FrameworkDecisionData(
             area="graph_rag",
             decision="optional_poc",
-            reason="GraphRAG is currently gated by decision and eval views; framework adoption should stay behind the same gate.",
+            reason=(
+                "GraphRAG is currently gated by decision and eval views; framework "
+                "adoption should stay behind the same gate."
+            ),
         ),
         FrameworkDecisionData(
             area="analytics_store",
             decision="avoid_by_default",
-            reason="PostgreSQL views and reports cover the current tuning needs; adding DuckDB or MongoDB would increase operational surface.",
+            reason=(
+                "PostgreSQL views and reports cover the current tuning needs; "
+                "adding DuckDB or MongoDB would increase operational surface."
+            ),
         ),
         FrameworkDecisionData(
             area="keyword_search",
             decision="avoid_by_default",
-            reason="PostgreSQL keyword recall is sufficient for the current lightweight hybrid stage unless eval proves otherwise.",
+            reason=(
+                "PostgreSQL keyword recall is sufficient for the current lightweight "
+                "hybrid stage unless eval proves otherwise."
+            ),
         ),
     ]
 
@@ -139,13 +153,19 @@ def build_production_readiness_report() -> ProductionReadinessReportData:
         build_check(
             name="migration_execution",
             passed=False,
-            reason="Day 16-18 migrations exist, but this readiness check cannot confirm they were applied to the live database.",
+            reason=(
+                "Day 16-18 migrations exist, but this readiness check cannot confirm "
+                "they were applied to the live database."
+            ),
             warn=True,
         ),
         build_check(
             name="external_service_probe",
             passed=settings.NEO4J_ENABLED,
-            reason="Neo4j probing is exposed; Milvus and Redis are still verified by worker/runtime checks rather than this report.",
+            reason=(
+                "Neo4j probing is exposed; Milvus and Redis are still verified by "
+                "worker/runtime checks rather than this report."
+            ),
             warn=True,
         ),
         build_check(

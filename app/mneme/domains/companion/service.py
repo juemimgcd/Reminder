@@ -2,10 +2,10 @@ import json
 
 from langchain_core.output_parsers import PydanticOutputParser
 
+from app.mneme.clients.llm_client import get_llm
 from app.mneme.conf.logging import app_logger
 from app.mneme.schemas.companion import CompanionAnswerResult
 from app.mneme.utils.companion_prompt import get_companion_prompt
-from app.mneme.clients.llm_client import get_llm
 
 
 def build_companion_input(

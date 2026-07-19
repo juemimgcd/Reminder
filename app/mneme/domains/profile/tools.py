@@ -1,6 +1,7 @@
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
+from app.mneme.domains.memory.governance import build_memory_governance_view
 from app.mneme.models.memory_entry import MemoryEntry
 from app.mneme.schemas.memory_governance import MemoryGovernanceData
 from app.mneme.schemas.profile_evidence import (
@@ -11,8 +12,6 @@ from app.mneme.schemas.profile_evidence import (
     ProfileToolCallItem,
     TopicTimelineItem,
 )
-from app.mneme.domains.memory.governance import build_memory_governance_view
-
 
 GOAL_MARKERS = (
     "goal",

@@ -1,7 +1,19 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.mneme.models.base import Base
@@ -13,6 +25,10 @@ class DurableAgentRun(Base):
         UniqueConstraint("user_id", "session_id", "client_request_id", name="uq_agent_runs_request"),
         Index("idx_agent_runs_status_updated", "status", "updated_at"),
         Index("idx_agent_runs_trigger", "trigger_type", "trigger_id"),
+        CheckConstraint(
+            "execution_mode IN ('single', 'multi')",
+            name="ck_agent_runs_execution_mode",
+        ),
     )
 
     run_id: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -25,6 +41,7 @@ class DurableAgentRun(Base):
     question: Mapped[str] = mapped_column(Text, nullable=False)
     top_k: Mapped[int] = mapped_column(Integer, nullable=False, default=4)
     answer_mode: Mapped[str] = mapped_column(String(32), nullable=False)
+    execution_mode: Mapped[str] = mapped_column(String(16), nullable=False, default="single", server_default="single")
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="queued")
     trigger_type: Mapped[str] = mapped_column(String(32), nullable=False, default="user")
     trigger_id: Mapped[str | None] = mapped_column(String(64), nullable=True)

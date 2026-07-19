@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -35,6 +36,7 @@ class ChatSessionData(BaseModel):
     user_id: int
     knowledge_base_id: str | None
     answer_mode: AnswerMode
+    multi_agent_enabled: bool = False
     title: str | None = None
     message_count: int
     last_message_at: datetime | None = None
@@ -57,6 +59,7 @@ class ChatSessionCreateRequest(BaseModel):
     knowledge_base_id: str | None = None
     title: str | None = Field(default=None, max_length=255)
     answer_mode: AnswerMode = "kb_qa"
+    multi_agent_enabled: bool = False
 
     @model_validator(mode="after")
     def require_scope_for_private_modes(self):
@@ -69,12 +72,14 @@ class ChatSessionUpdateRequest(BaseModel):
     title: str | None = Field(default=None, max_length=255)
     archived: bool | None = None
     answer_mode: AnswerMode | None = None
+    multi_agent_enabled: bool | None = None
 
 
 class ChatSessionMessageRequest(BaseModel):
     question: str = Field(..., min_length=1)
     top_k: int = Field(default=4, ge=1, le=10)
     answer_mode: AnswerMode | None = None
+    execution_mode: Literal["single", "multi"] | None = None
     model_config_id: str | None = None
     retry_message_id: str | None = None
     regenerate_message_id: str | None = None

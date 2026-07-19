@@ -4,10 +4,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mneme.clients.neo4j_client import is_neo4j_projection_enabled, run_neo4j_write
 from app.mneme.conf.logging import app_logger
-from app.mneme.crud.knowledge_base import get_knowledge_base_by_id
-from app.mneme.crud.user import get_user_by_id
 from app.mneme.crud.document import list_documents
+from app.mneme.crud.knowledge_base import get_knowledge_base_by_id
 from app.mneme.crud.memory_entry import list_memory_entries_by_user_id
+from app.mneme.crud.user import get_user_by_id
 from app.mneme.domains.graph.service import _build_related_document_edges
 
 

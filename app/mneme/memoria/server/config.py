@@ -50,6 +50,9 @@ class MemoryAgentSettings(BaseSettings):
     ANSWER_TOOL_OBSERVATION_MAX_CHARS: int = Field(default=2000, ge=200, le=8000)
     ANSWER_RUN_STALE_SECONDS: int = Field(default=180, ge=30, le=86400)
     ANSWER_RUN_RECOVERY_BATCH_SIZE: int = Field(default=100, ge=1, le=1000)
+    MULTI_AGENT_FEATURE_ENABLED: bool = True
+    MULTI_AGENT_ROLLOUT_PERCENT: int = Field(default=100, ge=0, le=100)
+    MULTI_AGENT_ALLOWED_MODES: str = "analysis_query"
     MULTI_AGENT_DEADLINE_SECONDS: float = Field(default=20, gt=0, le=120)
     MULTI_AGENT_SOURCE_TIMEOUT_SECONDS: float = Field(default=8, gt=0, le=60)
     MULTI_AGENT_MAX_MODEL_CALLS: int = Field(default=4, ge=1, le=16)

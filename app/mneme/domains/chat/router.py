@@ -13,9 +13,9 @@ from app.mneme.domains.chat.service import (
     get_chat_session_detail,
     list_chat_sessions,
     message_to_data,
+    remember_chat_message,
     require_owned_chat_session,
     stream_in_chat_session,
-    remember_chat_message,
     update_chat_session,
 )
 from app.mneme.models.user import User
@@ -58,6 +58,7 @@ async def create_chat_session_api(
         knowledge_base_id=payload.knowledge_base_id,
         title=payload.title,
         answer_mode=payload.answer_mode,
+        multi_agent_enabled=payload.multi_agent_enabled,
     )
     return success_response(data=ChatSessionData.model_validate(session), message="chat session created")
 
@@ -91,6 +92,7 @@ async def update_chat_session_api(
         title=payload.title,
         archived=payload.archived,
         answer_mode=payload.answer_mode,
+        multi_agent_enabled=payload.multi_agent_enabled,
     )
     return success_response(data=ChatSessionData.model_validate(session), message="chat session updated")
 
@@ -122,6 +124,7 @@ async def create_chat_message_api(
         question=payload.question,
         top_k=payload.top_k,
         answer_mode=payload.answer_mode,
+        execution_mode=payload.execution_mode,
         model_config_id=payload.model_config_id,
         retry_message_id=payload.retry_message_id,
         regenerate_message_id=payload.regenerate_message_id,
@@ -157,6 +160,7 @@ async def stream_chat_message_api(
                 question=payload.question,
                 top_k=payload.top_k,
                 answer_mode=payload.answer_mode,
+                execution_mode=payload.execution_mode,
                 abort_signal=abort_signal,
             ):
                 if await request_obj.is_disconnected():

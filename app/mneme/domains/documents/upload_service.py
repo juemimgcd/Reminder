@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import os
-from pathlib import Path
 import unicodedata
 import uuid
+from pathlib import Path
 
 from fastapi import UploadFile
 from sqlalchemy import text
@@ -24,7 +24,6 @@ from app.mneme.models.knowledge_base import KnowledgeBase
 from app.mneme.models.user import User
 from app.mneme.schemas.document import DocumentUploadData
 from app.mneme.utils.exceptions import BusinessException
-
 
 CHUNK_SIZE = 1024 * 1024
 

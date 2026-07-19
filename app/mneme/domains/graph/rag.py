@@ -1,7 +1,9 @@
-from datetime import datetime
 import re
+from datetime import datetime
 from typing import Any
 
+from app.mneme.domains.eval.service import dedupe_preserve_order, evaluate_retrieval, extract_terms
+from app.mneme.domains.graph.service import _build_related_document_edges
 from app.mneme.schemas.graph_rag import (
     GraphRagContextItem,
     GraphRagDecisionData,
@@ -9,9 +11,6 @@ from app.mneme.schemas.graph_rag import (
     GraphRagExpansionItem,
     GraphRagSeedItem,
 )
-from app.mneme.domains.eval.service import dedupe_preserve_order, evaluate_retrieval, extract_terms
-from app.mneme.domains.graph.service import _build_related_document_edges
-
 
 GRAPH_QUERY_MARKERS = (
     "relation",

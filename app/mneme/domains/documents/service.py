@@ -7,9 +7,9 @@ from app.mneme.conf.config import settings
 from app.mneme.conf.logging import app_logger
 from app.mneme.crud.document import get_document_by_id, update_document_status
 from app.mneme.crud.task_record import create_task_record
+from app.mneme.domains.graph.projection import sync_document_projection_from_db
 from app.mneme.infra.rate_limit import enforce_fixed_window_rate_limit
 from app.mneme.models.document import Document
-from app.mneme.domains.graph.projection import sync_document_projection_from_db
 from app.mneme.utils.exceptions import BusinessException
 
 

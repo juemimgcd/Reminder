@@ -5,7 +5,6 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.mneme.models.base import Base
 
-
 DEFAULT_USER_AVATAR_URL = "/static/avatars/default.png"
 
 

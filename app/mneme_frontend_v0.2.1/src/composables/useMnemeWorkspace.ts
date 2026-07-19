@@ -96,6 +96,8 @@ export function useMnemeWorkspace() {
   const aiModelActionStatus = ref("");
   const chatSessionFilter = ref("");
   const chatAnswerMode = ref<AnswerMode>("kb_qa");
+  const chatMultiAgentEnabled = ref(false);
+  const chatMultiAgentAvailable = computed(() => chatAnswerMode.value === "analysis_query");
   const memoryPendingCount = ref(0);
   const notifications = ref<NotificationData[]>([]);
   const notificationUnreadCount = ref(0);
@@ -212,7 +214,10 @@ export function useMnemeWorkspace() {
           chatSessions.value = data.items;
           activeChatSessionId.value = sessionId;
           chatMessages.value = detail?.messages ?? [];
-          if (detail) chatAnswerMode.value = detail.session.answer_mode;
+          if (detail) {
+            chatAnswerMode.value = detail.session.answer_mode;
+            chatMultiAgentEnabled.value = detail.session.multi_agent_enabled;
+          }
           else if (!activeKnowledgeBaseId.value) chatAnswerMode.value = "general_chat";
         }
         return true;
@@ -586,6 +591,7 @@ export function useMnemeWorkspace() {
     const detail = await api.getChatSession(token.value, sessionId);
     chatMessages.value = detail.messages;
     chatAnswerMode.value = detail.session.answer_mode;
+    chatMultiAgentEnabled.value = detail.session.multi_agent_enabled;
   }
 
   async function createChatSession() {
@@ -598,6 +604,7 @@ export function useMnemeWorkspace() {
       knowledge_base_id: knowledgeBaseId,
       title: "New Chat",
       answer_mode: chatAnswerMode.value,
+      multi_agent_enabled: chatMultiAgentEnabled.value,
     });
     chatSessions.value = [session, ...chatSessions.value];
     activeChatSessionId.value = session.id;
@@ -760,6 +767,8 @@ export function useMnemeWorkspace() {
         const run = await api.createAgentRun(token.value, sessionId, {
           question,
           answer_mode: options.mode ?? chatAnswerMode.value,
+          execution_mode:
+            chatMultiAgentEnabled.value && chatMultiAgentAvailable.value ? "multi" : "single",
           top_k: 4,
           client_request_id:
             globalThis.crypto?.randomUUID?.() ?? `request-${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -783,6 +792,7 @@ export function useMnemeWorkspace() {
         const detail = await api.getChatSession(token.value, sessionId);
         chatMessages.value = detail.messages;
         chatAnswerMode.value = detail.session.answer_mode;
+        chatMultiAgentEnabled.value = detail.session.multi_agent_enabled;
         const sessions = await api.listChatSessions(token.value, activeKnowledgeBaseId.value || null);
         chatSessions.value = sessions.items;
         return;
@@ -790,6 +800,8 @@ export function useMnemeWorkspace() {
       const detail = await api.sendChatSessionMessage(token.value, activeChatSessionId.value, {
         question,
         answer_mode: options.mode ?? chatAnswerMode.value,
+        execution_mode:
+          chatMultiAgentEnabled.value && chatMultiAgentAvailable.value ? "multi" : "single",
         top_k: 4,
         retry_message_id: options.retryMessageId,
         regenerate_message_id: options.regenerateMessageId,
@@ -797,6 +809,7 @@ export function useMnemeWorkspace() {
       mergeChatMessages(detail.messages);
       chatSessions.value = chatSessions.value.map((session) => (session.id === detail.session.id ? detail.session : session));
       chatAnswerMode.value = detail.session.answer_mode;
+      chatMultiAgentEnabled.value = detail.session.multi_agent_enabled;
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
         chatError.value = null;
@@ -862,9 +875,33 @@ export function useMnemeWorkspace() {
       banner.value = "This chat has no knowledge base. Keep General chat or create a scoped chat.";
       return;
     }
-    const updated = await api.updateChatSession(token.value, activeChatSessionId.value, mode);
+    const updated = await api.updateChatSession(token.value, activeChatSessionId.value, { answer_mode: mode });
     chatAnswerMode.value = updated.answer_mode;
     chatSessions.value = chatSessions.value.map((item) => item.id === updated.id ? updated : item);
+  }
+
+  async function setChatMultiAgentEnabled(enabled: boolean) {
+    if (chatPending.value) return;
+    if (!token.value || !activeChatSessionId.value) {
+      chatMultiAgentEnabled.value = enabled;
+      return;
+    }
+    const previous = chatMultiAgentEnabled.value;
+    chatMultiAgentEnabled.value = enabled;
+    try {
+      const updated = await api.updateChatSession(
+        token.value,
+        activeChatSessionId.value,
+        { multi_agent_enabled: enabled },
+      );
+      chatMultiAgentEnabled.value = updated.multi_agent_enabled;
+      chatSessions.value = chatSessions.value.map((item) =>
+        item.id === updated.id ? updated : item,
+      );
+    } catch (error) {
+      chatMultiAgentEnabled.value = previous;
+      banner.value = errorMessage(error, "Unable to update Multi-Agent preference.");
+    }
   }
 
   async function refreshMemoryPendingCount() {
@@ -1160,6 +1197,8 @@ export function useMnemeWorkspace() {
     banner,
     chatQuestion,
     chatAnswerMode,
+    chatMultiAgentAvailable,
+    chatMultiAgentEnabled,
     memoryPendingCount,
     notifications,
     notificationUnreadCount,
@@ -1237,6 +1276,7 @@ export function useMnemeWorkspace() {
     toggleNotificationPanel,
     readNotification,
     selectChatAnswerMode,
+    setChatMultiAgentEnabled,
     serviceHealth,
     setAuthMode,
     setDefaultAiModelConfig,

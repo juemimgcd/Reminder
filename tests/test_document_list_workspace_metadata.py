@@ -6,8 +6,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.dialects import postgresql
 
-from app.mneme.conf.database import get_database
 import app.mneme.crud.document as document_crud
+from app.mneme.conf.database import get_database
 from app.mneme.domains.documents.router import router
 from app.mneme.utils.auth import get_current_user
 

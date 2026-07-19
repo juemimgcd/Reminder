@@ -2,6 +2,7 @@
 
 import uuid
 from collections.abc import Awaitable, Callable
+from typing import Literal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -49,6 +50,7 @@ async def answer_via_memory_agent(
     owner_id: int,
     question: str,
     answer_mode: AnswerMode,
+    execution_mode: Literal["single", "multi"] = "single",
     top_k: int,
     knowledge_base_id: str | None,
     session_id: str | None,
@@ -70,6 +72,7 @@ async def answer_via_memory_agent(
         message_id=message_id,
         question=question,
         answer_mode=answer_mode,
+        execution_mode=execution_mode,
         top_k=top_k,
         allow_model_fallback=model_config is None,
         conversation=conversation or ConversationContextData(),

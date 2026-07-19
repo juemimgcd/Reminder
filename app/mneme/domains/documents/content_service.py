@@ -13,7 +13,6 @@ from app.mneme.models.document import Document
 from app.mneme.schemas.document import DocumentContentData, DocumentContentSection
 from app.mneme.utils.exceptions import BusinessException
 
-
 RenderMode = Literal["markdown", "text", "structured", "office", "pdf", "unsupported"]
 
 MARKDOWN_TYPES = {"md", "markdown"}

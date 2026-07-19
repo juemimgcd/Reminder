@@ -1,6 +1,6 @@
+import re
 from datetime import datetime
 from math import log2
-import re
 from typing import Any
 
 from app.mneme.schemas.eval import (

@@ -1,8 +1,12 @@
 # Memoria 流式交互、多渠道与多 Agent 优化路线
 
-> 状态：Proposed
+> 状态：Phase 1–4 implemented and verified
 > 日期：2026-07-18
 > 适用范围：`app/mneme/memoria`、Mneme Chat、前端工作区与后续渠道接入层
+
+> Phase 4 完成于 2026-07-19：Multi-Agent 改为会话级显式可选且默认关闭；
+> durable run 固化本次选择；服务端总开关支持灰度与紧急回滚；确定性 A/B
+> 报告覆盖质量、路由、证据裁决、安全、延迟、token 与成本发布门槛。
 
 ## 1. 核心判断
 
@@ -735,6 +739,17 @@ Candidate: bounded multi-agent RAG
 
 只有 Candidate 在质量、覆盖度或冲突处理上有显著收益时，才保留 multi-agent 路径。
 
+### 7.5 实现结果
+
+- [x] 用户可为每个聊天会话显式开启或关闭 Multi-Agent，默认关闭。
+- [x] `analysis_query` 不再因为 `auto` 隐式进入 Multi-Agent。
+- [x] durable run 持久化 `single` / `multi`，队列恢复不读取后来变更的偏好。
+- [x] 服务端 feature flag 可强制回退到 single-agent。
+- [x] 固定 A/B 数据集同时评估 Baseline 与 Candidate。
+- [x] 路由、来源选择、重复检索、空 Agent、冲突检测、Judge、引用、grounding、
+  部分失败、质量、延迟、token、费用、scope 与 action safety 均进入报告。
+- [x] Multi-Agent gates 与现有 answer gates、agent gates 共同决定 CLI 退出码。
+
 ---
 
 ## 8. 分阶段实施顺序
@@ -790,11 +805,11 @@ Candidate: bounded multi-agent RAG
 
 ### Milestone 7：灰度与评测
 
-- feature flag；
-- 单/多 Agent A/B；
-- 质量、延迟和费用指标；
-- 回滚开关；
-- 按 answer mode 灰度。
+- [x] feature flag；
+- [x] 单/多 Agent A/B；
+- [x] 质量、延迟和费用指标；
+- [x] 回滚开关；
+- [x] 会话级用户选择，并仅在支持多来源的 Analysis 模式开放前端入口。
 
 ---
 

@@ -5,7 +5,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.mneme.models import Document
 from app.mneme.models.chunk import Chunk
 
-
 BULK_INSERT_BATCH_SIZE = 5000
 
 

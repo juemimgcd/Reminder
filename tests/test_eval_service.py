@@ -1,6 +1,5 @@
 import unittest
 
-from app.mneme.schemas.eval import EvalCase, EvalPrediction
 from app.mneme.domains.eval.service import (
     calculate_citation_accuracy,
     calculate_faithfulness,
@@ -8,6 +7,7 @@ from app.mneme.domains.eval.service import (
     evaluate_retrieval,
     summarize_eval_results,
 )
+from app.mneme.schemas.eval import EvalCase, EvalPrediction
 
 
 class EvalServiceTest(unittest.TestCase):

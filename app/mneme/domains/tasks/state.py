@@ -4,7 +4,6 @@ from app.mneme.conf.logging import app_logger
 from app.mneme.crud.task_record import get_task_record_by_id, update_task_record_status
 from app.mneme.utils.exceptions import BusinessException
 
-
 PENDING = "pending"
 RUNNING = "running"
 SUCCEEDED = "succeeded"

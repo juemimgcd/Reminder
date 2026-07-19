@@ -13,6 +13,7 @@ async def create_chat_session(
     knowledge_base_pk: int | None,
     title: str | None,
     answer_mode: str = "kb_qa",
+    multi_agent_enabled: bool = False,
     system_managed: bool = False,
 ) -> ChatSession:
     session = ChatSession(
@@ -22,6 +23,7 @@ async def create_chat_session(
         knowledge_base_pk=knowledge_base_pk,
         title=title,
         answer_mode=answer_mode,
+        multi_agent_enabled=multi_agent_enabled,
         system_managed=system_managed,
     )
     db.add(session)

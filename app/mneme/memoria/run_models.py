@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -33,6 +34,7 @@ class AgentRunRecord(BaseModel):
     question: str
     top_k: int
     answer_mode: AnswerMode
+    execution_mode: Literal["single", "multi"] = "single"
     status: AgentRunStatus = AgentRunStatus.QUEUED
     trigger_type: str = "user"
     trigger_id: str | None = None
@@ -57,6 +59,7 @@ class AgentRunRecord(BaseModel):
         question: str,
         top_k: int,
         answer_mode: AnswerMode,
+        execution_mode: Literal["single", "multi"] = "single",
         trigger_type: str = "user",
         trigger_id: str | None = None,
         max_attempts: int = 3,
@@ -70,6 +73,7 @@ class AgentRunRecord(BaseModel):
             question=question,
             top_k=top_k,
             answer_mode=answer_mode,
+            execution_mode=execution_mode,
             trigger_type=trigger_type,
             trigger_id=trigger_id,
             max_attempts=max_attempts,

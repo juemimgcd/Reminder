@@ -2,7 +2,6 @@ from fastapi import APIRouter
 
 from app.mneme.utils.response import success_response
 
-
 router = APIRouter(prefix="/support", tags=["support"])
 
 

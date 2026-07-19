@@ -1,11 +1,11 @@
 import unittest
 
-from app.mneme.schemas.chat import EvidenceCitationDraft
 from app.mneme.domains.retrieval.citation_validation import (
     apply_citation_confidence_policy,
     quote_exists_in_source,
     validate_citation_drafts,
 )
+from app.mneme.schemas.chat import EvidenceCitationDraft
 
 
 class CitationValidationServiceTest(unittest.TestCase):

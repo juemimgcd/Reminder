@@ -6,7 +6,6 @@ from fastapi.responses import FileResponse
 from app.mneme.conf.config import settings
 from app.mneme.utils.response import success_response
 
-
 router = APIRouter(tags=["root"])
 FRONTEND_INDEX = (
     Path(__file__).resolve().parents[3]
