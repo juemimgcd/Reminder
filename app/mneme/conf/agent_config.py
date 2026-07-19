@@ -154,6 +154,7 @@ def mneme_agent_settings(config: MemoriaConfig) -> dict[str, Any]:
         "LLM_BASE_URL": model.base_url,
         "LLM_MODEL_NAME": model.model,
         "LLM_TEMPERATURE": model.temperature,
+        "LLM_CONTEXT_WINDOW": model.context_window,
         "AGENT_HISTORY_MAX_TURNS": history.max_turns,
         "AGENT_OUTPUT_RESERVE_TOKENS": history.output_reserve_tokens,
         "AGENT_SUMMARY_MAX_CHARS": history.summary_max_chars,

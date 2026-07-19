@@ -930,3 +930,18 @@ Candidate: bounded multi-agent RAG
 - 核心协作是多来源证据处理，不是无限子 Agent；
 - 核心可靠性来自持久化、幂等、预算、引用和评测；
 - 上层 Harness 可以调用 Memoria，但不能反向污染 Memoria 的领域边界。
+
+---
+
+## 12. Phase 5：Runtime Experience（已实现）
+
+本阶段只优化运行体验与 Agent 能力，不增加身份/RBAC、多租户、安全与凭据治理或配置控制面。
+
+- [x] `interrupt` 复用 durable abort 语义；
+- [x] `followup` 进入同会话 FIFO，并通过 trigger 关系关联原 run；
+- [x] `steer` 采用诚实的“中止并按新方向重启”语义；
+- [x] Web 生成期间可继续输入，并选择立即调整或排队追问；
+- [x] 历史上下文同时受 turn count 与估算 token budget 约束；
+- [x] compaction 产生不含正文的 `context.compacted` 事件；
+- [x] 主模型连续失败时进入短暂 cooldown，并优先尝试 fallback；
+- [x] 单 Agent 快路径、固定多 Agent 角色和只读工具边界保持不变。

@@ -8,6 +8,7 @@ import { safeStorageGet, safeStorageRemove, safeStorageSet } from "../lib/safeSt
 import type {
   AiModelConfigData,
   AiModelProviderPreset,
+  AgentRunControlMode,
   AgentRunTraceItem,
   AgentStreamConnectionState,
   AgentStreamEvent,
@@ -103,7 +104,10 @@ export function useMnemeWorkspace() {
   const notificationUnreadCount = ref(0);
   const notificationPanelOpen = ref(false);
   const chatPending = ref(false);
+  const chatControlPending = ref(false);
+  const chatControlMode = ref<Exclude<AgentRunControlMode, "interrupt">>("steer");
   const activeChatRunId = ref("");
+  const controlledChatRunId = ref("");
   const chatRunProgress = ref("");
   const chatStreamState = ref<AgentStreamConnectionState>("idle");
   const chatRunTrace = ref<AgentRunTraceItem[]>([]);
@@ -121,6 +125,7 @@ export function useMnemeWorkspace() {
   let documentPreviewGeneration = 0;
   let notificationPoll: ReturnType<typeof setInterval> | null = null;
   let activeChatController: AbortController | null = null;
+  let controlledChatController: AbortController | null = null;
 
   const loginForm = ref({ username: "", password: "" });
   const registerForm = ref({ username: "", displayName: "", password: "", confirmPassword: "" });
@@ -835,13 +840,155 @@ export function useMnemeWorkspace() {
   }
 
   async function cancelActiveChatRun() {
-    if (!token.value || !activeChatRunId.value) return;
+    const runId = controlledChatRunId.value || activeChatRunId.value;
+    if (!token.value || !runId) return;
     chatRunProgress.value = "Cancelling…";
     try {
-      await api.abortAgentRun(token.value, activeChatRunId.value);
+      await api.controlAgentRun(token.value, runId, { mode: "interrupt" });
+      controlledChatController?.abort();
       activeChatController?.abort();
     } catch (error) {
       banner.value = errorMessage(error, "Unable to cancel the agent run.");
+    }
+  }
+
+  async function controlActiveChatRun() {
+    const instruction = chatQuestion.value.trim();
+    if (
+      !token.value ||
+      !activeChatSessionId.value ||
+      !activeChatRunId.value ||
+      !instruction ||
+      chatControlPending.value
+    ) {
+      return;
+    }
+    chatControlPending.value = true;
+    chatError.value = null;
+    try {
+      const result = await api.controlAgentRun(token.value, activeChatRunId.value, {
+        mode: chatControlMode.value,
+        question: instruction,
+        answer_mode: chatAnswerMode.value,
+        execution_mode:
+          chatMultiAgentEnabled.value && chatMultiAgentAvailable.value ? "multi" : "single",
+        top_k: 4,
+        client_request_id:
+          globalThis.crypto?.randomUUID?.() ??
+          `control-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      });
+      chatQuestion.value = "";
+      const scheduled = result.scheduled_run;
+      if (!scheduled) return;
+      controlledChatRunId.value = scheduled.run_id;
+      const session = chatSessions.value.find(
+        (item) => item.id === activeChatSessionId.value,
+      );
+      const now = new Date().toISOString();
+      const pendingControlledUserId = `pending-controlled-user-${Date.now()}`;
+      const pendingControlledAssistantId = `pending-controlled-assistant-${Date.now()}`;
+      const pendingControlledBase = {
+        session_id: activeChatSessionId.value,
+        user_id: user.value?.id ?? 0,
+        knowledge_base_id: session?.knowledge_base_id ?? null,
+        sources: [],
+        citations: [],
+        tool_calls: [],
+        route: null,
+        model_config_id: null,
+        agent_run_id: scheduled.run_id,
+        confidence: null,
+        uncertainty: null,
+        insufficient_evidence: false,
+        created_at: now,
+      };
+      chatMessages.value = [
+        ...chatMessages.value,
+        {
+          ...pendingControlledBase,
+          id: pendingControlledUserId,
+          role: "user",
+          content: instruction,
+        },
+        {
+          ...pendingControlledBase,
+          id: pendingControlledAssistantId,
+          role: "assistant",
+          content: "",
+        },
+      ];
+      chatRunProgress.value =
+        result.behavior === "restart_with_updated_direction"
+          ? "Updating direction and restarting…"
+          : "Follow-up queued…";
+      recordRunTrace(
+        {
+          type: "lifecycle",
+          name: "run.control.accepted",
+          run_id: activeChatRunId.value,
+          metadata: {
+            mode: result.mode,
+            scheduled_run_id: scheduled.run_id,
+          },
+        },
+        result.mode === "steer" ? "Direction updated · restarting" : "Follow-up queued",
+        "active",
+      );
+      if (result.mode === "steer") activeChatController?.abort();
+
+      const controller = new AbortController();
+      controlledChatController = controller;
+      await api.streamAgentRun(
+        token.value,
+        scheduled.run_id,
+        (event) => {
+          if ((event.name === "answer.delta" || event.type === "assistant") && event.content) {
+            chatMessages.value = chatMessages.value.map((message) =>
+              message.id === pendingControlledAssistantId
+                ? { ...message, content: message.content + event.content }
+                : message,
+            );
+          } else if (event.name === "context.compacted") {
+            const count = Number(event.metadata?.compacted_messages ?? 0);
+            chatRunProgress.value = `Context compacted (${count} messages)`;
+            recordRunTrace(event, `Context compacted · ${count} messages`);
+          } else if (event.name === "run.started") {
+            chatRunProgress.value = "Controlled run started";
+            recordRunTrace(event, "Controlled run started", "active");
+          } else if (event.name === "answer.started") {
+            chatRunProgress.value = "Composing the updated answer…";
+            recordRunTrace(event, "Updated answer generation started", "active");
+          } else if (event.name === "answer.completed") {
+            chatRunProgress.value = "Controlled run completed";
+            recordRunTrace(event, "Controlled run completed");
+            chatStreamState.value = "completed";
+          } else if (event.name === "run.cancelled") {
+            chatRunProgress.value = "Cancelled";
+            recordRunTrace(event, "Controlled run cancelled", "warning");
+          } else if (event.name === "run.failed") {
+            chatRunProgress.value = event.error || "Controlled run failed";
+            recordRunTrace(event, chatRunProgress.value, "warning");
+          }
+        },
+        { signal: controller.signal },
+      );
+      const detail = await api.getChatSession(token.value, activeChatSessionId.value);
+      chatMessages.value = detail.messages;
+      chatAnswerMode.value = detail.session.answer_mode;
+      chatMultiAgentEnabled.value = detail.session.multi_agent_enabled;
+      const sessions = await api.listChatSessions(
+        token.value,
+        activeKnowledgeBaseId.value || null,
+      );
+      chatSessions.value = sessions.items;
+    } catch (error) {
+      if (!(error instanceof Error && error.name === "AbortError")) {
+        banner.value = errorMessage(error, "Unable to control the active agent run.");
+      }
+    } finally {
+      chatControlPending.value = false;
+      controlledChatController = null;
+      controlledChatRunId.value = "";
     }
   }
 
@@ -1162,6 +1309,7 @@ export function useMnemeWorkspace() {
   });
   onBeforeUnmount(() => {
     activeChatController?.abort();
+    controlledChatController?.abort();
     cancelIndexTaskMonitors();
     for (const controller of maintenanceTaskMonitors) controller.abort();
     maintenanceTaskMonitors.clear();
@@ -1204,6 +1352,8 @@ export function useMnemeWorkspace() {
     notificationUnreadCount,
     notificationPanelOpen,
     chatPending,
+    chatControlPending,
+    chatControlMode,
     activeChatRunId,
     chatRunProgress,
     chatRunTrace,
@@ -1267,6 +1417,7 @@ export function useMnemeWorkspace() {
     selectKnowledgeBase,
     selectChatSession,
     sendChatMessage,
+    controlActiveChatRun,
     cancelActiveChatRun,
     regenerateChatMessage,
     retryFailedChatMessage,

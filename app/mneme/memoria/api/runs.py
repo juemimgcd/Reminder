@@ -2,6 +2,7 @@ import asyncio
 import json
 import uuid
 from datetime import datetime, timezone
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, Query
 from fastapi.responses import StreamingResponse
@@ -17,7 +18,7 @@ from app.mneme.memoria.persistence.runtime_events import parse_event_sequence
 from app.mneme.memoria.run_models import TERMINAL_AGENT_RUN_STATUSES, AgentRunRecord, AgentRunStatus
 from app.mneme.memoria.run_submission import submit_agent_run
 from app.mneme.models.user import User
-from app.mneme.schemas.chat_session import ChatSessionMessageRequest
+from app.mneme.schemas.chat_session import AgentRunControlRequest, ChatSessionMessageRequest
 from app.mneme.utils.auth import get_current_user
 from app.mneme.utils.exceptions import BusinessException
 from app.mneme.utils.response import success_response
@@ -72,28 +73,85 @@ async def abort_agent_run_api(
     db: AsyncSession = Depends(get_write_database),
 ):
     record = await _require_owned_run(run_id, current_user.id, db=db)
-    if record.status not in TERMINAL_AGENT_RUN_STATUSES:
-        was_queued = record.started_at is None
-        transitioned = await agent_run_store.transition_to_aborting(run_id)
-        record = transitioned or record.model_copy(update={"status": AgentRunStatus.ABORTING})
-        if was_queued:
-            record.status = AgentRunStatus.ABORTED
-            record.completed_at = datetime.now(timezone.utc)
-            await agent_run_store.save(record)
-            await agent_run_store.remove_from_session_queue(session_id=record.session_id, run_id=record.run_id)
-            await agent_run_store.append_event(
-                record.run_id,
-                AgentEvent.rag_progress(
-                    AgentRunEventType.RUN_CANCELLED,
-                    phase="cancelled",
-                    run_id=record.run_id,
-                    loop_index=0,
-                    loop_reason="abort_while_queued",
-                ),
-            )
-            record = await agent_run_store.get(record.run_id) or record
-        await save_durable_run(db, record)
+    record = await _request_run_abort(record, db=db)
     return success_response(data=record, message="agent run abort requested")
+
+
+@router.post("/kb/chat/runs/{run_id}/control")
+async def control_agent_run_api(
+    run_id: str,
+    payload: AgentRunControlRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_write_database),
+):
+    target = await _require_owned_run(run_id, current_user.id, db=db)
+    if payload.mode == "interrupt":
+        target = await _request_run_abort(target, db=db)
+        await agent_run_store.append_event(
+            target.run_id,
+            AgentEvent.rag_progress(
+                AgentRunEventType.RUN_CONTROL_ACCEPTED,
+                phase="control",
+                run_id=target.run_id,
+                control_mode=payload.mode,
+                behavior="interrupt",
+            ),
+        )
+        return success_response(
+            data={
+                "mode": payload.mode,
+                "behavior": "interrupt",
+                "target_run": target,
+                "scheduled_run": None,
+            },
+            message="agent run interrupt requested",
+        )
+
+    session = await require_owned_chat_session(
+        db,
+        current_user=current_user,
+        session_id=target.session_id,
+    )
+    if session.archived_at is not None:
+        raise BusinessException(message="chat session is archived", code=4049, status_code=400)
+
+    behavior = "queue_after_current"
+    if payload.mode == "steer":
+        target = await _request_run_abort(target, db=db)
+        behavior = "restart_with_updated_direction"
+
+    scheduled = _build_controlled_run(
+        target,
+        payload,
+        default_execution_mode=("multi" if session.multi_agent_enabled else "single"),
+        user_id=current_user.id,
+    )
+    scheduled, created = await submit_agent_run(db, scheduled)
+    await agent_run_store.append_event(
+        target.run_id,
+        AgentEvent.rag_progress(
+            AgentRunEventType.RUN_CONTROL_ACCEPTED,
+            phase="control",
+            run_id=target.run_id,
+            control_mode=payload.mode,
+            behavior=behavior,
+            scheduled_run_id=scheduled.run_id,
+            scheduled_trace_id=scheduled.trace_id,
+        ),
+    )
+    return success_response(
+        data={
+            "mode": payload.mode,
+            "behavior": behavior,
+            "target_run": target,
+            "scheduled_run": scheduled,
+        },
+        message=(
+            "agent run control scheduled"
+            if created
+            else "existing controlled run returned"
+        ),
+    )
 
 
 @router.get("/kb/chat/runs/{run_id}/stream")
@@ -151,3 +209,61 @@ async def _require_owned_run(run_id: str, user_id: int, *, db: AsyncSession) -> 
     if record.user_id != user_id:
         raise BusinessException(message="agent run does not belong to current user", code=4052, status_code=403)
     return record
+
+
+async def _request_run_abort(
+    record: AgentRunRecord,
+    *,
+    db: AsyncSession,
+) -> AgentRunRecord:
+    if record.status in TERMINAL_AGENT_RUN_STATUSES:
+        return record
+    was_queued = record.started_at is None
+    transitioned = await agent_run_store.transition_to_aborting(record.run_id)
+    record = transitioned or record.model_copy(update={"status": AgentRunStatus.ABORTING})
+    if was_queued:
+        record.status = AgentRunStatus.ABORTED
+        record.completed_at = datetime.now(timezone.utc)
+        await agent_run_store.save(record)
+        await agent_run_store.remove_from_session_queue(
+            session_id=record.session_id,
+            run_id=record.run_id,
+        )
+        await agent_run_store.append_event(
+            record.run_id,
+            AgentEvent.rag_progress(
+                AgentRunEventType.RUN_CANCELLED,
+                phase="cancelled",
+                run_id=record.run_id,
+                loop_index=0,
+                loop_reason="abort_while_queued",
+            ),
+        )
+        record = await agent_run_store.get(record.run_id) or record
+    await save_durable_run(db, record)
+    return record
+
+
+def _build_controlled_run(
+    target: AgentRunRecord,
+    payload: AgentRunControlRequest,
+    *,
+    default_execution_mode: Literal["single", "multi"],
+    user_id: int,
+) -> AgentRunRecord:
+    question = payload.question
+    if question is None:
+        raise ValueError("controlled run requires a question")
+    return AgentRunRecord.create(
+        run_id=f"run_{uuid.uuid4().hex}",
+        session_id=target.session_id,
+        user_id=user_id,
+        client_request_id=payload.client_request_id or f"request_{uuid.uuid4().hex}",
+        question=question,
+        top_k=payload.top_k or target.top_k,
+        answer_mode=payload.answer_mode or target.answer_mode,
+        execution_mode=payload.execution_mode or target.execution_mode or default_execution_mode,
+        trigger_type=payload.mode,
+        trigger_id=target.run_id,
+        max_attempts=settings.AGENT_RUN_MAX_ATTEMPTS,
+    )
