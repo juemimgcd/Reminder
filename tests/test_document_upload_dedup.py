@@ -3,12 +3,12 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from types import SimpleNamespace
 
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.dialects import postgresql
 import pytest
+from sqlalchemy.dialects import postgresql
+from sqlalchemy.exc import IntegrityError
 
 import app.mneme.domains.documents.upload_service as service
-from app.mneme.domains.documents.upload_service import normalize_file_name, next_version
+from app.mneme.domains.documents.upload_service import next_version, normalize_file_name
 from app.mneme.schemas.document import DocumentUploadData
 
 

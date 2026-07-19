@@ -4,7 +4,6 @@ from typing import TypeVar
 
 from app.mneme.conf.logging import log_event
 
-
 T = TypeVar("T")
 
 

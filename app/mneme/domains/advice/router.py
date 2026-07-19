@@ -4,13 +4,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.mneme.conf.database import get_database
 from app.mneme.conf.logging import app_logger
 from app.mneme.crud.knowledge_base import get_knowledge_base_by_id
+from app.mneme.domains.profile.insight import build_advice_for_knowledge_base
 from app.mneme.models.user import User
 from app.mneme.schemas.advice import GrowthAdviceRequest, GrowthAdviceResult
-from app.mneme.domains.profile.insight import build_advice_for_knowledge_base
 from app.mneme.utils.auth import get_current_user
 from app.mneme.utils.exceptions import BusinessException
 from app.mneme.utils.response import success_response
-
 
 router = APIRouter(prefix="/advice", tags=["advice"])
 

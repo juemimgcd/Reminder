@@ -1,11 +1,12 @@
 import json
 from datetime import timedelta
+
 from langchain_core.output_parsers import PydanticOutputParser
 
+from app.mneme.clients.llm_client import get_llm
 from app.mneme.conf.logging import app_logger
 from app.mneme.schemas.growth_report import GrowthReportResult
 from app.mneme.utils.growth_prompt import get_growth_report_prompt
-from app.mneme.clients.llm_client import get_llm
 
 
 def split_timeline_by_recent_days(

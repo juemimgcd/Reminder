@@ -8,7 +8,6 @@ from passlib.context import CryptContext
 
 from app.mneme.conf.config import settings
 
-
 # passlib 1.7.4 still probes bcrypt.__about__.__version__, which was removed in bcrypt 4.x.
 if not hasattr(bcrypt, "__about__"):
     bcrypt.__about__ = SimpleNamespace(__version__=getattr(bcrypt, "__version__", "4"))
@@ -25,7 +24,12 @@ def verify_password(password: str, password_hash: str) -> bool:
     return pwd_context.verify(password, password_hash)
 
 
-async def create_access_token(*, subject: str, expires_minutes: int | None = None, extra_claims: dict[str, Any] | None = None) -> str:
+async def create_access_token(
+    *,
+    subject: str,
+    expires_minutes: int | None = None,
+    extra_claims: dict[str, Any] | None = None,
+) -> str:
     now = datetime.now(timezone.utc)
     minutes = expires_minutes if expires_minutes is not None else settings.ACCESS_TOKEN_EXPIRE_MINUTES
     expire = now + timedelta(minutes=minutes)

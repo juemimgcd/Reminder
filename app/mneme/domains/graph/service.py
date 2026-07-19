@@ -193,7 +193,11 @@ def _build_related_document_edges(
                     "total_importance_score": 0.0,
                 },
             )
-            chosen_payload = left_payload if left_payload["importance_score"] >= right_payload["importance_score"] else right_payload
+            chosen_payload = (
+                left_payload
+                if left_payload["importance_score"] >= right_payload["importance_score"]
+                else right_payload
+            )
             shared_importance_score = max(left_payload["importance_score"], right_payload["importance_score"])
             bucket["shared_memories"].append(
                 {

@@ -3,7 +3,6 @@ from time import time
 from app.mneme.conf.logging import log_event
 from app.mneme.utils.exceptions import BusinessException
 
-
 # {
 #     "chat_query:user:1:kb:demo": {
 #         "count": 3,

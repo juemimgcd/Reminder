@@ -15,13 +15,13 @@ from app.mneme.crud.memory_entry import (
     list_memory_entries_by_document_id,
     list_memory_entries_by_knowledge_base_id,
 )
+from app.mneme.domains.memory.identity import prepare_memory_entry_payload
+from app.mneme.domains.memory.projection import rebuild_memory_governance_projection
 from app.mneme.domains.tasks.outbox import (
     BACKEND_NEO4J,
     EVENT_DOCUMENT_GRAPH_SYNC,
     enqueue_outbox_event,
 )
-from app.mneme.domains.memory.identity import prepare_memory_entry_payload
-from app.mneme.domains.memory.projection import rebuild_memory_governance_projection
 from app.mneme.models.document import Document
 from app.mneme.models.memory_entry import MemoryEntry
 from app.mneme.schemas.memory_entry import MemoryEntryExtractionResult

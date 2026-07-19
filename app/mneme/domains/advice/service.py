@@ -2,10 +2,10 @@ import json
 
 from langchain_core.output_parsers import PydanticOutputParser
 
+from app.mneme.clients.llm_client import get_llm
 from app.mneme.conf.logging import app_logger
 from app.mneme.schemas.advice import GrowthAdviceResult
 from app.mneme.utils.advice_prompt import get_growth_advice_prompt
-from app.mneme.clients.llm_client import get_llm
 
 
 def build_advice_input(

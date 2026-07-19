@@ -1,8 +1,8 @@
+from app.mneme.conf.config import settings
 from app.mneme.conf.logging import app_logger
 from app.mneme.infra.celery_app import celery_app
 from app.mneme.tasks.index_tasks import index_document_task
 from app.mneme.tasks.outbox_tasks import dispatch_pending_outbox_events_task, process_outbox_event_task
-from app.mneme.conf.config import settings
 
 
 def enqueue_agent_run_task(*, run_id: str) -> str:

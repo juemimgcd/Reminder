@@ -2,11 +2,11 @@ import asyncio
 import re
 from functools import lru_cache
 from pathlib import Path
+
 from langchain_core.documents import Document as LCDocument
 
 from app.mneme.conf.logging import app_logger
 from app.mneme.utils.exceptions import BusinessException
-
 
 PAGE_BREAK_PATTERN = re.compile(r"\f+")
 

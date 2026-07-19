@@ -27,7 +27,6 @@ from app.mneme.utils.auth import get_current_user
 from app.mneme.utils.exceptions import BusinessException
 from app.mneme.utils.response import success_response
 
-
 router = APIRouter(prefix="/kb/document-folders", tags=["document-folders"])
 
 

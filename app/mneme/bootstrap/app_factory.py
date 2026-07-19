@@ -1,17 +1,15 @@
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi import HTTPException
 from fastapi.responses import FileResponse
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from app.mneme.api.errors import BusinessException, business_exception_handler, unhandled_exception_handler
 from app.mneme.bootstrap.lifespan import lifespan
 from app.mneme.bootstrap.root_routes import router as root_router
 from app.mneme.bootstrap.router_registry import register_routers
 from app.mneme.conf.config import settings
-from app.mneme.api.errors import BusinessException, business_exception_handler, unhandled_exception_handler
-
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 FRONTEND_DIST_DIR = REPO_ROOT / "app" / "mneme_frontend_v0.2.1" / "dist"

@@ -3,37 +3,36 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mneme.conf.database import get_database, get_write_database
 from app.mneme.conf.logging import app_logger
+from app.mneme.crud.document import get_document_by_id, list_documents
+from app.mneme.crud.knowledge_base import get_knowledge_base_by_id, list_knowledge_bases_by_user_id
 from app.mneme.crud.memory_entry import (
     list_memory_entries_by_document_id,
     list_memory_entries_by_knowledge_base_id,
     list_memory_entries_by_user_id,
-)
-from app.mneme.crud.document import get_document_by_id, list_documents
-from app.mneme.crud.knowledge_base import get_knowledge_base_by_id, list_knowledge_bases_by_user_id
-from app.mneme.models.user import User
-from app.mneme.schemas.task_record import TaskRecordData
-from app.mneme.schemas.graph import GraphData
-from app.mneme.schemas.graph_rag import GraphRagDecisionData
-from app.mneme.domains.tasks.maintenance import (
-    GRAPH_REBUILD_KNOWLEDGE_BASE,
-    GRAPH_REBUILD_USER,
-    submit_maintenance_task,
 )
 from app.mneme.domains.graph.query import (
     build_document_graph_payload_from_neo4j,
     build_knowledge_base_graph_payload_from_neo4j,
     build_user_graph_payload_from_neo4j,
 )
+from app.mneme.domains.graph.rag import build_graph_rag_decision
 from app.mneme.domains.graph.service import (
     build_document_graph_payload,
     build_knowledge_base_graph_payload,
     build_user_graph_payload,
 )
-from app.mneme.domains.graph.rag import build_graph_rag_decision
+from app.mneme.domains.tasks.maintenance import (
+    GRAPH_REBUILD_KNOWLEDGE_BASE,
+    GRAPH_REBUILD_USER,
+    submit_maintenance_task,
+)
+from app.mneme.models.user import User
+from app.mneme.schemas.graph import GraphData
+from app.mneme.schemas.graph_rag import GraphRagDecisionData
+from app.mneme.schemas.task_record import TaskRecordData
 from app.mneme.utils.auth import get_current_user
 from app.mneme.utils.exceptions import BusinessException
 from app.mneme.utils.response import success_response
-
 
 router = APIRouter(prefix="/graph", tags=["graph"])
 
@@ -132,7 +131,11 @@ async def get_document_graph(
         min_shared_memory_count: int = Query(default=2, ge=1, le=20, description="minimum shared memory count"),
         min_relationship_score: float = Query(default=0.35, ge=0, le=1, description="minimum relationship score"),
         max_related_edges: int = Query(default=24, ge=1, le=200, description="maximum related edges"),
-        relationship_scope: str = Query(default="knowledge_base", pattern="^(knowledge_base|user)$", description="relationship scope"),
+        relationship_scope: str = Query(
+            default="knowledge_base",
+            pattern="^(knowledge_base|user)$",
+            description="relationship scope",
+        ),
         current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_database),
 ):
@@ -155,7 +158,11 @@ async def get_document_graph(
         knowledge_base_id=document.knowledge_base_id,
     )
     if not root_knowledge_base or root_knowledge_base.user_id != current_user.id:
-        raise BusinessException(message="knowledge base not found or not owned by current user", code=4042, status_code=404)
+        raise BusinessException(
+            message="knowledge base not found or not owned by current user",
+            code=4042,
+            status_code=404,
+        )
 
     neo4j_payload = await build_document_graph_payload_from_neo4j(
         current_user=current_user,
@@ -325,7 +332,11 @@ async def get_knowledge_base_graph_rag(
     if not knowledge_base:
         raise BusinessException(message="Knowledge base not found.", code=4042, status_code=404)
     if knowledge_base.user_id != current_user.id:
-        raise BusinessException(message="Knowledge base does not belong to the current user.", code=4007, status_code=403)
+        raise BusinessException(
+            message="Knowledge base does not belong to the current user.",
+            code=4007,
+            status_code=403,
+        )
 
     documents = await list_documents(
         db,

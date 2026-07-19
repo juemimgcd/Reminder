@@ -3,7 +3,6 @@ from pathlib import Path
 
 import yaml
 
-
 COMPOSE_FILE = Path(__file__).resolve().parents[1] / "docker-compose.yml"
 RELEASE_SCRIPT = Path(__file__).resolve().parents[1] / "deploy" / "release-image.sh"
 UPGRADE_SCRIPT = Path(__file__).resolve().parents[1] / "upgrade.sh"

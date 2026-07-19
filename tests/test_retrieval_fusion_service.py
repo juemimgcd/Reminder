@@ -2,12 +2,12 @@ import asyncio
 import unittest
 from unittest.mock import patch
 
-from app.mneme.schemas.chat import ContextItem
 from app.mneme.domains.retrieval.fusion import (
     fuse_and_rerank_context_items,
     fuse_context_items_by_rrf,
     rerank_context_items,
 )
+from app.mneme.schemas.chat import ContextItem
 
 
 def context_item(

@@ -5,7 +5,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mneme.conf.database import get_database, get_write_database
 from app.mneme.crud.document import list_documents
-from app.mneme.crud.knowledge_base import create_knowledge_base, get_knowledge_base_by_id, list_knowledge_bases_by_user_id
+from app.mneme.crud.knowledge_base import (
+    create_knowledge_base,
+    get_knowledge_base_by_id,
+    list_knowledge_bases_by_user_id,
+)
+from app.mneme.domains.documents.resources import delete_knowledge_base_resources
+from app.mneme.domains.tasks.outbox import enqueue_graph_projection_upsert
 from app.mneme.models.user import User
 from app.mneme.schemas.knowledge_base import (
     KnowledgeBaseCreateRequest,
@@ -13,8 +19,6 @@ from app.mneme.schemas.knowledge_base import (
     KnowledgeBaseDeleteData,
     KnowledgeBaseListData,
 )
-from app.mneme.domains.tasks.outbox import enqueue_graph_projection_upsert
-from app.mneme.domains.documents.resources import delete_knowledge_base_resources
 from app.mneme.utils.auth import get_current_user
 from app.mneme.utils.exceptions import BusinessException
 from app.mneme.utils.response import success_response
@@ -92,8 +96,20 @@ async def delete_knowledge_base_api(
         db,
         knowledge_base_pk=knowledge_base.pk,
     )
-    if any(doc.status in {"queued", "indexing", "parsing", "chunking", "embedding", "vector_upserting"} for doc in documents):
-        raise BusinessException(message="knowledge base has active indexing documents; retry later", code=4023, status_code=400)
+    active_statuses = {
+        "queued",
+        "indexing",
+        "parsing",
+        "chunking",
+        "embedding",
+        "vector_upserting",
+    }
+    if any(doc.status in active_statuses for doc in documents):
+        raise BusinessException(
+            message="knowledge base has active indexing documents; retry later",
+            code=4023,
+            status_code=400,
+        )
 
     result = await delete_knowledge_base_resources(
         db,

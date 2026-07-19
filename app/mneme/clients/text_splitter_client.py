@@ -8,7 +8,6 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from app.mneme.conf.logging import app_logger
 
-
 HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.+)$", re.MULTILINE)
 
 

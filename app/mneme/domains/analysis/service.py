@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mneme.crud.knowledge_base import get_knowledge_base_by_id
+from app.mneme.domains.tasks.state import is_active_task_status
 from app.mneme.models.chunk import Chunk
 from app.mneme.models.document import Document
 from app.mneme.models.memory_entry import MemoryEntry
@@ -21,7 +22,6 @@ from app.mneme.schemas.analytics import (
     StatusCountData,
     TaskAnalyticsData,
 )
-from app.mneme.domains.tasks.state import is_active_task_status
 from app.mneme.utils.exceptions import BusinessException
 
 

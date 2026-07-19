@@ -2,7 +2,6 @@ from app.mneme.clients.reranker_client import rerank_pairs
 from app.mneme.conf.config import settings
 from app.mneme.schemas.chat import ContextItem
 
-
 RRF_K = 60
 RECALL_WEIGHTS = {
     "vector": 1.0,

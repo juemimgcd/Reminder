@@ -2,7 +2,6 @@ import re
 
 from app.mneme.schemas.chat import QueryRouteDecision
 
-
 GENERAL_CHAT_PATTERNS = [
     r"hello",
     r"\bhi\b",

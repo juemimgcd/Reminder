@@ -6,14 +6,13 @@ from app.mneme.conf.logging import app_logger
 from app.mneme.crud.auth_user import create_user_account, update_user_last_login_at
 from app.mneme.crud.knowledge_base import get_or_create_default_knowledge_base
 from app.mneme.crud.user import get_user_by_username
+from app.mneme.domains.tasks.outbox import enqueue_graph_projection_upsert
 from app.mneme.models.user import User
 from app.mneme.schemas.auth import LoginRequest, RegisterRequest, UserAuthResponse
-from app.mneme.domains.tasks.outbox import enqueue_graph_projection_upsert
 from app.mneme.schemas.users import UserPublic
 from app.mneme.utils.auth import get_current_user
 from app.mneme.utils.response import success_response
 from app.mneme.utils.security import create_access_token, hash_password, verify_password
-
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 

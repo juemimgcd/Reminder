@@ -1,11 +1,11 @@
 import unittest
 
-from app.mneme.schemas.chat import QueryRouteDecision
 from app.mneme.domains.retrieval.debug import (
     build_answer_debug,
     build_non_retrieval_debug,
     preview_text,
 )
+from app.mneme.schemas.chat import QueryRouteDecision
 
 
 class RetrievalDebugServiceTest(unittest.TestCase):

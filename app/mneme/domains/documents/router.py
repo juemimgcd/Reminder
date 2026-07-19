@@ -12,6 +12,16 @@ from app.mneme.conf.logging import app_logger
 from app.mneme.crud.document import get_document_by_id, list_document_workspace_rows
 from app.mneme.crud.document_folder import ensure_root_folder, get_folder_by_id, get_folder_by_pk
 from app.mneme.crud.knowledge_base import get_knowledge_base_by_id, get_or_create_default_knowledge_base
+from app.mneme.domains.documents.content_service import (
+    build_document_content,
+    list_document_versions,
+    require_source_file,
+    sanitize_download_name,
+)
+from app.mneme.domains.documents.resources import delete_document_resources
+from app.mneme.domains.documents.service import submit_document_index_task
+from app.mneme.domains.documents.upload_service import store_uploaded_document
+from app.mneme.domains.tasks.outbox import enqueue_graph_projection_upsert
 from app.mneme.infra.rate_limit import enforce_fixed_window_rate_limit
 from app.mneme.infra.task_queue import enqueue_index_document_task
 from app.mneme.models.chunk import Chunk
@@ -20,29 +30,18 @@ from app.mneme.models.memory import MemoryEntry
 from app.mneme.models.user import User
 from app.mneme.schemas.document import (
     DocumentDeleteData,
+    DocumentIndexTaskData,
     DocumentListData,
     DocumentListItem,
-    DocumentIndexTaskData,
     DocumentPreviewChunk,
     DocumentPreviewData,
     DocumentPreviewMemoryEntry,
     DocumentVersionData,
     DocumentVersionListData,
 )
-from app.mneme.domains.documents.content_service import (
-    build_document_content,
-    list_document_versions,
-    require_source_file,
-    sanitize_download_name,
-)
-from app.mneme.domains.documents.service import submit_document_index_task
-from app.mneme.domains.documents.resources import delete_document_resources
-from app.mneme.domains.documents.upload_service import store_uploaded_document
-from app.mneme.domains.tasks.outbox import enqueue_graph_projection_upsert
 from app.mneme.utils.auth import get_current_user
 from app.mneme.utils.exceptions import BusinessException
 from app.mneme.utils.response import success_response
-
 
 router = APIRouter(prefix="/kb/documents", tags=["documents"])
 
@@ -390,7 +389,11 @@ async def delete_document_api(
         raise BusinessException(message="document not found or not owned by current user", code=4044, status_code=404)
 
     if document.status in {"queued", "indexing", "parsing", "chunking", "embedding", "vector_upserting"}:
-        raise BusinessException(message="cancel or wait for index tasks before deleting the document", code=4021, status_code=400)
+        raise BusinessException(
+            message="cancel or wait for index tasks before deleting the document",
+            code=4021,
+            status_code=400,
+        )
 
     result = await delete_document_resources(
         db,

@@ -28,7 +28,12 @@ class KnowledgeBase(Base):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False, comment="knowledge base name")
     description: Mapped[str | None] = mapped_column(Text, nullable=True, comment="knowledge base description")
-    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, comment="default knowledge base flag")
+    is_default: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        comment="default knowledge base flag",
+    )
 
     def __repr__(self) -> str:
         return f"<KnowledgeBase(pk={self.pk}, id={self.id}, user_id={self.user_id}, name='{self.name}')>"

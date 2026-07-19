@@ -4,10 +4,10 @@ from typing import Any
 
 from langchain_core.documents import Document as LCDocument
 
-from app.mneme.conf.config import settings
-from app.mneme.conf.logging import log_event, app_logger
 from app.mneme.clients.embedding_client import get_embeddings
-from app.mneme.infra.circuit_breaker import before_call, record_success, record_failure
+from app.mneme.conf.config import settings
+from app.mneme.conf.logging import app_logger, log_event
+from app.mneme.infra.circuit_breaker import before_call, record_failure, record_success
 from app.mneme.infra.object_cache import get_cached_object, set_cached_object
 from app.mneme.infra.retry import retry_async
 
