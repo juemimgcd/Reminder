@@ -39,6 +39,13 @@ class ChatSession(Base):
     title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, comment="会话标题")
 
     answer_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="kb_qa", server_default="kb_qa")
+    multi_agent_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        comment="user-controlled multi-agent preference for this chat",
+    )
     message_count: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0", comment="message count"
     )

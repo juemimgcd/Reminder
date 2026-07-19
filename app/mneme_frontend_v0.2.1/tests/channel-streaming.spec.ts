@@ -24,7 +24,13 @@ test("analysis mode exposes bounded multi-agent role progress", async ({ page })
   await page.getByRole("button", { name: "AI Laboratory", exact: true }).click();
 
   const composer = page.getByTestId("workspace-chat-command");
+  const toggle = page.getByTestId("multi-agent-toggle");
+  await expect(toggle).not.toBeChecked();
+  await expect(toggle).toBeDisabled();
   await page.getByTestId("answer-mode-selector").getByRole("button", { name: "Analysis" }).click();
+  await expect(toggle).toBeEnabled();
+  await toggle.check();
+  await expect(toggle).toBeChecked();
   await composer.locator("textarea").fill("Compare all available evidence");
   await composer.getByRole("button", { name: "Send message" }).click();
 
@@ -32,6 +38,22 @@ test("analysis mode exposes bounded multi-agent role progress", async ({ page })
   await expect(trace).toContainText("Coordinator · 4 sources");
   await expect(trace).toContainText("document_retriever · 2 results");
   await expect(trace).toContainText("Evidence Judge · 4 kept · 1 conflicts");
+});
+
+test("multi-agent preference is optional and survives an answer refresh", async ({ page }) => {
+  await page.getByRole("button", { name: "AI Laboratory", exact: true }).click();
+  const toggle = page.getByTestId("multi-agent-toggle");
+
+  await expect(toggle).not.toBeChecked();
+  await page.getByTestId("answer-mode-selector").getByRole("button", { name: "Analysis" }).click();
+  await toggle.check();
+  await expect(toggle).toBeChecked();
+
+  const composer = page.getByTestId("workspace-chat-command");
+  await composer.locator("textarea").fill("Compare the current sources");
+  await composer.getByRole("button", { name: "Send message" }).click();
+
+  await expect(page.getByTestId("multi-agent-toggle")).toBeChecked();
 });
 
 test("settings manages Feishu binding, routing, and delivery retry", async ({ page }) => {

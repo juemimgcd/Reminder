@@ -79,3 +79,30 @@ Live mode keeps the same deterministic gates and replaces the fixture's
 predicted answer, mode, citations, confidence, evidence flags, and sanitized
 tool calls with the validated `/v1/answers` response. Each call receives its own request and trace IDs, so the
 result can be correlated with answer-run metrics and structured logs.
+
+## Multi-Agent A/B release evaluation
+
+Phase 4 adds a paired baseline that compares the existing single-agent path
+with the bounded Multi-Agent candidate. It is deterministic and does not
+require credentials:
+
+```powershell
+uv run python -m app.mneme.memoria.server.eval.runner `
+  --dataset app/mneme/memoria/server/eval/cases.jsonl `
+  --multi-agent-dataset app/mneme/memoria/server/eval/multi_agent_cases.jsonl `
+  --output .tmp/memoria-eval.json
+```
+
+The `multi_agent` report includes route accuracy, source-selection
+precision/recall, duplicate and empty-agent ratios, conflict detection,
+Evidence Judge keep/drop precision, citation validity, grounded-answer and
+partial-failure recovery rates, plus quality, latency, token, and cost deltas
+against the single-agent baseline.
+
+Release succeeds only when the existing answer and agent gates and all
+Multi-Agent gates pass. Multi-Agent remains an explicit per-chat preference
+that defaults to off. Operators can force the single-agent path immediately by
+setting `MEMORY_AGENT_MULTI_AGENT_FEATURE_ENABLED=false`.
+Operators may stage the rollout with
+`MEMORY_AGENT_MULTI_AGENT_ROLLOUT_PERCENT` and
+`MEMORY_AGENT_MULTI_AGENT_ALLOWED_MODES`.

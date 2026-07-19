@@ -2,6 +2,7 @@ import asyncio
 
 import pytest
 
+from app.mneme.memoria.server.config import settings
 from app.mneme.memoria.server.contracts.answers import AnswerRequest
 from app.mneme.memoria.server.multi_agent.budget import (
     MultiAgentBudgetExceeded,
@@ -23,7 +24,7 @@ from app.mneme.memoria.server.runtime.plans import MODE_PLANS
 def _request(
     *,
     mode: str = "analysis_query",
-    execution_mode: str = "auto",
+    execution_mode: str = "multi",
     question: str = "compare evidence across sources",
 ) -> AnswerRequest:
     return AnswerRequest(
@@ -97,7 +98,7 @@ class _ConcurrentRetriever:
 
 def test_coordinator_keeps_simple_questions_on_single_agent_fast_path():
     decision = RAGCoordinator().decide(
-        _request(mode="kb_qa"),
+        _request(mode="kb_qa", execution_mode="single"),
         MODE_PLANS["kb_qa"],
         MultiAgentBudgetLimits(),
     )
@@ -106,7 +107,7 @@ def test_coordinator_keeps_simple_questions_on_single_agent_fast_path():
     assert decision.assignments == []
 
 
-def test_analysis_query_gets_four_fixed_roles_without_nested_spawning():
+def test_analysis_query_gets_four_fixed_roles_only_when_explicitly_enabled():
     decision = RAGCoordinator().decide(
         _request(),
         MODE_PLANS["analysis_query"],
@@ -121,6 +122,43 @@ def test_analysis_query_gets_four_fixed_roles_without_nested_spawning():
         "relation_retriever",
     ]
     assert sum(item.top_k for item in decision.assignments) <= 24
+
+
+def test_analysis_query_auto_mode_stays_on_single_agent_path():
+    decision = RAGCoordinator().decide(
+        _request(execution_mode="auto"),
+        MODE_PLANS["analysis_query"],
+        MultiAgentBudgetLimits(),
+    )
+
+    assert decision.execution_mode == "single"
+    assert decision.assignments == []
+
+
+def test_feature_flag_forces_explicit_multi_request_to_single(monkeypatch):
+    monkeypatch.setattr(settings, "MULTI_AGENT_FEATURE_ENABLED", False)
+
+    decision = RAGCoordinator().decide(
+        _request(execution_mode="multi"),
+        MODE_PLANS["analysis_query"],
+        MultiAgentBudgetLimits(),
+    )
+
+    assert decision.execution_mode == "single"
+    assert decision.reason_code == "feature_disabled"
+
+
+def test_rollout_percentage_can_exclude_explicit_multi_request(monkeypatch):
+    monkeypatch.setattr(settings, "MULTI_AGENT_ROLLOUT_PERCENT", 0)
+
+    decision = RAGCoordinator().decide(
+        _request(execution_mode="multi"),
+        MODE_PLANS["analysis_query"],
+        MultiAgentBudgetLimits(),
+    )
+
+    assert decision.execution_mode == "single"
+    assert decision.reason_code == "rollout_excluded"
 
 
 def test_executor_runs_sources_concurrently_with_identical_owner_scope():

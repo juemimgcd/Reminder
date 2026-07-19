@@ -3,6 +3,7 @@ import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from typing import Literal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -103,6 +104,7 @@ async def create_chat_session(
     knowledge_base_id: str | None,
     title: str | None,
     answer_mode: AnswerMode = "kb_qa",
+    multi_agent_enabled: bool = False,
 ) -> ChatSession:
     if answer_mode != "general_chat" and knowledge_base_id is None:
         raise BusinessException(message="knowledge base is required for this answer mode", code=4053)
@@ -119,6 +121,7 @@ async def create_chat_session(
         knowledge_base_pk=knowledge_base.pk if knowledge_base else None,
         title=title,
         answer_mode=answer_mode,
+        multi_agent_enabled=multi_agent_enabled,
     )
 
 
@@ -156,6 +159,7 @@ async def update_chat_session(
     title: str | None = None,
     archived: bool | None = None,
     answer_mode: AnswerMode | None = None,
+    multi_agent_enabled: bool | None = None,
 ) -> ChatSession:
     session = await require_owned_chat_session(db, current_user=current_user, session_id=session_id)
     if title is not None:
@@ -166,6 +170,8 @@ async def update_chat_session(
         if answer_mode != "general_chat" and session.knowledge_base_id is None:
             raise BusinessException(message="knowledge base is required for this answer mode", code=4053)
         session.answer_mode = answer_mode
+    if multi_agent_enabled is not None:
+        session.multi_agent_enabled = multi_agent_enabled
     await db.flush()
     await db.refresh(session)
     return session
@@ -234,6 +240,7 @@ async def ask_in_chat_session(
     question: str,
     top_k: int,
     answer_mode: AnswerMode | None = None,
+    execution_mode: Literal["single", "multi"] | None = None,
     expected_knowledge_base_id: str | None | object = _EXPECTED_SCOPE_UNSET,
     model_config_id: str | None = None,
     retry_message_id: str | None = None,
@@ -268,6 +275,9 @@ async def ask_in_chat_session(
         existing_user_message = next((message for message in existing if message.role == "user"), None)
 
     selected_mode: AnswerMode = answer_mode or session.answer_mode
+    selected_execution_mode: Literal["single", "multi"] = execution_mode or (
+        "multi" if session.multi_agent_enabled else "single"
+    )
     if selected_mode != "general_chat" and session.knowledge_base_id is None:
         raise BusinessException(message="knowledge base is required for this answer mode", code=4053)
 
@@ -376,6 +386,7 @@ async def ask_in_chat_session(
             owner_id=current_user.id,
             question=question,
             answer_mode=selected_mode,
+            execution_mode=selected_execution_mode,
             top_k=top_k,
             knowledge_base_id=session.knowledge_base_id,
             session_id=session.id,
@@ -468,6 +479,7 @@ async def stream_in_chat_session(
     question: str,
     top_k: int,
     answer_mode: AnswerMode | None = None,
+    execution_mode: Literal["single", "multi"] | None = None,
     abort_signal: asyncio.Event | None = None,
     agent_run_id: str | None = None,
     trace_id: str | None = None,
@@ -507,6 +519,7 @@ async def stream_in_chat_session(
                 question=question,
                 top_k=top_k,
                 answer_mode=answer_mode,
+                execution_mode=execution_mode,
                 agent_run_id=agent_run_id,
                 abort_signal=abort_signal,
                 trace_id=trace_id,

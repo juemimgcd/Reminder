@@ -43,6 +43,9 @@ async def create_agent_run_api(
         question=payload.question,
         top_k=payload.top_k,
         answer_mode=payload.answer_mode or session.answer_mode,
+        execution_mode=payload.execution_mode or (
+            "multi" if session.multi_agent_enabled else "single"
+        ),
         max_attempts=settings.AGENT_RUN_MAX_ATTEMPTS,
     )
     record, created = await submit_agent_run(db, record)

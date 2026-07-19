@@ -171,6 +171,7 @@ let chatSessions: ChatSessionData[] = [
     knowledge_base_id: "kb-demo-research",
     title: "Preview Vault Review",
     answer_mode: "kb_qa",
+    multi_agent_enabled: false,
     message_count: 2,
     last_message_at: now,
     archived_at: null,
@@ -731,12 +732,13 @@ const previewApi = {
     const items = chatSessions.filter((session) => session.knowledge_base_id === knowledgeBaseId && !session.archived_at);
     return delay({ items, total: items.length });
   },
-  createChatSession(_token: string, payload: { knowledge_base_id: string | null; title?: string | null; answer_mode: AnswerMode }): Promise<ChatSessionData> {
+  createChatSession(_token: string, payload: { knowledge_base_id: string | null; title?: string | null; answer_mode: AnswerMode; multi_agent_enabled?: boolean }): Promise<ChatSessionData> {
     const session: ChatSessionData = {
       id: `chat-preview-${Date.now()}`,
       user_id: previewUser.id,
       knowledge_base_id: payload.knowledge_base_id,
       answer_mode: payload.answer_mode,
+      multi_agent_enabled: payload.multi_agent_enabled ?? false,
       title: payload.title || "New Chat",
       message_count: 0,
       last_message_at: null,
@@ -752,9 +754,12 @@ const previewApi = {
     const session = chatSessions.find((item) => item.id === sessionId) ?? chatSessions[0];
     return delay({ session, messages: chatMessages[session.id] ?? [] });
   },
-  updateChatSession(_token: string, sessionId: string, answerMode: AnswerMode): Promise<ChatSessionData> {
+  updateChatSession(_token: string, sessionId: string, payload: { answer_mode?: AnswerMode; multi_agent_enabled?: boolean }): Promise<ChatSessionData> {
     const session = chatSessions.find((item) => item.id === sessionId) ?? chatSessions[0];
-    session.answer_mode = answerMode;
+    if (payload.answer_mode) session.answer_mode = payload.answer_mode;
+    if (payload.multi_agent_enabled !== undefined) {
+      session.multi_agent_enabled = payload.multi_agent_enabled;
+    }
     return delay(session);
   },
   deleteChatSession(_token: string, sessionId: string): Promise<{ session_id: string; deleted_count: number }> {
@@ -762,7 +767,7 @@ const previewApi = {
     delete chatMessages[sessionId];
     return delay({ session_id: sessionId, deleted_count: 1 });
   },
-  sendChatSessionMessage(_token: string, sessionId: string, payload: { question: string; answer_mode: AnswerMode; top_k?: number; retry_message_id?: string; regenerate_message_id?: string }): Promise<ChatSessionDetailData> {
+  sendChatSessionMessage(_token: string, sessionId: string, payload: { question: string; answer_mode: AnswerMode; execution_mode?: "single" | "multi"; top_k?: number; retry_message_id?: string; regenerate_message_id?: string }): Promise<ChatSessionDetailData> {
     const session = chatSessions.find((item) => item.id === sessionId) ?? chatSessions[0];
     const createdAt = new Date().toISOString();
     const nextMessages: ChatMessageData[] = [
@@ -803,12 +808,12 @@ const previewApi = {
   async streamChatSessionMessage(
     token: string,
     sessionId: string,
-    payload: { question: string; answer_mode: AnswerMode; top_k?: number },
+    payload: { question: string; answer_mode: AnswerMode; execution_mode?: "single" | "multi"; top_k?: number },
     onEvent: (event: import("../types").AgentStreamEvent) => void,
   ): Promise<void> {
     onEvent({ type: "lifecycle", name: "run.started", phase: "started" });
     onEvent({ type: "lifecycle", name: "retrieval.started", phase: "retrieve" });
-    if (payload.answer_mode === "analysis_query") {
+    if (payload.execution_mode === "multi" && payload.answer_mode === "analysis_query") {
       onEvent({
         type: "lifecycle",
         name: "multi_agent.coordinator.completed",
@@ -865,7 +870,7 @@ const previewApi = {
     createAgentRun(
       _token: string,
       sessionId: string,
-      payload: { question: string; answer_mode: AnswerMode; top_k?: number; client_request_id: string },
+      payload: { question: string; answer_mode: AnswerMode; execution_mode?: "single" | "multi"; top_k?: number; client_request_id: string },
     ): Promise<AgentRunData> {
       const existing = [...previewAgentRuns.values()].find(
         (item) => item.session_id === sessionId && item.client_request_id === payload.client_request_id,
@@ -880,6 +885,7 @@ const previewApi = {
         question: payload.question,
         top_k: payload.top_k ?? 4,
         answer_mode: payload.answer_mode,
+        execution_mode: payload.execution_mode ?? "single",
         status: "queued" as const,
         created_at: createdAt,
         started_at: null,

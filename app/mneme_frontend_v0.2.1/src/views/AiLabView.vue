@@ -183,6 +183,34 @@ const modeDescription = computed(() => ({
             {{ mode.label }}
           </button>
         </div>
+        <label
+          class="multi-agent-option"
+          :class="{ 'multi-agent-option--active': workspace.chatMultiAgentEnabled.value }"
+        >
+          <input
+            data-testid="multi-agent-toggle"
+            type="checkbox"
+            :checked="workspace.chatMultiAgentEnabled.value"
+            :disabled="
+              workspace.chatPending.value ||
+              !workspace.chatMultiAgentAvailable.value
+            "
+            @change="
+              workspace.setChatMultiAgentEnabled(
+                ($event.target as HTMLInputElement).checked,
+              )
+            "
+          />
+          <span class="multi-agent-switch" aria-hidden="true"><i></i></span>
+          <span>
+            <strong>Multi-Agent thinking</strong>
+            <small>{{
+              workspace.chatMultiAgentAvailable.value
+                ? "Optional for this chat · parallel source retrieval and evidence review"
+                : "Available in Analysis mode"
+            }}</small>
+          </span>
+        </label>
         <div class="composer">
           <textarea
             v-model="workspace.chatQuestion.value"
@@ -385,6 +413,75 @@ form {
 .modes button.active {
   color: var(--accent);
   background: var(--accent-soft);
+}
+.multi-agent-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 0.55rem;
+  padding: 0.5rem 0.65rem;
+  color: var(--text-secondary);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-muted);
+  border-radius: 0.4rem;
+  cursor: pointer;
+}
+.multi-agent-option--active {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border-muted));
+  background: var(--accent-soft);
+}
+.multi-agent-option:has(input:disabled) {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+.multi-agent-option input {
+  position: absolute;
+  z-index: 1;
+  width: 2rem;
+  height: 1.1rem;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+.multi-agent-option > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 0.1rem;
+}
+.multi-agent-option strong {
+  font-size: 0.72rem;
+}
+.multi-agent-option small {
+  line-height: 1.3;
+}
+.multi-agent-switch {
+  position: relative;
+  width: 2rem;
+  height: 1.1rem;
+  flex: 0 0 auto;
+  background: var(--bg-active);
+  border: 1px solid var(--border-strong);
+  border-radius: 1rem;
+  pointer-events: none;
+}
+.multi-agent-switch i {
+  position: absolute;
+  top: 0.14rem;
+  left: 0.16rem;
+  width: 0.7rem;
+  height: 0.7rem;
+  background: var(--text-tertiary);
+  border-radius: 50%;
+  transition: transform 140ms ease, background 140ms ease;
+}
+.multi-agent-option input:checked + .multi-agent-switch i {
+  background: var(--accent);
+  transform: translateX(0.82rem);
+}
+.multi-agent-option input:focus-visible + .multi-agent-switch {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .composer {
   display: flex;

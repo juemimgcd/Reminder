@@ -304,6 +304,7 @@ export interface ChatSessionData {
   user_id: number;
   knowledge_base_id: string | null;
   answer_mode: AnswerMode;
+  multi_agent_enabled: boolean;
   title: string | null;
   message_count: number;
   last_message_at: string | null;
@@ -401,6 +402,7 @@ export interface AgentRunData {
   question: string;
   top_k: number;
   answer_mode: AnswerMode;
+  execution_mode: "single" | "multi";
   status: AgentRunStatus;
   created_at: string;
   started_at: string | null;

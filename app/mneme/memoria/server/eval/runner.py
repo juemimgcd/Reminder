@@ -28,6 +28,10 @@ from app.mneme.memoria.server.eval.metrics import (
     evaluate_case,
     summarize_metrics,
 )
+from app.mneme.memoria.server.eval.multi_agent import (
+    load_multi_agent_cases,
+    run_multi_agent_evaluation,
+)
 
 
 def load_cases(path: str | Path) -> list[EvalCase]:
@@ -74,6 +78,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="environment variable containing a scoped service token",
     )
     parser.add_argument("--knowledge-base-id", help="knowledge-base scope for non-general live cases")
+    parser.add_argument(
+        "--multi-agent-dataset",
+        type=Path,
+        help="optional paired single/multi-agent A/B JSONL dataset",
+    )
     return parser
 
 
@@ -164,7 +173,14 @@ def main(argv: list[str] | None = None) -> int:
     dataset_version = "v1"
     report = run_evaluation(cases, dataset_version=dataset_version)
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    report_json = json.dumps(report.to_dict(), ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    output = report.to_dict()
+    multi_agent_report = None
+    if args.multi_agent_dataset:
+        multi_agent_report = run_multi_agent_evaluation(
+            load_multi_agent_cases(args.multi_agent_dataset)
+        )
+        output["multi_agent"] = multi_agent_report
+    report_json = json.dumps(output, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     args.output.write_text(report_json, encoding="utf-8")
     print(
         json.dumps(
@@ -172,11 +188,18 @@ def main(argv: list[str] | None = None) -> int:
                 "agent_gates": report.agent_gates,
                 "case_count": report.case_count,
                 "gates": report.gates,
+                "multi_agent_gates": (
+                    multi_agent_report["gates"] if multi_agent_report else None
+                ),
             },
             sort_keys=True,
         )
     )
-    return 0 if all((*report.gates.values(), *report.agent_gates.values())) else 1
+    base_ready = all((*report.gates.values(), *report.agent_gates.values()))
+    multi_agent_ready = (
+        multi_agent_report is None or bool(multi_agent_report["release_ready"])
+    )
+    return 0 if base_ready and multi_agent_ready else 1
 
 
 if __name__ == "__main__":  # pragma: no cover

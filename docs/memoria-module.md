@@ -110,8 +110,8 @@ the current evidence-only answer policy. Callers that omit conversation context
 retain the previous single-turn behavior.
 
 The conversation-context layer itself does not execute tools or orchestrate
-multiple Agents. The bounded model-review loop and its controlled tool boundary
-are described below; multi-Agent delegation remains a later milestone.
+multiple Agents. The bounded model-review loop, controlled tool boundary, and
+optional bounded Multi-Agent retrieval path are described below.
 
 ## Bounded reasoning loop
 
@@ -149,6 +149,28 @@ decision applies a mutation while `apply_enabled=false`. Unknown, out-of-mode,
 malformed, and over-budget tool requests are rejected or recorded as bounded
 observations. No tool delegates work to another Agent.
 
+## Optional bounded Multi-Agent retrieval
+
+Multi-Agent execution is opt-in per chat. New chats default to the
+single-agent path, and changing answer mode never enables Multi-Agent
+implicitly. Mneme persists the selected preference on the chat session and
+copies it into each durable run, so a queued request cannot change behavior
+when the user later updates the chat.
+
+The fixed Coordinator may assign document, memory, profile, and relation
+retrieval roles only inside the parent owner and knowledge-base scope.
+Retrieval is concurrent but bounded by deadline, source timeout, top-k, model
+calls, tokens, and estimated cost. Retrieval roles cannot spawn Agents.
+Evidence Judge then deduplicates and resolves conflicts before the existing
+citation-validation boundary.
+
+The service-level `MEMORY_AGENT_MULTI_AGENT_FEATURE_ENABLED` flag is the
+rollout and emergency rollback boundary. Disabling it forces every request
+onto the single-agent path even if a chat preference is enabled.
+`MEMORY_AGENT_MULTI_AGENT_ROLLOUT_PERCENT` selects a stable user/session
+cohort, and `MEMORY_AGENT_MULTI_AGENT_ALLOWED_MODES` limits rollout to an
+explicit comma-separated answer-mode allowlist.
+
 ## Agent quality evaluation
 
 The deterministic evaluation runner scores both final-answer behavior and an
@@ -160,6 +182,13 @@ Cases without trajectory expectations remain neutral, so the versioned
 `tool_calls` returned by `/v1/answers`; fixture cases may additionally specify
 expected or forbidden tool names, proposal-only actions, maximum calls, and a
 terminal stop reason.
+
+Phase 4 adds a paired single-agent and Multi-Agent baseline. Its release report
+checks route and source selection, duplicate and empty retrieval, conflict
+detection, Evidence Judge decisions, citations, grounding, partial-failure
+recovery, scope/action safety, and quality, latency, token, and cost deltas.
+The CLI succeeds only when these Multi-Agent gates and the existing answer and
+controlled-tool gates all pass.
 
 ## Operational checks
 
