@@ -2,6 +2,8 @@
   AiModelConfigData,
   AiModelConfigListData,
   AgentRunData,
+  AgentRunControlData,
+  AgentRunControlMode,
   AgentStreamEvent,
   AnswerMode,
   AuthTokenData,
@@ -930,6 +932,50 @@ const previewApi = {
       run.status = "aborted";
       run.completed_at = new Date().toISOString();
       return delay(run);
+    },
+    async controlAgentRun(
+      _token: string,
+      runId: string,
+      payload: {
+        mode: AgentRunControlMode;
+        question?: string;
+        answer_mode?: AnswerMode;
+        execution_mode?: "single" | "multi";
+        top_k?: number;
+        client_request_id?: string;
+      },
+    ): Promise<AgentRunControlData> {
+      const target = previewAgentRuns.get(runId) ?? [...previewAgentRuns.values()][0];
+      if (payload.mode === "interrupt") {
+        target.status = "aborted";
+        target.completed_at = new Date().toISOString();
+        return delay({
+          mode: payload.mode,
+          behavior: "interrupt",
+          target_run: target,
+          scheduled_run: null,
+        });
+      }
+      if (payload.mode === "steer") {
+        target.status = "aborted";
+        target.completed_at = new Date().toISOString();
+      }
+      const scheduled = await this.createAgentRun(_token, target.session_id, {
+        question: payload.question ?? "",
+        answer_mode: payload.answer_mode ?? target.answer_mode,
+        execution_mode: payload.execution_mode ?? target.execution_mode,
+        top_k: payload.top_k ?? target.top_k,
+        client_request_id: payload.client_request_id ?? `request-preview-${Date.now()}`,
+      });
+      return delay({
+        mode: payload.mode,
+        behavior:
+          payload.mode === "steer"
+            ? "restart_with_updated_direction"
+            : "queue_after_current",
+        target_run: target,
+        scheduled_run: scheduled,
+      });
     },
   getChannelConfiguration(): Promise<ChannelGatewayConfigurationData> {
     return delay(previewChannelConfiguration);

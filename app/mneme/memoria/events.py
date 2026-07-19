@@ -16,6 +16,7 @@ class AgentEventType(str, Enum):
 class AgentRunEventType(str, Enum):
     RUN_QUEUED = "run.queued"
     RUN_STARTED = "run.started"
+    RUN_CONTROL_ACCEPTED = "run.control.accepted"
     QUERY_REWRITTEN = "query.rewritten"
     RETRIEVAL_STARTED = "retrieval.started"
     RETRIEVAL_SOURCE_COMPLETED = "retrieval.source_completed"

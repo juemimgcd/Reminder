@@ -3,6 +3,8 @@ import type {
   AiModelConfigData,
   AiModelConfigListData,
   AgentStreamEvent,
+  AgentRunControlData,
+  AgentRunControlMode,
   AgentRunData,
   AnswerMode,
   ApiResponse,
@@ -593,6 +595,24 @@ const realApi = {
   },
   abortAgentRun(token: string, runId: string) {
     return request<AgentRunData>(`/kb/chat/runs/${runId}/abort`, { method: "POST", token });
+  },
+  controlAgentRun(
+    token: string,
+    runId: string,
+    payload: {
+      mode: AgentRunControlMode;
+      question?: string;
+      answer_mode?: AnswerMode;
+      execution_mode?: "single" | "multi";
+      top_k?: number;
+      client_request_id?: string;
+    },
+  ) {
+    return request<AgentRunControlData>(`/kb/chat/runs/${runId}/control`, {
+      method: "POST",
+      token,
+      body: payload,
+    });
   },
   getChannelConfiguration(token: string) {
     return request<ChannelGatewayConfigurationData>("/channels/configuration", { token });

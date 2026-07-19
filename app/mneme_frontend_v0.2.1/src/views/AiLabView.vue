@@ -193,6 +193,7 @@ const modeDescription = computed(() => ({
             :checked="workspace.chatMultiAgentEnabled.value"
             :disabled="
               workspace.chatPending.value ||
+              workspace.chatControlPending.value ||
               !workspace.chatMultiAgentAvailable.value
             "
             @change="
@@ -214,10 +215,39 @@ const modeDescription = computed(() => ({
         <div class="composer">
           <textarea
             v-model="workspace.chatQuestion.value"
-            :disabled="workspace.chatPending.value"
-            placeholder="Ask Mneme…"
-          /><button
-            v-if="workspace.chatPending.value"
+            :placeholder="
+              workspace.chatPending.value || workspace.chatControlPending.value
+                ? 'Add a direction or queue the next question…'
+                : 'Ask Mneme…'
+            "
+          />
+          <div
+            v-if="workspace.chatPending.value || workspace.chatControlPending.value"
+            class="run-controls"
+          >
+            <select
+              v-model="workspace.chatControlMode.value"
+              aria-label="Run control mode"
+              :disabled="workspace.chatControlPending.value"
+            >
+              <option value="steer">Steer now</option>
+              <option value="followup">Queue next</option>
+            </select>
+            <button
+              type="button"
+              class="control-run"
+              :disabled="
+                workspace.chatControlPending.value ||
+                !workspace.chatQuestion.value.trim()
+              "
+              aria-label="Apply run control"
+              @click="workspace.controlActiveChatRun"
+            >
+              <Send />
+            </button>
+          </div>
+          <button
+            v-if="workspace.chatPending.value || workspace.chatControlPending.value"
             type="button"
             class="stop-run"
             aria-label="Stop generating"
@@ -485,6 +515,7 @@ form {
 }
 .composer {
   display: flex;
+  align-items: stretch;
   gap: 0.5rem;
 }
 .composer textarea {
@@ -499,6 +530,31 @@ form {
 .composer button {
   color: var(--accent-contrast);
   background: var(--accent);
+}
+.run-controls {
+  display: flex;
+  gap: 0.35rem;
+}
+.run-controls select {
+  min-width: 7.25rem;
+  padding: 0 0.5rem;
+  color: var(--text-primary);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-muted);
+  border-radius: 0.4rem;
+}
+.run-controls select:hover {
+  border-color: var(--border-strong);
+}
+.run-controls select:focus-visible,
+.composer textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.composer button:disabled,
+.run-controls select:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 .composer button.stop-run {
   color: var(--text-primary);
@@ -616,6 +672,18 @@ form {
 @media (max-width: 560px) {
   .run-trace {
     margin-left: 0;
+  }
+  .composer {
+    flex-wrap: wrap;
+  }
+  .composer textarea {
+    flex-basis: 100%;
+  }
+  .run-controls {
+    flex: 1;
+  }
+  .run-controls select {
+    flex: 1;
   }
 }
 </style>

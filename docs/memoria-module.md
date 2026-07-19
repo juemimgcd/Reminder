@@ -204,6 +204,29 @@ recovery, scope/action safety, and quality, latency, token, and cost deltas.
 The CLI succeeds only when these Multi-Agent gates and the existing answer and
 controlled-tool gates all pass.
 
+## Runtime conversation controls
+
+An active durable run can be controlled through
+`POST /kb/chat/runs/{run_id}/control`:
+
+- `interrupt` requests cancellation through the existing durable abort path;
+- `followup` queues a linked run behind the current session turn;
+- `steer` cancels the current run and schedules a linked replacement with the
+  updated instruction.
+
+`steer` is intentionally restart-based. The Memory Agent HTTP boundary does
+not support injecting a prompt into an in-flight provider request, so the API
+reports `restart_with_updated_direction` instead of implying live prompt
+mutation. Controlled runs retain their own `run_id` and `trace_id`, and link
+back through `trigger_type` and `trigger_id`.
+
+Conversation history is bounded by both turn count and an estimated token
+budget derived from the configured model context window. Compaction emits a
+sanitized `context.compacted` event with before/after estimates, count, and
+reason. Provider selection also keeps a small process-local health window:
+repeated provider failures temporarily cool that route and prefer the
+configured fallback, while a successful probe clears the cooldown.
+
 ## Operational checks
 
 Use `/health/readiness` for the API/database boundary, `/health/worker` for the

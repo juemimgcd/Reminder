@@ -110,6 +110,7 @@ class Settings(BaseSettings):
     LLM_BASE_URL: str = ""
     LLM_MODEL_NAME: str = ""
     LLM_TEMPERATURE: float = 0.0
+    LLM_CONTEXT_WINDOW: int = 64000
 
     JWT_SECRET: str = Field(
         default="dev-only-change-this-secret-key",

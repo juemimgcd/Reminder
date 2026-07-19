@@ -374,6 +374,12 @@ async def ask_in_chat_session(
         summary_through_message_id=session.context_summary_through_message_id,
         max_messages=settings.AGENT_HISTORY_MAX_TURNS * 2,
         summary_max_chars=settings.AGENT_SUMMARY_MAX_CHARS,
+        max_context_tokens=max(
+            512,
+            (settings.LLM_CONTEXT_WINDOW - settings.AGENT_OUTPUT_RESERVE_TOKENS) // 2,
+        ),
+        chars_per_token=settings.AGENT_CHARS_PER_TOKEN,
+        tool_result_soft_chars=settings.AGENT_TOOL_RESULT_SOFT_CHARS,
     )
     session.context_summary = prepared_context.persisted_summary or None
     session.context_summary_through_message_id = (
@@ -382,6 +388,23 @@ async def ask_in_chat_session(
     await db.commit()
 
     try:
+        if event_callback is not None and prepared_context.compacted_messages:
+            await event_callback(
+                MemoryAgentStreamEvent(
+                    type="phase",
+                    sequence=1,
+                    name=AgentRunEventType.CONTEXT_COMPACTED.value,
+                    run_id=agent_run_id,
+                    phase="context",
+                    status="completed",
+                    public_payload={
+                        "before_tokens": prepared_context.before_tokens,
+                        "after_tokens": prepared_context.after_tokens,
+                        "compacted_messages": prepared_context.compacted_messages,
+                        "reason": prepared_context.compaction_reason,
+                    },
+                )
+            )
         agent_response = await answer_via_memory_agent(
             owner_id=current_user.id,
             question=question,

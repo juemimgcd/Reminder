@@ -92,6 +92,21 @@ class ChatSessionMessageRequest(BaseModel):
         return self
 
 
+class AgentRunControlRequest(BaseModel):
+    mode: Literal["steer", "followup", "interrupt"]
+    question: str | None = Field(default=None, min_length=1)
+    top_k: int | None = Field(default=None, ge=1, le=10)
+    answer_mode: AnswerMode | None = None
+    execution_mode: Literal["single", "multi"] | None = None
+    client_request_id: str | None = Field(default=None, min_length=1, max_length=128)
+
+    @model_validator(mode="after")
+    def require_instruction_for_scheduled_controls(self):
+        if self.mode in {"steer", "followup"} and self.question is None:
+            raise ValueError("question is required for steer and followup controls")
+        return self
+
+
 class ChatMessageRememberData(BaseModel):
     message_id: str
     requested: bool

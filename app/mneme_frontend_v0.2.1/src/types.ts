@@ -344,6 +344,7 @@ export interface AgentStreamEvent {
   name?:
     | "run.queued"
     | "run.started"
+    | "run.control.accepted"
     | "query.rewritten"
     | "retrieval.started"
     | "retrieval.source_completed"
@@ -411,6 +412,15 @@ export interface AgentRunData {
   last_event_id: string | null;
   last_event_sequence: number;
   queue_wait_ms: number | null;
+}
+
+export type AgentRunControlMode = "steer" | "followup" | "interrupt";
+
+export interface AgentRunControlData {
+  mode: AgentRunControlMode;
+  behavior: "restart_with_updated_direction" | "queue_after_current" | "interrupt";
+  target_run: AgentRunData;
+  scheduled_run: AgentRunData | null;
 }
 
 export interface ChannelGatewayConfigurationData {

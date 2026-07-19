@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -72,6 +73,42 @@ class _PromptBudget:
     output_tokens: int
 
 
+@dataclass
+class _ProviderHealthState:
+    consecutive_failures: int = 0
+    cooldown_until: float = 0.0
+
+
+class _ProviderHealthRegistry:
+    def __init__(self, *, failure_threshold: int = 2, cooldown_seconds: float = 30.0) -> None:
+        self._failure_threshold = failure_threshold
+        self._cooldown_seconds = cooldown_seconds
+        self._states: dict[tuple[str, str, str], _ProviderHealthState] = {}
+
+    def is_available(self, config: _ResolvedConfig) -> bool:
+        state = self._states.get(_provider_key(config))
+        return state is None or state.cooldown_until <= time.monotonic()
+
+    def record_success(self, config: _ResolvedConfig) -> None:
+        self._states.pop(_provider_key(config), None)
+
+    def record_failure(self, config: _ResolvedConfig, failure: _Failure) -> None:
+        if failure.code not in {
+            "AGENT_CAPACITY_EXCEEDED",
+            "AGENT_MODEL_AUTH_FAILED",
+            "AGENT_MODEL_INVALID_RESPONSE",
+            "AGENT_MODEL_UNAVAILABLE",
+        }:
+            return
+        state = self._states.setdefault(_provider_key(config), _ProviderHealthState())
+        state.consecutive_failures += 1
+        if state.consecutive_failures >= self._failure_threshold:
+            state.cooldown_until = time.monotonic() + self._cooldown_seconds
+
+
+_PROVIDER_HEALTH = _ProviderHealthRegistry()
+
+
 class ConfiguredModelGateway:
     def __init__(self, *, tool_executor: ScopedToolExecutor | None = None) -> None:
         self._tool_executor = tool_executor
@@ -81,6 +118,24 @@ class ConfiguredModelGateway:
         attempts: list[dict[str, Any]] = []
         last_failure = _Failure("AGENT_MODEL_UNAVAILABLE", False)
         provider_model_calls = 0
+        available_configs = [
+            config for config in configs if _PROVIDER_HEALTH.is_available(config)
+        ]
+        if available_configs:
+            skipped_configs = [
+                config for config in configs if config not in available_configs
+            ]
+            attempts.extend(
+                _attempt(
+                    config,
+                    0,
+                    "skipped",
+                    "AGENT_PROVIDER_COOLDOWN",
+                    reasoning_step=0,
+                )
+                for config in skipped_configs
+            )
+            configs = available_configs
 
         for config in configs:
             reasoning_summary = ""
@@ -103,6 +158,7 @@ class ConfiguredModelGateway:
                 attempts.append(
                     _attempt(config, 1, "failed", last_failure.code, reasoning_step=1)
                 )
+                _PROVIDER_HEALTH.record_failure(config, last_failure)
                 continue
             try:
                 for reasoning_step in range(1, settings.ANSWER_REASONING_MAX_STEPS + 1):
@@ -223,6 +279,7 @@ class ConfiguredModelGateway:
                             ):
                                 raise RuntimeDependencyError("AGENT_CAPACITY_EXCEEDED")
                             if not transition.should_continue:
+                                _PROVIDER_HEALTH.record_success(config)
                                 return GeneratedAnswer(
                                     answer=parsed.answer,
                                     route=request.mode,
@@ -294,6 +351,7 @@ class ConfiguredModelGateway:
                     await client.close()
                 except Exception:
                     pass
+            _PROVIDER_HEALTH.record_failure(config, last_failure)
 
         raise RuntimeDependencyError(last_failure.code)
 
@@ -369,6 +427,10 @@ def _fallback_config() -> _ResolvedConfig:
         api_key=settings.ANSWER_LLM_FALLBACK_API_KEY,
         fallback=True,
     )
+
+
+def _provider_key(config: _ResolvedConfig) -> tuple[str, str, str]:
+    return config.provider, config.base_url, config.model_name
 
 
 def _classify_provider_error(exc: Exception) -> _Failure:
