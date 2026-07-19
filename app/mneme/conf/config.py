@@ -3,6 +3,8 @@ from pathlib import Path
 from pydantic import AliasChoices, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.mneme.conf.agent_config import load_memoria_config, mneme_agent_settings
+
 DEFAULT_BASE_DIR = Path(__file__).resolve().parents[3]
 
 DEFAULT_CORS_ALLOWED_ORIGINS = [
@@ -200,4 +202,4 @@ class Settings(BaseSettings):
 
 
 
-settings = Settings()
+settings = Settings(**mneme_agent_settings(load_memoria_config()))
