@@ -1,0 +1,89 @@
+{
+  "_comment": "Memoria Agent runtime configuration. Secrets are resolved from .env through ${VAR_NAME} references.",
+  "version": 1,
+  "chat": {
+    "model": {
+      "provider": "qwen",
+      "model": "qwen-plus",
+      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "api_key": "${DASHSCOPE_API_KEY}",
+      "temperature": 0.0,
+      "context_window": 64000
+    },
+    "history": {
+      "max_turns": 12,
+      "output_reserve_tokens": 4096,
+      "summary_max_chars": 2000,
+      "chars_per_token": 3.0,
+      "tool_result_soft_chars": 600
+    },
+    "retrieval": {
+      "vector_recall_k": 12,
+      "keyword_recall_k": 12,
+      "memory_recall_k": 8,
+      "rerank_candidate_k": 20,
+      "context_budget_chars": 4000
+    }
+  },
+  "memory_agent": {
+    "extraction_model": {
+      "provider": "qwen",
+      "model": "qwen-plus",
+      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "api_key": "${DASHSCOPE_API_KEY}",
+      "temperature": 0.0,
+      "context_window": 64000
+    },
+    "answer_model": {
+      "provider": "qwen",
+      "model": "qwen-plus",
+      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "api_key": "${DASHSCOPE_API_KEY}",
+      "temperature": 0.0,
+      "context_window": 64000
+    },
+    "fallback_model": {
+      "provider": "openai",
+      "model": "",
+      "base_url": "",
+      "api_key": "${MEMORIA_FALLBACK_API_KEY}",
+      "temperature": 0.0,
+      "context_window": 64000
+    },
+    "retry": {
+      "max_attempts": 3,
+      "base_seconds": 0.5,
+      "max_seconds": 4.0
+    },
+    "answer": {
+      "max_context_chars": 24000,
+      "context_chars_per_token": 3.0,
+      "prompt_reserve_tokens": 1024,
+      "max_question_chars": 8000,
+      "max_output_tokens": 1200
+    },
+    "reasoning": {
+      "max_steps": 3,
+      "summary_max_chars": 600,
+      "total_output_tokens": 3600
+    },
+    "tools": {
+      "max_calls": 4,
+      "observation_max_chars": 2000
+    },
+    "multi_agent": {
+      "enabled": true,
+      "rollout_percent": 100,
+      "allowed_modes": [
+        "analysis_query"
+      ],
+      "deadline_seconds": 20,
+      "source_timeout_seconds": 8,
+      "max_model_calls": 4,
+      "max_prompt_tokens": 12000,
+      "max_completion_tokens": 3600,
+      "max_retrieval_top_k": 24,
+      "max_estimated_cost": 1.0
+    }
+  }
+}

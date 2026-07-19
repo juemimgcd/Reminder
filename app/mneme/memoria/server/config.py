@@ -1,6 +1,8 @@
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.mneme.conf.agent_config import load_memoria_config, memory_agent_settings
+
 
 class MemoryAgentSettings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -62,4 +64,4 @@ class MemoryAgentSettings(BaseSettings):
     MULTI_AGENT_MAX_ESTIMATED_COST: float = Field(default=1.0, ge=0, le=100)
 
 
-settings = MemoryAgentSettings()
+settings = MemoryAgentSettings(**memory_agent_settings(load_memoria_config()))

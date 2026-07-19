@@ -164,12 +164,26 @@ calls, tokens, and estimated cost. Retrieval roles cannot spawn Agents.
 Evidence Judge then deduplicates and resolves conflicts before the existing
 citation-validation boundary.
 
-The service-level `MEMORY_AGENT_MULTI_AGENT_FEATURE_ENABLED` flag is the
-rollout and emergency rollback boundary. Disabling it forces every request
-onto the single-agent path even if a chat preference is enabled.
-`MEMORY_AGENT_MULTI_AGENT_ROLLOUT_PERCENT` selects a stable user/session
-cohort, and `MEMORY_AGENT_MULTI_AGENT_ALLOWED_MODES` limits rollout to an
-explicit comma-separated answer-mode allowlist.
+The service-level `memory_agent.multi_agent.enabled` value in `memoria.json`
+is the rollout and emergency rollback boundary. Disabling it forces every
+request onto the single-agent path even if a chat preference is enabled.
+`rollout_percent` selects a stable user/session cohort, and `allowed_modes`
+limits rollout to an explicit answer-mode allowlist.
+
+## Configuration boundary
+
+Backend and deployment configuration remains in `.env`: database and queue
+URLs, JWT material, service ports, storage backends, and provider secrets.
+Agent behavior lives in the project-root `memoria.json`: chat and Memory Agent
+models, history and retrieval budgets, retry and answer limits, reasoning,
+tools, and Multi-Agent rollout policy.
+
+Like AtlasClaw's JSON configuration, string values may reference environment
+secrets with the exact `${VAR_NAME}` form. The JSON file is validated at
+startup and is authoritative for Agent fields, so legacy Agent environment
+variables cannot silently override the checked-in policy. Set
+`MEMORIA_CONFIG_PATH` only when a deployment needs a different JSON file
+location.
 
 ## Agent quality evaluation
 

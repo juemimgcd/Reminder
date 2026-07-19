@@ -102,7 +102,6 @@ against the single-agent baseline.
 Release succeeds only when the existing answer and agent gates and all
 Multi-Agent gates pass. Multi-Agent remains an explicit per-chat preference
 that defaults to off. Operators can force the single-agent path immediately by
-setting `MEMORY_AGENT_MULTI_AGENT_FEATURE_ENABLED=false`.
-Operators may stage the rollout with
-`MEMORY_AGENT_MULTI_AGENT_ROLLOUT_PERCENT` and
-`MEMORY_AGENT_MULTI_AGENT_ALLOWED_MODES`.
+setting `memory_agent.multi_agent.enabled` to `false` in `memoria.json`.
+Operators may stage the rollout with `rollout_percent` and `allowed_modes` in
+the same section.
