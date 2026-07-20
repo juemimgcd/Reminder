@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 from dataclasses import asdict, dataclass
+from datetime import datetime
 from pathlib import Path
 
 from sqlalchemy import select
@@ -38,6 +39,26 @@ class Checkpoint:
     status: str
 
 
+@dataclass(frozen=True)
+class DocumentSnapshot:
+    id: str
+    user_id: int
+    knowledge_base_id: str
+    updated_at: datetime
+    file_name: str
+
+
+@dataclass(frozen=True)
+class MemoryEntrySnapshot:
+    id: str
+    document_id: str
+    user_id: int
+    knowledge_base_id: str
+    chunk_id: str
+    evidence_text: str
+    first_seen_at: datetime
+
+
 def _atomic_checkpoint(path: Path, checkpoint: Checkpoint) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.tmp")
@@ -61,26 +82,48 @@ def _load_checkpoint(path: Path) -> Checkpoint | None:
 
 async def _documents(
     *, owner_id: int | None, knowledge_base_id: str | None
-) -> list[Document]:
+) -> list[DocumentSnapshot]:
     statement = select(Document).where(Document.status == "indexed")
     if owner_id is not None:
         statement = statement.where(Document.user_id == owner_id)
     if knowledge_base_id is not None:
         statement = statement.where(Document.knowledge_base_id == knowledge_base_id)
     async with open_read_session() as db:
-        return list(await db.scalars(statement.order_by(Document.id)))
+        documents = list(await db.scalars(statement.order_by(Document.id)))
+        return [
+            DocumentSnapshot(
+                id=document.id,
+                user_id=document.user_id,
+                knowledge_base_id=document.knowledge_base_id,
+                updated_at=document.updated_at,
+                file_name=document.file_name,
+            )
+            for document in documents
+        ]
 
 
 async def _legacy_memories(
     *, owner_id: int | None, knowledge_base_id: str | None
-) -> list[MemoryEntry]:
+) -> list[MemoryEntrySnapshot]:
     statement = select(MemoryEntry).where(MemoryEntry.status == "active")
     if owner_id is not None:
         statement = statement.where(MemoryEntry.user_id == owner_id)
     if knowledge_base_id is not None:
         statement = statement.where(MemoryEntry.knowledge_base_id == knowledge_base_id)
     async with open_read_session() as db:
-        return list(await db.scalars(statement.order_by(MemoryEntry.id)))
+        memories = list(await db.scalars(statement.order_by(MemoryEntry.id)))
+        return [
+            MemoryEntrySnapshot(
+                id=memory.id,
+                document_id=memory.document_id,
+                user_id=memory.user_id,
+                knowledge_base_id=memory.knowledge_base_id,
+                chunk_id=memory.chunk_id,
+                evidence_text=memory.evidence_text,
+                first_seen_at=memory.first_seen_at,
+            )
+            for memory in memories
+        ]
 
 
 def _past_checkpoint(
