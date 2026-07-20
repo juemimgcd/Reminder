@@ -38,7 +38,7 @@ def _normalize_provider(provider: str) -> str:
     normalized = provider.strip().lower()
     if normalized in LLM_PROVIDER_DEFAULTS:
         return normalized
-    return "qwen"
+    return "deepseek"
 
 
 def build_llm_kwargs(config=settings, user_config: dict | None = None) -> dict:

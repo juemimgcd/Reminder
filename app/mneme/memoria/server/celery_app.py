@@ -3,6 +3,7 @@ from celery.signals import after_setup_logger, after_setup_task_logger, worker_p
 
 from app.mneme.memoria.server.config import settings
 from app.mneme.memoria.server.logging import configure_logger, configure_logging
+from app.mneme.memoria.server.services.embeddings import preload_embedding_model_sync
 
 celery_app = Celery(
     "memory_agent",
@@ -43,3 +44,5 @@ def configure_celery_logger(logger, **_kwargs) -> None:
 @worker_process_init.connect
 def configure_worker_process_logging(**_kwargs) -> None:
     configure_logging()
+    if settings.EMBEDDING_PRELOAD_ON_STARTUP:
+        preload_embedding_model_sync()

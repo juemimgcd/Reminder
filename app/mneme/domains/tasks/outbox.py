@@ -1,6 +1,8 @@
 import hashlib
 import re
 import uuid
+from copy import deepcopy
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -53,6 +55,20 @@ EVENT_GRAPH_PROJECTION_UPSERT = "graph.projection.upsert"
 BACKEND_MILVUS = "milvus"
 BACKEND_NEO4J = "neo4j"
 MAX_MEMORY_AGENT_ERROR_LENGTH = 2000
+
+
+@dataclass(frozen=True, slots=True)
+class OutboxEventSnapshot:
+    id: str
+    event_type: str
+    aggregate_type: str
+    aggregate_id: str
+    target_backend: str
+    payload: dict[str, Any]
+    idempotency_key: str
+    status: str
+    attempt_count: int
+    max_attempts: int
 
 _SECRET_PATTERNS = (
     re.compile(r"-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----"),
@@ -256,7 +272,7 @@ async def enqueue_graph_projection_upsert(
     )
 
 
-async def mark_outbox_running(*, event: OutboxEvent) -> None:
+async def mark_outbox_running(*, event: OutboxEvent | OutboxEventSnapshot) -> None:
     async with open_write_session() as db:
         await update_outbox_event_status(
             db,
@@ -279,7 +295,7 @@ async def mark_outbox_succeeded(*, event_id: str) -> None:
         )
 
 
-async def mark_outbox_failed(*, event: OutboxEvent, exc: Exception) -> None:
+async def mark_outbox_failed(*, event: OutboxEvent | OutboxEventSnapshot, exc: Exception) -> None:
     next_attempt_count = event.attempt_count + 1
     attempts_exhausted = should_dead_letter(
         attempt_count=next_attempt_count,
@@ -367,7 +383,7 @@ async def enqueue_conversation_completed(
     db: AsyncSession,
     *,
     owner_id: int,
-    knowledge_base_id: str,
+    knowledge_base_id: str | None,
     session_id: str,
     user_message_id: str,
     user_content: str,
@@ -552,7 +568,7 @@ async def enqueue_conversation_deleted(
     db: AsyncSession,
     *,
     owner_id: int,
-    knowledge_base_id: str,
+    knowledge_base_id: str | None,
     session_id: str,
     message_ids: list[str],
     source_version: datetime,
@@ -563,7 +579,7 @@ async def enqueue_conversation_deleted(
         event_id=_deletion_event_id(
             "conversation-deleted",
             str(owner_id),
-            knowledge_base_id,
+            knowledge_base_id or "",
             session_id,
             source_version_text,
         ),
@@ -591,19 +607,35 @@ def _deletion_event_id(prefix: str, *identity_parts: str) -> str:
     return _memory_event_id(prefix, *identity_parts)
 
 
-def _bounded_error_detail(*, event: OutboxEvent, exc: Exception) -> str:
+def _bounded_error_detail(*, event: OutboxEvent | OutboxEventSnapshot, exc: Exception) -> str:
     if event.target_backend == settings.MEMORY_AGENT_OUTBOX_TARGET:
         detail = exc.message if isinstance(exc, BusinessException) else "memory agent delivery failed"
         return detail[:MAX_MEMORY_AGENT_ERROR_LENGTH]
     return str(exc)
 
 
-async def load_outbox_event_snapshot(*, event_id: str) -> OutboxEvent | None:
+def _snapshot_outbox_event(event: OutboxEvent) -> OutboxEventSnapshot:
+    return OutboxEventSnapshot(
+        id=event.id,
+        event_type=event.event_type,
+        aggregate_type=event.aggregate_type,
+        aggregate_id=event.aggregate_id,
+        target_backend=event.target_backend,
+        payload=deepcopy(event.payload),
+        idempotency_key=event.idempotency_key,
+        status=event.status,
+        attempt_count=event.attempt_count,
+        max_attempts=event.max_attempts,
+    )
+
+
+async def load_outbox_event_snapshot(*, event_id: str) -> OutboxEventSnapshot | None:
     async with open_read_session() as db:
-        return await get_outbox_event_by_id(db, event_id=event_id)
+        event = await get_outbox_event_by_id(db, event_id=event_id)
+        return _snapshot_outbox_event(event) if event is not None else None
 
 
-async def apply_vector_reindex_event(event: OutboxEvent) -> dict[str, int | str]:
+async def apply_vector_reindex_event(event: OutboxEvent | OutboxEventSnapshot) -> dict[str, int | str]:
     document_id = event.payload.get("document_id")
     if not document_id:
         raise BusinessException(message="outbox vector event missing document_id", code=5017, status_code=500)
@@ -635,7 +667,7 @@ async def apply_vector_reindex_event(event: OutboxEvent) -> dict[str, int | str]
     }
 
 
-async def apply_graph_sync_event(event: OutboxEvent) -> dict[str, int | str]:
+async def apply_graph_sync_event(event: OutboxEvent | OutboxEventSnapshot) -> dict[str, int | str]:
     document_id = event.payload.get("document_id")
     if not document_id:
         raise BusinessException(message="outbox graph event missing document_id", code=5018, status_code=500)
@@ -669,7 +701,7 @@ async def apply_graph_sync_event(event: OutboxEvent) -> dict[str, int | str]:
     }
 
 
-async def apply_graph_projection_upsert(event: OutboxEvent) -> dict[str, str | bool]:
+async def apply_graph_projection_upsert(event: OutboxEvent | OutboxEventSnapshot) -> dict[str, str | bool]:
     aggregate_type = str(event.payload.get("aggregate_type") or "")
     aggregate_id = str(event.payload.get("aggregate_id") or "")
     if aggregate_type not in {"user", "knowledge_base", "document"} or not aggregate_id:
@@ -710,7 +742,7 @@ async def apply_graph_projection_upsert(event: OutboxEvent) -> dict[str, str | b
     return {"aggregate_type": aggregate_type, "aggregate_id": aggregate_id, "skipped": False}
 
 
-async def apply_outbox_event(event: OutboxEvent) -> dict[str, Any]:
+async def apply_outbox_event(event: OutboxEvent | OutboxEventSnapshot) -> dict[str, Any]:
     if event.target_backend == "in_app":
         from app.mneme.memoria.automation.outbox import apply_in_app_notification_event
 
@@ -778,18 +810,19 @@ async def dispatch_pending_outbox_events(
             target_backend=target_backend,
             now=datetime.now(timezone.utc),
         )
+        event_ids = [event.id for event in events]
 
     dispatched = 0
     failed = 0
-    for event in events:
+    for event_id in event_ids:
         try:
-            await process_outbox_event_by_id(event_id=event.id)
+            await process_outbox_event_by_id(event_id=event_id)
             dispatched += 1
         except Exception:
             failed += 1
 
     return {
-        "matched": len(events),
+        "matched": len(event_ids),
         "dispatched": dispatched,
         "failed": failed,
     }

@@ -31,7 +31,7 @@ x-app-base: &app-base
     MEMORY_AGENT_ENABLED: "${MEMORY_AGENT_ENABLED:-false}"
     MEMORY_AGENT_SERVICE_JWT_SECRET: ${MEMORY_AGENT_SERVICE_JWT_SECRET:-}
     AGENT_RUN_ALLOW_MEMORY_FALLBACK: "false"
-    AGENT_RUN_REDIS_URL: redis://redis:6379/2
+    AGENT_RUN_REDIS_URL: redis://redis:6379/4
     PYTHONPATH: /app
     WAIT_FOR_SERVICE_NAME: mneme
     WAIT_FOR_HOSTS: ${WAIT_FOR_HOSTS:-postgres:5432,redis:6379,neo4j:7687}
@@ -63,6 +63,13 @@ x-memory-agent-base: &memory-agent-base
     MEMORY_AGENT_CELERY_BROKER_URL: redis://redis:6379/2
     MEMORY_AGENT_CELERY_RESULT_BACKEND: redis://redis:6379/3
     MEMORY_AGENT_CELERY_QUEUE: ${MEMORY_AGENT_CELERY_QUEUE:-memory_agent}
+    MEMORY_AGENT_EMBEDDING_MODEL_NAME: ${MEMORY_AGENT_EMBEDDING_MODEL_NAME:-BAAI/bge-m3}
+    MEMORY_AGENT_EMBEDDING_MODEL_PATH: ${MEMORY_AGENT_EMBEDDING_MODEL_PATH:-}
+    MEMORY_AGENT_EMBEDDING_CACHE_DIR: ${MEMORY_AGENT_EMBEDDING_CACHE_DIR:-/app/storage/model_cache/sentence_transformers}
+    MEMORY_AGENT_EMBEDDING_LOCAL_FILES_ONLY: "${MEMORY_AGENT_EMBEDDING_LOCAL_FILES_ONLY:-false}"
+    MEMORY_AGENT_EMBEDDING_PRELOAD_ON_STARTUP: "${MEMORY_AGENT_EMBEDDING_PRELOAD_ON_STARTUP:-true}"
+    MEMORY_AGENT_UVICORN_WORKERS: ${MEMORY_AGENT_UVICORN_WORKERS:-1}
+    MEMORY_AGENT_WORKER_CONCURRENCY: ${MEMORY_AGENT_WORKER_CONCURRENCY:-1}
     CELERY_BROKER_URL: redis://redis:6379/2
     CELERY_RESULT_BACKEND: redis://redis:6379/3
     MEMORIA_CONFIG_PATH: ${MEMORIA_CONFIG_PATH:-/app/memoria.json}
@@ -72,6 +79,8 @@ x-memory-agent-base: &memory-agent-base
     WAIT_FOR_HOSTS: postgres:5432,redis:6379
     WAIT_FOR_URLS: ""
     WAIT_FOR_TIMEOUT_SECONDS: ${WAIT_FOR_TIMEOUT_SECONDS:-180}
+  volumes:
+    - ./storage:/app/storage
 
 x-logging: &default-logging
   driver: json-file
@@ -81,11 +90,8 @@ x-logging: &default-logging
 
 services:
   postgres:
-    build:
-      context: .
-      dockerfile: docker/Postgres.Dockerfile
-    image: reminder-postgres:17-pgvector
-    pull_policy: never
+    image: ${POSTGRES_IMAGE:-pgvector/pgvector:0.8.5-pg17-bookworm}
+    pull_policy: ${POSTGRES_IMAGE_PULL_POLICY:-missing}
     container_name: reminder-postgres
     restart: unless-stopped
     environment:

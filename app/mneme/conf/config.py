@@ -168,7 +168,7 @@ class Settings(BaseSettings):
     AGENT_OUTPUT_RESERVE_TOKENS: int = 4096
     AGENT_SUMMARY_MAX_CHARS: int = 2000
     AGENT_CHARS_PER_TOKEN: float = 3.0
-    AGENT_RUN_REDIS_URL: str = "redis://localhost:6379/2"
+    AGENT_RUN_REDIS_URL: str = "redis://localhost:6379/4"
     AGENT_RUN_ALLOW_MEMORY_FALLBACK: bool = True
     AGENT_RUN_TTL_SECONDS: int = 3600
     AGENT_RUN_EVENT_MAXLEN: int = 1000

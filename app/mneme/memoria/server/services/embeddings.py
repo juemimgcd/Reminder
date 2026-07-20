@@ -1,5 +1,6 @@
 import asyncio
 from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 from app.mneme.memoria.server.config import settings
@@ -9,7 +10,28 @@ from app.mneme.memoria.server.config import settings
 def _embedding_model() -> Any:
     from sentence_transformers import SentenceTransformer
 
-    return SentenceTransformer(settings.EMBEDDING_MODEL_NAME)
+    cache_dir = Path(settings.EMBEDDING_CACHE_DIR).expanduser()
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    model_source = settings.EMBEDDING_MODEL_PATH.strip() or settings.EMBEDDING_MODEL_NAME.strip()
+    if not model_source:
+        raise RuntimeError("embedding model path or name must be configured")
+    return SentenceTransformer(
+        model_source,
+        cache_folder=str(cache_dir),
+        local_files_only=settings.EMBEDDING_LOCAL_FILES_ONLY,
+    )
+
+
+def embedding_model_ready() -> bool:
+    return _embedding_model.cache_info().currsize > 0
+
+
+def preload_embedding_model_sync() -> None:
+    _embedding_model()
+
+
+async def preload_embedding_model() -> None:
+    await asyncio.to_thread(preload_embedding_model_sync)
 
 
 def _embed_texts_sync(texts: list[str]) -> list[list[float]]:

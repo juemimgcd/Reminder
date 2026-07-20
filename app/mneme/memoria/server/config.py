@@ -21,6 +21,10 @@ class MemoryAgentSettings(BaseSettings):
     CELERY_QUEUE: str = "memory_agent"
     EMBEDDING_DIMENSION: int = 1024
     EMBEDDING_MODEL_NAME: str = "BAAI/bge-m3"
+    EMBEDDING_MODEL_PATH: str = ""
+    EMBEDDING_CACHE_DIR: str = "storage/model_cache/sentence_transformers"
+    EMBEDDING_LOCAL_FILES_ONLY: bool = False
+    EMBEDDING_PRELOAD_ON_STARTUP: bool = False
     EXTRACTION_LLM_BASE_URL: str = ""
     EXTRACTION_LLM_API_KEY: SecretStr = SecretStr("")
     EXTRACTION_LLM_MODEL: str = ""

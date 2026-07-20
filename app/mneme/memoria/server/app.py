@@ -1,4 +1,5 @@
 import logging
+from contextlib import asynccontextmanager
 from time import perf_counter
 from uuid import uuid4
 
@@ -11,13 +12,22 @@ from app.mneme.memoria.server.api.events import router as event_router
 from app.mneme.memoria.server.api.health import router as health_router
 from app.mneme.memoria.server.api.memories import router as memories_router
 from app.mneme.memoria.server.api.runs import router as runs_router
+from app.mneme.memoria.server.config import settings
 from app.mneme.memoria.server.observability.context import observation_context, safe_identifier, safe_log
+from app.mneme.memoria.server.services.embeddings import preload_embedding_model
 
 logger = logging.getLogger(__name__)
 
 
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    if settings.EMBEDDING_PRELOAD_ON_STARTUP:
+        await preload_embedding_model()
+    yield
+
+
 def create_memory_agent_app() -> FastAPI:
-    app = FastAPI(title="Mneme Memoria", version="1.0.0")
+    app = FastAPI(title="Mneme Memoria", version="1.0.0", lifespan=lifespan)
 
     @app.middleware("http")
     async def correlate_request(request, call_next):

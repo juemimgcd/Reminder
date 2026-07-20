@@ -14,6 +14,7 @@ from app.mneme.memoria.server.models.document_projection import DocumentProjecti
 from app.mneme.memoria.server.models.inbox_event import InboxEvent
 from app.mneme.memoria.server.models.memory_audit import MemoryActionAudit
 from app.mneme.memoria.server.observability.metrics import OperationalMetrics, labels, render_metrics
+from app.mneme.memoria.server.services.embeddings import embedding_model_ready
 
 router = APIRouter()
 
@@ -36,9 +37,16 @@ async def readiness(db: Annotated[AsyncSession, Depends(get_db)]) -> dict[str, o
     service_model_configured = bool(
         settings.ANSWER_LLM_MODEL.strip() and settings.ANSWER_LLM_API_KEY.get_secret_value()
     )
+    model_ready = embedding_model_ready()
+    if settings.EMBEDDING_PRELOAD_ON_STARTUP and not model_ready:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="embedding model unavailable",
+        )
     return {
         "status": "ready",
         "database": "ready",
+        "embedding_model": "ready" if model_ready else "lazy",
         # Requests may supply an ephemeral model config, so this is diagnostic rather than fatal.
         "answer_model": "service_default" if service_model_configured else "request_required",
     }
