@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 from app.mneme.conf.database import open_read_session, open_write_session
 from app.mneme.conf.logging import app_logger
 from app.mneme.crud.document import get_document_by_id, update_document_status
@@ -7,13 +9,36 @@ from app.mneme.domains.tasks.state import CANCELLED, FAILED, SUCCEEDED, transiti
 from app.mneme.infra.async_runner import run_task_coroutine
 from app.mneme.infra.celery_app import celery_app
 from app.mneme.memoria.automation.service import emit_domain_event
-from app.mneme.models.document import Document
 from app.mneme.utils.exceptions import BusinessException
 
 
-async def load_document_snapshot(*, document_id: str) -> Document | None:
+@dataclass(frozen=True, slots=True)
+class DocumentIndexSnapshot:
+    pk: int
+    id: str
+    user_id: int
+    knowledge_base_id: str
+    knowledge_base_pk: int
+    file_name: str
+    file_path: str
+    file_type: str
+
+
+async def load_document_snapshot(*, document_id: str) -> DocumentIndexSnapshot | None:
     async with open_read_session() as db:
-        return await get_document_by_id(db, document_id=document_id)
+        document = await get_document_by_id(db, document_id=document_id)
+        if document is None:
+            return None
+        return DocumentIndexSnapshot(
+            pk=document.pk,
+            id=document.id,
+            user_id=document.user_id,
+            knowledge_base_id=document.knowledge_base_id,
+            knowledge_base_pk=document.knowledge_base_pk,
+            file_name=document.file_name,
+            file_path=document.file_path,
+            file_type=document.file_type,
+        )
 
 
 async def load_task_status(*, task_id: str) -> str | None:
