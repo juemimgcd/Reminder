@@ -1,11 +1,10 @@
-import asyncio
-
 from app.mneme.conf.database import open_read_session, open_write_session
 from app.mneme.conf.logging import app_logger
 from app.mneme.crud.document import get_document_by_id, update_document_status
 from app.mneme.crud.task_record import get_task_record_by_id
 from app.mneme.domains.documents.pipeline import run_document_index_pipeline
 from app.mneme.domains.tasks.state import CANCELLED, FAILED, SUCCEEDED, transition_task_status
+from app.mneme.infra.async_runner import run_task_coroutine
 from app.mneme.infra.celery_app import celery_app
 from app.mneme.memoria.automation.service import emit_domain_event
 from app.mneme.models.document import Document
@@ -62,7 +61,7 @@ def index_document_task(
     app_logger.bind(module="index_task").info(
         f"worker task start task_id={task_id} document_id={document_id}"
     )
-    asyncio.run(
+    run_task_coroutine(
         run_index_document_task_async(
             task_id=task_id,
             document_id=document_id,

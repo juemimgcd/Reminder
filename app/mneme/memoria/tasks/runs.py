@@ -1,9 +1,9 @@
-import asyncio
 from datetime import datetime, timedelta, timezone
 
 from app.mneme.conf.config import settings
 from app.mneme.conf.database import open_write_session
 from app.mneme.conf.logging import app_logger
+from app.mneme.infra.async_runner import run_task_coroutine
 from app.mneme.infra.celery_app import celery_app
 from app.mneme.memoria.automation.service import emit_domain_event
 from app.mneme.memoria.events import AgentEvent
@@ -26,12 +26,12 @@ from app.mneme.memoria.run_service import execute_agent_run
 )
 def execute_agent_run_task(self, *, run_id: str) -> None:
     app_logger.bind(module="agent_worker").info(f"agent run task start run_id={run_id}")
-    asyncio.run(execute_agent_run(run_id))
+    run_task_coroutine(execute_agent_run(run_id))
 
 
 @celery_app.task(name="tasks.recover_agent_runs_task")
 def recover_agent_runs_task() -> None:
-    asyncio.run(recover_agent_runs())
+    run_task_coroutine(recover_agent_runs())
 
 
 async def recover_agent_runs() -> int:

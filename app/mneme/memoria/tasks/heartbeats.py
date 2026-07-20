@@ -1,9 +1,9 @@
-import asyncio
 from datetime import datetime, timedelta, timezone
 
 from app.mneme.conf.config import settings
 from app.mneme.conf.database import open_write_session
 from app.mneme.conf.logging import app_logger
+from app.mneme.infra.async_runner import run_task_coroutine
 from app.mneme.infra.celery_app import celery_app
 from app.mneme.memoria.automation.service import dispatch_heartbeat_job
 from app.mneme.memoria.persistence.automation import (
@@ -15,7 +15,7 @@ from app.mneme.memoria.persistence.automation import (
 
 @celery_app.task(name="tasks.dispatch_due_heartbeat_jobs_task")
 def dispatch_due_heartbeat_jobs_task() -> None:
-    count = asyncio.run(dispatch_due_heartbeat_jobs())
+    count = run_task_coroutine(dispatch_due_heartbeat_jobs())
     app_logger.bind(module="heartbeat_scheduler").info(f"heartbeat dispatch complete count={count}")
 
 

@@ -31,6 +31,7 @@ x-app-base: &app-base
     MEMORY_AGENT_ENABLED: "${MEMORY_AGENT_ENABLED:-false}"
     MEMORY_AGENT_SERVICE_JWT_SECRET: ${MEMORY_AGENT_SERVICE_JWT_SECRET:-}
     AGENT_RUN_ALLOW_MEMORY_FALLBACK: "false"
+    AGENT_RUN_REDIS_URL: redis://redis:6379/2
     PYTHONPATH: /app
     WAIT_FOR_SERVICE_NAME: mneme
     WAIT_FOR_HOSTS: ${WAIT_FOR_HOSTS:-postgres:5432,redis:6379,neo4j:7687}
@@ -62,6 +63,8 @@ x-memory-agent-base: &memory-agent-base
     MEMORY_AGENT_CELERY_BROKER_URL: redis://redis:6379/2
     MEMORY_AGENT_CELERY_RESULT_BACKEND: redis://redis:6379/3
     MEMORY_AGENT_CELERY_QUEUE: ${MEMORY_AGENT_CELERY_QUEUE:-memory_agent}
+    CELERY_BROKER_URL: redis://redis:6379/2
+    CELERY_RESULT_BACKEND: redis://redis:6379/3
     MEMORIA_CONFIG_PATH: ${MEMORIA_CONFIG_PATH:-/app/memoria.json}
     MEMORY_AGENT_ANSWER_RUN_STALE_SECONDS: ${MEMORY_AGENT_ANSWER_RUN_STALE_SECONDS:-180}
     PYTHONPATH: /app
@@ -78,7 +81,11 @@ x-logging: &default-logging
 
 services:
   postgres:
-    image: postgres:17
+    build:
+      context: .
+      dockerfile: docker/Postgres.Dockerfile
+    image: reminder-postgres:17-pgvector
+    pull_policy: never
     container_name: reminder-postgres
     restart: unless-stopped
     environment:

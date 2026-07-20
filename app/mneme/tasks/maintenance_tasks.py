@@ -1,4 +1,3 @@
-import asyncio
 import json
 from datetime import datetime, timedelta, timezone
 
@@ -22,18 +21,19 @@ from app.mneme.domains.tasks.maintenance import (
     MEMORY_REBUILD_KNOWLEDGE_BASE,
 )
 from app.mneme.domains.tasks.state import FAILED, SUCCEEDED, transition_task_status
+from app.mneme.infra.async_runner import run_task_coroutine
 from app.mneme.infra.celery_app import celery_app
 from app.mneme.infra.task_queue import enqueue_maintenance_task
 
 
 @celery_app.task(name="tasks.execute_maintenance_task")
 def execute_maintenance_task(*, task_id: str) -> None:
-    asyncio.run(run_maintenance_task(task_id))
+    run_task_coroutine(run_maintenance_task(task_id))
 
 
 @celery_app.task(name="tasks.recover_maintenance_tasks")
 def recover_maintenance_tasks() -> None:
-    asyncio.run(recover_stale_maintenance_tasks())
+    run_task_coroutine(recover_stale_maintenance_tasks())
 
 
 async def run_maintenance_task(task_id: str) -> None:

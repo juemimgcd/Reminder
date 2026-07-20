@@ -3,10 +3,10 @@
   "version": 1,
   "chat": {
     "model": {
-      "provider": "qwen",
-      "model": "qwen-plus",
-      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-      "api_key": "${DASHSCOPE_API_KEY}",
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "base_url": "https://api.deepseek.com",
+      "api_key": "${DEEPSEEK_API_KEY}",
       "temperature": 0.0,
       "context_window": 64000
     },
@@ -27,18 +27,18 @@
   },
   "memory_agent": {
     "extraction_model": {
-      "provider": "qwen",
-      "model": "qwen-plus",
-      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-      "api_key": "${DASHSCOPE_API_KEY}",
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "base_url": "https://api.deepseek.com",
+      "api_key": "${DEEPSEEK_API_KEY}",
       "temperature": 0.0,
       "context_window": 64000
     },
     "answer_model": {
-      "provider": "qwen",
-      "model": "qwen-plus",
-      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-      "api_key": "${DASHSCOPE_API_KEY}",
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "base_url": "https://api.deepseek.com",
+      "api_key": "${DEEPSEEK_API_KEY}",
       "temperature": 0.0,
       "context_window": 64000
     },
