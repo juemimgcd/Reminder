@@ -4,7 +4,7 @@ from app.mneme.clients.document_loader_client import load_langchain_documents
 from app.mneme.clients.text_splitter_client import split_documents
 from app.mneme.conf.database import open_write_session
 from app.mneme.conf.logging import log_event
-from app.mneme.crud.chunk import create_chunks
+from app.mneme.crud.chunk import create_chunks, delete_chunks_by_document_id
 from app.mneme.crud.document import update_document_status
 from app.mneme.domains.tasks.outbox import (
     enqueue_document_agent_projection,
@@ -51,6 +51,7 @@ async def persist_chunks_for_document(
     chunk_docs: list,
 ) -> None:
     async with open_write_session() as db:
+        await delete_chunks_by_document_id(db, document_id=document_id)
         await create_chunks(
             db,
             document_id=document_id,
