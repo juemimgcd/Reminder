@@ -1,9 +1,11 @@
 from pathlib import Path
+from typing import Literal
 
 from pydantic import AliasChoices, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.mneme.conf.agent_config import load_memoria_config, mneme_agent_settings
+from app.mneme.version import __version__
 
 DEFAULT_BASE_DIR = Path(__file__).resolve().parents[3]
 
@@ -23,10 +25,11 @@ class Settings(BaseSettings):
     )
 
     BASE_DIR: Path = DEFAULT_BASE_DIR
+    APP_ENV: Literal["development", "test", "production"] = "development"
 
-    PROJECT_NAME: str = "Agentic RAG Assistant"
-    VERSION: str = "0.1.0"
-    DESCRIPTION: str = "A FastAPI backend for a private Agentic RAG knowledge assistant"
+    PROJECT_NAME: str = "Mneme"
+    VERSION: str = __version__
+    DESCRIPTION: str = "A private memory-oriented RAG knowledge assistant"
     LOG_LEVEL: str = "INFO"
 
     API_PREFIX: str = "/api/v1"
@@ -192,12 +195,35 @@ class Settings(BaseSettings):
     CIRCUIT_BREAKER_RECOVERY_TIMEOUT_SECONDS: int = 30
 
     @model_validator(mode="after")
-    def include_default_cors_origins(self) -> "Settings":
-        merged = [*self.CORS_ALLOWED_ORIGINS]
-        for origin in DEFAULT_CORS_ALLOWED_ORIGINS:
-            if origin not in merged:
-                merged.append(origin)
-        self.CORS_ALLOWED_ORIGINS = merged
+    def validate_environment(self) -> "Settings":
+        if self.APP_ENV != "production":
+            merged = [*self.CORS_ALLOWED_ORIGINS]
+            for origin in DEFAULT_CORS_ALLOWED_ORIGINS:
+                if origin not in merged:
+                    merged.append(origin)
+            self.CORS_ALLOWED_ORIGINS = merged
+            return self
+
+        if "CORS_ALLOWED_ORIGINS" not in self.model_fields_set:
+            self.CORS_ALLOWED_ORIGINS = []
+        if "CORS_ALLOW_ORIGIN_REGEX" not in self.model_fields_set:
+            self.CORS_ALLOW_ORIGIN_REGEX = ""
+
+        jwt_secret = self.JWT_SECRET.strip()
+        service_secret = self.MEMORY_AGENT_SERVICE_JWT_SECRET.get_secret_value().strip()
+        errors: list[str] = []
+        if len(jwt_secret) < 32 or "change-this" in jwt_secret or "replace-with" in jwt_secret:
+            errors.append("JWT_SECRET must be a non-placeholder value of at least 32 characters")
+        if len(service_secret) < 32 or "change-this" in service_secret or "replace-with" in service_secret:
+            errors.append("MEMORY_AGENT_SERVICE_JWT_SECRET must be a non-placeholder value of at least 32 characters")
+        if jwt_secret and jwt_secret == service_secret:
+            errors.append("JWT_SECRET and MEMORY_AGENT_SERVICE_JWT_SECRET must be different")
+        if ":123456@" in self.DATABASE_URL:
+            errors.append("DATABASE_URL must not use the default PostgreSQL password")
+        if self.NEO4J_ENABLED and self.NEO4J_PASSWORD == "change-this-in-production":
+            errors.append("NEO4J_PASSWORD must not use the production placeholder")
+        if errors:
+            raise ValueError("unsafe production configuration: " + "; ".join(errors))
         return self
 
 

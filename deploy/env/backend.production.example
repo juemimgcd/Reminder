@@ -1,6 +1,6 @@
-PROJECT_NAME=Reminder
-VERSION=0.1.0
-DESCRIPTION=Reminder production environment
+PROJECT_NAME=Mneme
+DESCRIPTION=Mneme production environment
+APP_ENV=production
 LOG_LEVEL=INFO
 
 APP_IMAGE_REPOSITORY=ghcr.io/juemimgcd/reminder
@@ -8,6 +8,8 @@ APP_IMAGE_TAG=
 APP_IMAGE_PULL_POLICY=always
 
 PYTHON_VERSION=3.12
+APP_UID=1000
+APP_GID=1000
 PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 PIP_EXTRA_INDEX_URL=
 
@@ -16,6 +18,8 @@ APP_HOST_PORT=127.0.0.1:8000
 UVICORN_WORKERS=2
 # Empty keeps Docker startup lightweight. Set to "vector" to start milvus + etcd + minio.
 COMPOSE_PROFILES=
+REDIS_IMAGE=redis:7.4.9-alpine
+NEO4J_IMAGE=neo4j:2026.06.0-community
 WAIT_FOR_TIMEOUT_SECONDS=180
 # Optional. When COMPOSE_PROFILES=vector, you may include milvus wait targets here.
 WAIT_FOR_HOSTS=

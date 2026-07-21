@@ -56,6 +56,7 @@ cp deploy/env/backend.production.example .env
 
 至少要修改这些值：
 
+- `APP_ENV=production`
 - `APP_HOST_PORT=127.0.0.1:8000`
 - `FORWARDED_ALLOW_IPS=127.0.0.1`
 - `TRUSTED_HOSTS=["your-domain.com","www.your-domain.com","127.0.0.1","localhost"]`
@@ -66,11 +67,14 @@ cp deploy/env/backend.production.example .env
 - `LLM_PROVIDER`
 - `DASHSCOPE_API_KEY` / `MIMO_API_KEY` / `KIMI_API_KEY` / `GLM_API_KEY` / `DEEPSEEK_API_KEY`
 - `JWT_SECRET`
+- `MEMORY_AGENT_SERVICE_JWT_SECRET`（必须与 `JWT_SECRET` 不同）
 - 如果你要启用交叉编码器重排，建议配置 `RERANKER_ENABLED=true`
 
 说明：
 
 - `APP_HOST_PORT=127.0.0.1:8000` 表示应用只暴露给本机，公网访问统一走 Nginx。
+- 应用镜像以非 root 用户运行。`APP_UID`、`APP_GID` 必须与服务器上 `storage` 目录的属主一致；修改后执行 `mkdir -p storage && sudo chown -R ${APP_UID}:${APP_GID} storage`。
+- `APP_ENV=production` 会在启动时拒绝短密钥、占位密钥、默认数据库密码和相同的两组 JWT 密钥。
 - `FORWARDED_ALLOW_IPS=127.0.0.1` 表示仅信任来自本机 Nginx 的 `X-Forwarded-*` 头。
 - `TRUSTED_HOSTS` 应包含你的正式域名，避免错误 Host 头直接打到应用。
 - Compose 内部会自动使用 `postgres`、`redis`、`neo4j` 这些容器名互连；启用 `vector` profile 后，应用也会通过 `milvus` 容器名访问向量库。

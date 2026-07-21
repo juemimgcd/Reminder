@@ -11,6 +11,9 @@ RUN npm run build
 
 FROM python:${PYTHON_VERSION}-slim-bookworm
 
+ARG APP_UID=1000
+ARG APP_GID=1000
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \
@@ -58,8 +61,14 @@ COPY --from=frontend-builder /frontend/dist /app/app/mneme_frontend_v0.2.1/dist
 
 RUN test -d /app/app/mneme/memoria/server && \
     test -f /app/docker/start-memory-agent-api.sh && \
-    test -f /app/docker/start-memory-agent-worker.sh
+    test -f /app/docker/start-memory-agent-worker.sh && \
+    groupadd --gid "${APP_GID}" mneme && \
+    useradd --uid "${APP_UID}" --gid "${APP_GID}" --create-home --shell /usr/sbin/nologin mneme && \
+    mkdir -p /app/storage/celery && \
+    chown -R mneme:mneme /app/storage
 
 EXPOSE 8000 8010
+
+USER mneme
 
 CMD ["sh", "/app/docker/start-api.sh"]

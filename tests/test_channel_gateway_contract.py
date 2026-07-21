@@ -210,7 +210,7 @@ def test_feishu_partial_delivery_reports_resume_cursor():
 
 
 def test_channel_routes_and_delivery_tasks_are_registered():
-    paths = {route.path for route in create_app().routes}
+    paths = create_app().openapi()["paths"]
 
     assert "/channels/configuration" in paths
     assert "/channels/feishu/webhook" in paths
