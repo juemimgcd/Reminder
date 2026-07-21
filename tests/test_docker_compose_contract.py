@@ -35,11 +35,11 @@ class DockerComposeContractTest(unittest.TestCase):
 
         self.assertNotIn("milvus", migrate_dependencies)
 
-    def test_neo4j_uses_an_existing_compatible_image(self):
+    def test_neo4j_uses_a_pinned_compatible_image(self):
         image = self.services["neo4j"]["image"]
 
         self.assertNotEqual(image, "neo4j:5.28")
-        self.assertEqual(image, "neo4j:latest")
+        self.assertEqual(image, "${NEO4J_IMAGE:-neo4j:2026.06.0-community}")
 
     def test_nginx_uses_the_production_hostname_and_private_upstream(self):
         nginx = NGINX_FILE.read_text(encoding="utf-8")

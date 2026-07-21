@@ -6,6 +6,8 @@ x-app-base: &app-base
     dockerfile: docker/Dockerfile
     args:
       PYTHON_VERSION: ${PYTHON_VERSION:-3.12}
+      APP_UID: ${APP_UID:-1000}
+      APP_GID: ${APP_GID:-1000}
       PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
       PIP_EXTRA_INDEX_URL: ${PIP_EXTRA_INDEX_URL:-}
   image: ${APP_IMAGE_REPOSITORY:-reminder-app}:${APP_IMAGE_TAG:-local}
@@ -46,6 +48,8 @@ x-memory-agent-base: &memory-agent-base
     dockerfile: docker/Dockerfile
     args:
       PYTHON_VERSION: ${PYTHON_VERSION:-3.12}
+      APP_UID: ${APP_UID:-1000}
+      APP_GID: ${APP_GID:-1000}
       PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
       PIP_EXTRA_INDEX_URL: ${PIP_EXTRA_INDEX_URL:-}
   image: ${APP_IMAGE_REPOSITORY:-reminder-app}:${APP_IMAGE_TAG:-local}
@@ -178,7 +182,7 @@ services:
     logging: *default-logging
 
   redis:
-    image: redis:7-alpine
+    image: ${REDIS_IMAGE:-redis:7.4.9-alpine}
     container_name: reminder-redis
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
@@ -219,7 +223,7 @@ services:
         condition: service_started
 
   neo4j:
-    image: neo4j:latest
+    image: ${NEO4J_IMAGE:-neo4j:2026.06.0-community}
     container_name: reminder-neo4j
     restart: unless-stopped
     environment:

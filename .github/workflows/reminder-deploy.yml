@@ -1,4 +1,4 @@
-name: reminder-deploy
+name: mneme-ci-release
 
 on:
   push:
@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: reminder-deploy-${{ github.ref }}
+  group: mneme-ci-release-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -35,8 +35,17 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Verify frontend release version
+        run: node -e "const fs=require('fs');const pkg=require('./package.json');const version=fs.readFileSync('../../VERSION','utf8').trim();if(pkg.version!==version)process.exit(1)"
+
       - name: Run frontend type check
         run: npm run lint
+
+      - name: Run frontend contract tests
+        run: npm run test:contracts
+
+      - name: Build frontend production bundle
+        run: npm run build
 
   backend-check:
     runs-on: ubuntu-latest
@@ -52,12 +61,19 @@ jobs:
           cache-dependency-path: |
             requirements/base.txt
             requirements/test.txt
+            requirements/dev.txt
 
-      - name: Install backend test dependencies
-        run: python -m pip install -r requirements/test.txt
+      - name: Install backend development dependencies
+        run: python -m pip install -r requirements/dev.txt
+
+      - name: Verify backend release version
+        run: python -c "from pathlib import Path; from app.mneme.version import __version__; assert __version__ == Path('VERSION').read_text(encoding='utf-8').strip()"
 
       - name: Compile backend sources
         run: python -m compileall app main.py
+
+      - name: Run backend static checks
+        run: python -m ruff check app main.py tests
 
       - name: Run backend unit tests
         run: python -m pytest -q -p no:cacheprovider

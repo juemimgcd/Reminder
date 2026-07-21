@@ -84,10 +84,11 @@ def test_heavy_clients_do_not_import_model_packages_at_module_import_time():
         assert forbidden_module not in top_level_import_modules(path)
 
 
-def test_backend_ci_installs_test_requirements_and_runs_pytest():
+def test_backend_ci_installs_development_requirements_and_runs_quality_checks():
     workflow = read_text(".github/workflows/reminder-deploy.yml")
 
-    assert "python -m pip install -r requirements/test.txt" in workflow
+    assert "python -m pip install -r requirements/dev.txt" in workflow
+    assert "python -m ruff check app main.py tests" in workflow
     assert "python -m pytest -q -p no:cacheprovider" in workflow
 
 
