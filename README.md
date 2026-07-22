@@ -1,5 +1,11 @@
 # Mneme
 
+## Canonical documentation
+
+- [docs/architecture.md](docs/architecture.md) — current system boundaries, data ownership, and execution flows
+- [docs/runtime-contracts.md](docs/runtime-contracts.md) — durability, events, Outbox, evidence, tools, and error invariants
+- [docs/current-state.md](docs/current-state.md) — completed capabilities, active risks, and the next planned step
+
 面向个人长期内容沉淀的记忆型 RAG 系统。
 
 Mneme 用来把笔记、文章、复盘和经历沉淀成可检索、可分析、可追踪的个人记忆库。它不是简单 FAQ demo，而是一套包含用户、知识库、文档、向量检索、图谱、记忆、画像和成长分析的完整应用。

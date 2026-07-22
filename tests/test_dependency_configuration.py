@@ -3,6 +3,12 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+CANONICAL_DOCS = (
+    "docs/architecture.md",
+    "docs/runtime-contracts.md",
+    "docs/current-state.md",
+)
+REPOSITORY_PATH = re.compile(r"`((?:app|tests)/[^`]+)`")
 
 
 def read_text(path: str) -> str:
@@ -28,6 +34,19 @@ def top_level_import_modules(path: str) -> set[str]:
         elif isinstance(node, ast.ImportFrom) and node.module:
             modules.add(node.module)
     return modules
+
+
+def test_canonical_architecture_documents_are_linked_and_reference_existing_paths():
+    readme = read_text("README.md")
+
+    for path in CANONICAL_DOCS:
+        assert (ROOT / path).is_file(), f"missing canonical document: {path}"
+        assert f"[{path}]({path})" in readme, f"README should link {path}"
+
+        for referenced_path in REPOSITORY_PATH.findall(read_text(path)):
+            assert (ROOT / referenced_path).exists(), (
+                f"{path} references a missing repository path: {referenced_path}"
+            )
 
 
 def test_root_requirements_is_full_stack_aggregate():
