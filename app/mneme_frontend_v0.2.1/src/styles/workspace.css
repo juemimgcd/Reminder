@@ -1,0 +1,290 @@
+@layer utilities {
+  .mneme-workbench {
+    min-height: 100vh;
+    background: var(--surface-canvas);
+    color: var(--content-primary);
+    transition: background-color var(--duration-fast) ease, color var(--duration-fast) ease;
+  }
+
+  .mneme-shell {
+    display: grid;
+    min-height: 100vh;
+    grid-template-columns: 52px 256px minmax(0, 1fr);
+  }
+
+  .mneme-shell--resource-closed {
+    grid-template-columns: 52px 0 minmax(0, 1fr);
+  }
+
+  .mneme-shell--resource-closed > [data-testid="resource-sidebar"] {
+    width: 0;
+    visibility: hidden;
+    border: 0;
+  }
+
+  .mneme-shell__main {
+    position: relative;
+    display: flex;
+    width: 100%;
+    height: 100vh;
+    min-width: 0;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .glass-panel,
+  .stitch-card,
+  .premium-card {
+    background: var(--surface-panel);
+    border: 1px solid var(--stroke-subtle);
+    box-shadow: none;
+  }
+
+  .stitch-card,
+  .premium-card {
+    transition: border-color var(--duration-fast) ease, background-color var(--duration-fast) ease;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .stitch-card:hover,
+    .premium-card:hover {
+      background: color-mix(in srgb, var(--surface-panel) 88%, var(--surface-raised));
+      border-color: var(--stroke-default);
+    }
+  }
+
+  .premium-card-content {
+    position: relative;
+  }
+
+  .stitch-sidebar {
+    background: var(--surface-sidebar);
+    border-color: var(--stroke-subtle);
+  }
+
+  .stitch-panel {
+    background: var(--surface-canvas);
+    border-color: var(--stroke-subtle);
+  }
+
+  .premium-input,
+  .mneme-workbench input,
+  .mneme-workbench textarea,
+  .mneme-workbench select {
+    color: var(--content-primary);
+    background: var(--surface-canvas);
+    border-color: var(--stroke-subtle);
+    border-radius: var(--radius-control);
+    transition: border-color var(--duration-fast) ease, background-color var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .premium-input:hover,
+    .mneme-workbench input:hover,
+    .mneme-workbench textarea:hover,
+    .mneme-workbench select:hover {
+      border-color: var(--stroke-default);
+    }
+  }
+
+  .premium-input:focus,
+  .premium-input:focus-visible {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 3px var(--accent-subtle);
+    outline: none;
+  }
+
+  .premium-tag {
+    color: var(--content-secondary);
+    background: var(--surface-sidebar);
+    border: 1px solid var(--stroke-subtle);
+    transition: color var(--duration-fast) ease, border-color var(--duration-fast) ease, background-color var(--duration-fast) ease;
+  }
+
+  .premium-tag[data-active="true"] {
+    color: var(--accent-primary);
+    background: var(--accent-subtle);
+    border-color: color-mix(in srgb, var(--accent-primary) 54%, var(--stroke-subtle));
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .premium-tag:hover {
+      color: var(--accent-primary);
+      background: var(--accent-subtle);
+      border-color: color-mix(in srgb, var(--accent-primary) 54%, var(--stroke-subtle));
+    }
+  }
+
+  .premium-action-btn {
+    color: var(--content-secondary);
+    background: transparent;
+    border: 1px solid var(--stroke-subtle);
+    transition: color var(--duration-fast) ease, border-color var(--duration-fast) ease, background-color var(--duration-fast) ease;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .premium-action-btn:hover:not(:disabled) {
+      color: var(--content-primary);
+      background: var(--surface-raised);
+      border-color: var(--stroke-default);
+    }
+  }
+
+  .premium-action-btn:active:not(:disabled) {
+    background: var(--surface-selected);
+  }
+
+  .premium-action-btn:disabled {
+    opacity: 0.45;
+  }
+
+  .premium-range {
+    accent-color: var(--accent-pressed);
+  }
+
+  .ui-floating-surface {
+    background: var(--surface-panel);
+    border: 1px solid var(--stroke-subtle);
+    box-shadow: var(--shadow-popover);
+  }
+
+  .ui-selected-row {
+    color: var(--content-primary);
+    background: var(--accent-subtle);
+    box-shadow: inset 2px 0 0 var(--accent-primary);
+  }
+
+  .ui-divider {
+    border-color: var(--stroke-subtle);
+  }
+
+  .mneme-workbench code {
+    color: var(--accent-primary);
+  }
+
+  .mneme-workbench table {
+    border-color: var(--stroke-subtle);
+  }
+
+  .mneme-workbench thead {
+    background: var(--surface-sidebar);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .mneme-workbench tbody tr:hover {
+      background: var(--surface-raised);
+    }
+  }
+
+  .mneme-workbench ::-webkit-scrollbar,
+  .code-scroll::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+  }
+
+  .mneme-workbench ::-webkit-scrollbar-track,
+  .code-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .mneme-workbench ::-webkit-scrollbar-thumb,
+  .code-scroll::-webkit-scrollbar-thumb {
+    background: var(--stroke-default);
+    border: 2px solid transparent;
+    border-radius: var(--radius-round);
+    background-clip: padding-box;
+  }
+}
+
+@media (max-width: 1023px) {
+  .mneme-shell,
+  .mneme-shell--resource-closed {
+    display: grid;
+    grid-template-columns: 52px minmax(0, 1fr);
+    min-width: 0;
+  }
+
+  .graph-file-panel,
+  .ai-history-panel {
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: var(--z-popover);
+    width: min(84vw, 320px);
+    overflow: auto;
+    box-shadow: var(--shadow-popover);
+  }
+
+  .graph-file-panel[aria-hidden="true"],
+  .ai-history-panel[aria-hidden="true"] {
+    display: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .mneme-shell,
+  .mneme-shell--resource-closed {
+    display: block;
+  }
+
+  .mneme-shell > [data-testid="activity-bar"] {
+    display: none;
+  }
+
+  .mneme-shell__main {
+    height: calc(100dvh - 3.7rem);
+  }
+
+  .mneme-workbench [data-testid="obsidian-editor-pane"] {
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+
+  .mneme-workbench [data-testid="stitch-research-vault-layout"],
+  .mneme-workbench [data-testid="stitch-graph-layout"],
+  .mneme-workbench [data-testid="stitch-ai-layout"],
+  .mneme-workbench [data-testid="stitch-settings-layout"] {
+    width: 100%;
+    max-width: 100%;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .graph-toolbar {
+    right: 0.75rem;
+    left: 0.75rem !important;
+    top: 0.75rem !important;
+    display: grid !important;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.6rem !important;
+  }
+
+  .graph-toolbar > button {
+    width: 3rem;
+    height: 3rem;
+    padding: 0 !important;
+    font-size: 0;
+  }
+
+  .graph-toolbar-controls,
+  .graph-search-form {
+    min-width: 0;
+    width: 100% !important;
+  }
+
+  .graph-search-form {
+    height: 3rem !important;
+    padding-inline: 0.75rem !important;
+  }
+
+  .graph-tabs {
+    height: 2.75rem !important;
+    gap: 0.15rem !important;
+    overflow-x: auto;
+    padding-inline: 0.3rem !important;
+  }
+
+  .graph-tabs button {
+    flex: 0 0 auto;
+    padding: 0.45rem 0.65rem !important;
+    font-size: 0.72rem !important;
+  }
+}
