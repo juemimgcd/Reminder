@@ -1,7 +1,9 @@
 import uuid
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.mneme.memoria.context_governance import ContextAssemblyReport
 
 AnswerMode = Literal["kb_qa", "memory_query", "profile_query", "analysis_query", "general_chat"]
 RetrievalScope = Literal["hybrid", "memory_only"]
@@ -30,6 +32,13 @@ class AgentRequest(BaseModel):
     history_summary: str = ""
     history_compaction: dict[str, Any] | None = None
     history_prepared: bool = False
+
+    @field_validator("history_compaction", mode="before")
+    @classmethod
+    def serialize_context_assembly_report(cls, value: Any) -> Any:
+        if isinstance(value, ContextAssemblyReport):
+            return value.model_dump(mode="json")
+        return value
 
 
 class AgentResponse(BaseModel):

@@ -3,6 +3,12 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+CANONICAL_DOCS = (
+    "docs/architecture.md",
+    "docs/runtime-contracts.md",
+    "docs/current-state.md",
+)
+REPOSITORY_PATH = re.compile(r"`((?:app|tests)/[^`]+)`")
 
 
 def read_text(path: str) -> str:
@@ -28,6 +34,19 @@ def top_level_import_modules(path: str) -> set[str]:
         elif isinstance(node, ast.ImportFrom) and node.module:
             modules.add(node.module)
     return modules
+
+
+def test_canonical_architecture_documents_are_linked_and_reference_existing_paths():
+    readme = read_text("README.md")
+
+    for path in CANONICAL_DOCS:
+        assert (ROOT / path).is_file(), f"missing canonical document: {path}"
+        assert f"[{path}]({path})" in readme, f"README should link {path}"
+
+        for referenced_path in REPOSITORY_PATH.findall(read_text(path)):
+            assert (ROOT / referenced_path).exists(), (
+                f"{path} references a missing repository path: {referenced_path}"
+            )
 
 
 def test_root_requirements_is_full_stack_aggregate():
@@ -84,11 +103,22 @@ def test_heavy_clients_do_not_import_model_packages_at_module_import_time():
         assert forbidden_module not in top_level_import_modules(path)
 
 
-def test_backend_ci_installs_test_requirements_and_runs_pytest():
+def test_backend_ci_installs_development_requirements_and_runs_quality_checks():
     workflow = read_text(".github/workflows/reminder-deploy.yml")
 
-    assert "python -m pip install -r requirements/test.txt" in workflow
+    assert "python -m pip install -r requirements/dev.txt" in workflow
+    assert "python -m ruff check app main.py tests" in workflow
     assert "python -m pytest -q -p no:cacheprovider" in workflow
+
+
+def test_ci_runs_real_dependency_integration_and_ai_evaluation_gates():
+    workflow = read_text(".github/workflows/reminder-deploy.yml")
+
+    assert "integration-check:" in workflow
+    assert "python -m alembic upgrade head" in workflow
+    assert "tests/integration" in workflow
+    assert "app/mneme/memoria/server/eval/cases.jsonl" in workflow
+    assert "app/mneme/memoria/server/eval/multi_agent_cases.jsonl" in workflow
 
 
 def test_dockerfile_copies_grouped_requirements_before_installing_dependencies():

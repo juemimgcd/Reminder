@@ -1,8 +1,14 @@
-# Reminder
+# Mneme
+
+## Canonical documentation
+
+- [docs/architecture.md](docs/architecture.md) — current system boundaries, data ownership, and execution flows
+- [docs/runtime-contracts.md](docs/runtime-contracts.md) — durability, events, Outbox, evidence, tools, and error invariants
+- [docs/current-state.md](docs/current-state.md) — completed capabilities, active risks, and the next planned step
 
 面向个人长期内容沉淀的记忆型 RAG 系统。
 
-Reminder 用来把笔记、文章、复盘和经历沉淀成可检索、可分析、可追踪的个人记忆库。它不是简单 FAQ demo，而是一套包含用户、知识库、文档、向量检索、图谱、记忆、画像和成长分析的完整应用。
+Mneme 用来把笔记、文章、复盘和经历沉淀成可检索、可分析、可追踪的个人记忆库。它不是简单 FAQ demo，而是一套包含用户、知识库、文档、向量检索、图谱、记忆、画像和成长分析的完整应用。
 
 当前在线问答链路为：
 
@@ -236,6 +242,9 @@ docker compose exec -T app python -m app.mneme.memoria.cli.operations
 生产环境建议把应用放在 Nginx 后面，并将 `APP_HOST_PORT` 绑定到 `127.0.0.1:8000`，避免数据库、Redis、Milvus、Neo4j 直接暴露到公网。
 
 ## 生产发布
+
+生产监控、告警、备份恢复演练和镜像回滚流程见
+[`docs/operations-runbook.md`](docs/operations-runbook.md)。
 
 Git tag 会触发 GitHub Actions 构建并发布 GHCR 镜像。服务器准备好 `.env` 并登录
 GHCR 后，使用同一个镜像 tag 更新整套应用服务：

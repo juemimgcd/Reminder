@@ -1,13 +1,13 @@
-# Reminder Frontend
+# Mneme Frontend
 
-这个前端现在是 Vue 3 + Vite 工作台，直接对接 Reminder 后端接口，不再是静态 AI Studio 原型。
+这个前端现在是 Vue 3 + Vite 工作台，直接对接 Mneme 后端接口，不再是静态 AI Studio 原型。
 
 ## Run Locally
 
 Prerequisites:
 
 - Node.js 20+
-- 可访问的 Reminder 后端
+- 可访问的 Mneme 后端
 
 1. 安装依赖
 
