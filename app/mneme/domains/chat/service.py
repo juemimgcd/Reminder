@@ -402,6 +402,9 @@ async def ask_in_chat_session(
                         "after_tokens": prepared_context.after_tokens,
                         "compacted_messages": prepared_context.compacted_messages,
                         "reason": prepared_context.compaction_reason,
+                        "context_assembly_report": (
+                            prepared_context.assembly_report.model_dump(mode="json")
+                        ),
                     },
                 )
             )
