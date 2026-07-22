@@ -50,7 +50,7 @@ def test_write_actions_are_propose_only_and_risk_classified():
 
 
 def test_agent_automation_routes_are_registered():
-    paths = {route.path for route in create_app().routes}
+    paths = set(create_app().openapi()["paths"])
 
     assert "/agent/heartbeats" in paths
     assert "/agent/heartbeats/{job_id}/run" in paths
