@@ -29,6 +29,7 @@ class AgentRunEventType(str, Enum):
     ANSWER_STARTED = "answer.started"
     ANSWER_DELTA = "answer.delta"
     CITATION_RESOLVED = "citation.resolved"
+    GROUNDING_DECIDED = "grounding.decided"
     ANSWER_COMPLETED = "answer.completed"
     TOOL_STARTED = "tool.started"
     TOOL_COMPLETED = "tool.completed"
@@ -180,6 +181,8 @@ def _legacy_event_name(event_type: AgentEventType, phase: str) -> AgentRunEventT
         return AgentRunEventType.ANSWER_STARTED
     if phase.endswith("citations") or phase.endswith("citations_completed"):
         return AgentRunEventType.CITATION_RESOLVED
+    if phase.endswith("grounding") or phase.endswith("grounding_completed"):
+        return AgentRunEventType.GROUNDING_DECIDED
     return AgentRunEventType.RUN_STARTED
 
 

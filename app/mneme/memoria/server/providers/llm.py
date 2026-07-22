@@ -191,6 +191,7 @@ class ConfiguredModelGateway:
                             observations,
                             max_chars=settings.ANSWER_TOOL_OBSERVATION_MAX_CHARS,
                         ),
+                        grounding_requirement=request.grounding_requirement,
                     )
                     step_completed = False
                     for attempt in range(1, settings.ANSWER_LLM_MAX_ATTEMPTS + 1):

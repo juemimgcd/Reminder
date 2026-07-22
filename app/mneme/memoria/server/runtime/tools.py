@@ -171,7 +171,23 @@ class ScopedToolExecutor:
                 status="failed",
                 message="tool dependency failed",
             )
-        bounded = tuple(evidence[:top_k])
+        scoped_evidence = [
+            item
+            for item in evidence
+            if _provenance_matches_context(item, context=context)
+        ][:top_k]
+        bounded = tuple(
+            item.model_copy(
+                update={
+                    "metadata": {
+                        **item.metadata,
+                        "owner_id": context.owner_id,
+                        "run_id": context.run_id,
+                    }
+                }
+            )
+            for item in scoped_evidence
+        )
         trace = {
             "tool_call_id": tool_call_id,
             "name": request.name,
@@ -278,6 +294,18 @@ def _source_allowed(plan: RetrievalPlan, source_type: str) -> bool:
         "profile": plan.profile,
         "relation": plan.relations,
     }.get(source_type, False)
+
+
+def _provenance_matches_context(
+    evidence: RetrievedEvidence,
+    *,
+    context: ToolExecutionContext,
+) -> bool:
+    owner_id = evidence.metadata.get("owner_id")
+    run_id = evidence.metadata.get("run_id")
+    return (owner_id is None or owner_id == context.owner_id) and (
+        run_id is None or run_id == context.run_id
+    )
 
 
 def _single_source_plan(source_type: str) -> RetrievalPlan:
