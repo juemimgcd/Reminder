@@ -24,6 +24,11 @@ from app.mneme.memoria.server.runtime.contracts import (
     ToolExecutionContext,
     retrieval_request,
 )
+from app.mneme.memoria.server.runtime.grounding import (
+    INSUFFICIENT_EVIDENCE_ANSWER,
+    evaluate_grounding,
+    grounding_requirement_for_mode,
+)
 from app.mneme.memoria.server.runtime.plans import MODE_PLANS
 from app.mneme.memoria.server.runtime.ports import AnswerGenerator, CitationValidator, EvidenceRetriever
 
@@ -293,6 +298,7 @@ class MemoryAgent:
     ) -> AnswerResponse:
         phase: RunPhase = "retrieve"
         phase_started = perf_counter()
+        grounding_requirement = grounding_requirement_for_mode(request.answer_mode)
         try:
             await self._runs.begin_phase(run_id, previous="validate", phase=phase)
             await _emit_run_event(event_callback, phase, "started", run_id)
@@ -304,6 +310,17 @@ class MemoryAgent:
                         run_id=run_id,
                         event_callback=event_callback,
                     )
+                    retrieval_grounding = evaluate_grounding(
+                        grounding_requirement,
+                        evidence=evidence,
+                        tool_calls=[],
+                        owner_id=request.owner_id,
+                        run_id=run_id,
+                    )
+                    admitted_evidence_ids = set(retrieval_grounding.evidence_ids)
+                    evidence = [
+                        item for item in evidence if item.evidence_id in admitted_evidence_ids
+                    ]
             except TimeoutError:
                 code = "AGENT_RETRIEVAL_TIMEOUT"
                 await self._record_failure(
@@ -405,6 +422,7 @@ class MemoryAgent:
                                 if multi_agent_result
                                 else ToolExecutionContext(
                                     request_id=request.request_id,
+                                    run_id=run_id,
                                     owner_id=request.owner_id,
                                     knowledge_base_id=request.knowledge_base_id,
                                     mode=request.answer_mode,
@@ -413,6 +431,7 @@ class MemoryAgent:
                                     allow_action_proposals=request.session_id is not None,
                                 )
                             ),
+                            grounding_requirement=grounding_requirement,
                             **generation_values,
                         )
                     )
@@ -483,6 +502,46 @@ class MemoryAgent:
                         "stop_reason": multi_agent_result.stop_reason,
                     }
                 )
+
+            grounding_decision = evaluate_grounding(
+                grounding_requirement,
+                evidence=evidence,
+                tool_calls=generated.tool_calls,
+                owner_id=request.owner_id,
+                run_id=run_id,
+                tool_evidence_ids={item.evidence_id for item in generated.tool_evidence},
+                claimed_evidence_ids={
+                    evidence_id
+                    for item in generated.citations
+                    if isinstance(item, dict)
+                    and isinstance((evidence_id := item.get("evidence_id")), str)
+                },
+            )
+            accepted_evidence_ids = set(grounding_decision.evidence_ids)
+            evidence = [
+                item for item in evidence if item.evidence_id in accepted_evidence_ids
+            ]
+            if not grounding_decision.satisfied:
+                generated = generated.model_copy(
+                    update={
+                        "answer": INSUFFICIENT_EVIDENCE_ANSWER,
+                        "citations": [],
+                        "confidence": min(generated.confidence, 0.25),
+                        "uncertainty": generated.uncertainty or grounding_decision.reason,
+                        "insufficient_evidence": True,
+                    }
+                )
+            await _emit_run_event(
+                event_callback,
+                "grounding",
+                "completed",
+                run_id,
+                satisfied=grounding_decision.satisfied,
+                evidence_count=len(grounding_decision.evidence_ids),
+                missing_source_types=grounding_decision.missing_source_types,
+                missing_tool_names=grounding_decision.missing_tool_names,
+                reason=grounding_decision.reason,
+            )
 
             await self._runs.record_generation(
                 run_id=run_id,

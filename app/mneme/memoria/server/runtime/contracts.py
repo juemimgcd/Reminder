@@ -50,12 +50,33 @@ class RetrievalRequest(BaseModel):
 
 class ToolExecutionContext(BaseModel):
     request_id: str
+    run_id: str
     owner_id: int = Field(gt=0)
     knowledge_base_id: str | None = None
     mode: AnswerMode
     top_k: int = Field(default=4, ge=1, le=10)
     plan: RetrievalPlan
     allow_action_proposals: bool = False
+
+
+class GroundingRequirement(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    required: bool
+    required_source_types: frozenset[str] = frozenset()
+    required_tool_names: frozenset[str] = frozenset()
+    allow_ungrounded_final: bool = False
+    reason: str
+
+
+class GroundingDecision(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    satisfied: bool
+    evidence_ids: list[str] = Field(default_factory=list)
+    missing_source_types: list[str] = Field(default_factory=list)
+    missing_tool_names: list[str] = Field(default_factory=list)
+    reason: str
 
 
 class GenerationRequest(BaseModel):
@@ -71,6 +92,7 @@ class GenerationRequest(BaseModel):
     max_prompt_tokens: int = Field(default=200_000, ge=512, le=1_000_000)
     max_completion_tokens: int = Field(default=32_000, ge=128, le=100_000)
     tool_context: ToolExecutionContext | None = Field(default=None, exclude=True, repr=False)
+    grounding_requirement: GroundingRequirement
 
 
 class GeneratedAnswer(BaseModel):

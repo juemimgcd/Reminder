@@ -2,6 +2,7 @@ def phase_event_name(phase: str, status: str) -> str | None:
     return {
         ("retrieve", "started"): "retrieval.started",
         ("generate", "started"): "answer.started",
+        ("grounding", "completed"): "grounding.decided",
         ("citations", "completed"): "citation.resolved",
     }.get((phase, status))
 

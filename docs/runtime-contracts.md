@@ -95,6 +95,31 @@ database rows directly.
 - General chat receives no private evidence and must not claim access to documents, profile, or
   memory.
 
+### Grounding enforcement
+
+Grounding requirements are resolved from the selected answer mode by a static Python policy. No
+keyword router or additional model classifier participates in the decision.
+
+- `general_chat` permits a general-knowledge final answer, but private evidence and private-access
+  claims are forbidden.
+- `kb_qa` requires document or governed-memory evidence.
+- `memory_query` requires governed-memory evidence.
+- `profile_query` requires governed profile or memory evidence.
+- `analysis_query` requires at least one configured document, memory, profile, or relation source.
+
+Evidence with explicit owner provenance that differs from the current owner is rejected before it
+can enter the generation prompt. Duplicate evidence identifiers are rejected as ambiguous. Tool
+evidence is stamped with the current owner and run only after any conflicting provenance is rejected,
+and is rejected at the grounding boundary when either provenance value is missing or different. A
+tool requirement is satisfied only by a trace whose status is `completed`; model text cannot
+substitute for an execution trace. Tool observations remain untrusted data and cannot override the
+resolved requirement.
+
+The runtime evaluates grounding before accepting the generated final answer. An unsatisfied
+requirement produces the stable insufficient-evidence answer, removes citations, bounds confidence,
+and emits `grounding.decided` with the missing source and tool types. Grounding enforcement is in
+Python; the system prompt only restates the resolved policy for the model.
+
 ### Context governance and compaction
 
 Conversation context is assembled deterministically without a model or database call in the
