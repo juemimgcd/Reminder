@@ -10,9 +10,17 @@ from app.mneme.bootstrap.lifespan import lifespan
 from app.mneme.bootstrap.root_routes import router as root_router
 from app.mneme.bootstrap.router_registry import register_routers
 from app.mneme.conf.config import settings
+from app.mneme.conf.logging import log_event
+from app.mneme.observability.http import HttpMetrics, configure_http_observability
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 FRONTEND_DIST_DIR = REPO_ROOT / "app" / "mneme_frontend_v0.2.1" / "dist"
+mneme_http_metrics = HttpMetrics()
+
+
+def _emit_http_event(event: str, **fields: str | int) -> None:
+    level = "error" if event == "request_failed" else "info"
+    log_event("http", level, event, **fields)
 
 
 def configure_cors(app: FastAPI) -> None:
@@ -65,6 +73,7 @@ def create_app() -> FastAPI:
         version=settings.VERSION,
         description=settings.DESCRIPTION,
     )
+    configure_http_observability(app, metrics=mneme_http_metrics, emit=_emit_http_event)
     configure_cors(app)
     configure_trusted_hosts(app)
     configure_exception_handlers(app)

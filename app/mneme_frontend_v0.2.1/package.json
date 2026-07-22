@@ -1,7 +1,7 @@
 {
   "name": "mneme-frontend",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0 --config vite.config.mjs --configLoader native",
@@ -10,6 +10,7 @@
     "preview": "vite preview --config vite.config.mjs --configLoader native",
     "clean": "rm -rf dist server.js",
     "lint": "vue-tsc --noEmit",
+    "test:contracts": "node --test tests/*.test.mjs",
     "test:e2e": "playwright test",
     "dev:preview": "vite --mode preview --port=3000 --host=0.0.0.0 --config vite.config.mjs --configLoader native"
   },

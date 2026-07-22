@@ -10,6 +10,21 @@ from app.mneme.domains.retrieval.fusion import (
 from app.mneme.schemas.chat import ContextItem
 
 
+def test_context_item_helpers_have_a_focused_module_and_compatibility_exports():
+    from app.mneme.domains.retrieval import context_items, context_service
+
+    helper_names = (
+        "build_context_item_from_chunk",
+        "build_context_item_from_memory",
+        "build_context_item_from_vector",
+        "dedupe_preserve_order",
+        "extract_query_terms",
+        "merge_context_items",
+    )
+    for name in helper_names:
+        assert getattr(context_service, name) is getattr(context_items, name)
+
+
 def context_item(
     *,
     recall_type: str,

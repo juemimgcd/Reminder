@@ -26,7 +26,7 @@ async def root():
             "project": settings.PROJECT_NAME,
             "version": settings.VERSION,
         },
-        message="welcome to agentic rag assistant",
+        message="welcome to Mneme",
     )
 
 
