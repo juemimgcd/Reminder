@@ -1,0 +1,75 @@
+groups:
+  - name: mneme-availability
+    rules:
+      - alert: MnemeApiUnavailable
+        expr: up{job="mneme"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Mneme API scrape target is unavailable
+          runbook: docs/operations-runbook.md#availability
+
+      - alert: MemoryAgentUnavailable
+        expr: up{job="memory-agent"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Memory Agent scrape target is unavailable
+          runbook: docs/operations-runbook.md#availability
+
+      - alert: MnemeHighHttp5xxRatio
+        expr: |
+          sum(rate(mneme_http_requests_total{status=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(mneme_http_requests_total[5m])), 0.001)
+          > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Mneme HTTP 5xx ratio is above 5 percent
+          runbook: docs/operations-runbook.md#http-errors-and-latency
+
+      - alert: MnemeHighAverageHttpLatency
+        expr: |
+          sum(rate(mneme_http_request_duration_ms_sum[5m]))
+          /
+          clamp_min(sum(rate(mneme_http_request_duration_ms_count[5m])), 0.001)
+          > 2000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Mneme average HTTP latency is above 2 seconds
+          runbook: docs/operations-runbook.md#http-errors-and-latency
+
+  - name: mneme-memory-agent
+    rules:
+      - alert: MemoryAgentDeadLettersPresent
+        expr: memory_agent_dead_letters > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Memory Agent has dead-letter inbox events
+          runbook: docs/operations-runbook.md#memory-agent-backlog-and-failures
+
+      - alert: MemoryAgentFailedRunsPresent
+        expr: memory_agent_failed_runs > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Memory Agent has failed answer runs
+          runbook: docs/operations-runbook.md#memory-agent-backlog-and-failures
+
+      - alert: MemoryAgentProjectionLagHigh
+        expr: memory_agent_projection_lag_seconds > 300
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Memory Agent projection lag is above 5 minutes
+          runbook: docs/operations-runbook.md#memory-agent-backlog-and-failures

@@ -92,6 +92,16 @@ def test_backend_ci_installs_development_requirements_and_runs_quality_checks():
     assert "python -m pytest -q -p no:cacheprovider" in workflow
 
 
+def test_ci_runs_real_dependency_integration_and_ai_evaluation_gates():
+    workflow = read_text(".github/workflows/reminder-deploy.yml")
+
+    assert "integration-check:" in workflow
+    assert "python -m alembic upgrade head" in workflow
+    assert "tests/integration" in workflow
+    assert "app/mneme/memoria/server/eval/cases.jsonl" in workflow
+    assert "app/mneme/memoria/server/eval/multi_agent_cases.jsonl" in workflow
+
+
 def test_dockerfile_copies_grouped_requirements_before_installing_dependencies():
     dockerfile = read_text("docker/Dockerfile")
 

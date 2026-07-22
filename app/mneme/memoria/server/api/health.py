@@ -15,6 +15,7 @@ from app.mneme.memoria.server.models.inbox_event import InboxEvent
 from app.mneme.memoria.server.models.memory_audit import MemoryActionAudit
 from app.mneme.memoria.server.observability.metrics import OperationalMetrics, labels, render_metrics
 from app.mneme.memoria.server.services.embeddings import embedding_model_ready
+from app.mneme.observability.http import render_http_metrics
 
 router = APIRouter()
 
@@ -201,5 +202,8 @@ async def _operational_metrics(db: AsyncSession) -> OperationalMetrics:
 
 @router.get("/metrics", include_in_schema=False)
 async def metrics(db: Annotated[AsyncSession, Depends(get_db)]) -> Response:
+    from app.mneme.memoria.server.app import memory_agent_http_metrics
+
     snapshot = await _operational_metrics(db)
-    return Response(render_metrics(snapshot), media_type="text/plain; version=0.0.4")
+    content = render_metrics(snapshot) + render_http_metrics(memory_agent_http_metrics, prefix="memory_agent")
+    return Response(content, media_type="text/plain; version=0.0.4")
