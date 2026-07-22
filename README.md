@@ -237,6 +237,9 @@ docker compose exec -T app python -m app.mneme.memoria.cli.operations
 
 ## 生产发布
 
+生产监控、告警、备份恢复演练和镜像回滚流程见
+[`docs/operations-runbook.md`](docs/operations-runbook.md)。
+
 Git tag 会触发 GitHub Actions 构建并发布 GHCR 镜像。服务器准备好 `.env` 并登录
 GHCR 后，使用同一个镜像 tag 更新整套应用服务：
 

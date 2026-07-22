@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from loguru import logger
 
 from app.mneme.conf.config import settings
+from app.mneme.observability.context import correlation_fields
 
 
 def setup_logger() -> None:
@@ -58,6 +59,7 @@ def build_log_message(event: str, **fields) -> str:
 
 
 def log_event(module: str, level: str, event: str, **fields) -> None:
+    fields = {**fields, **correlation_fields()}
     bound_logger = app_logger.bind(module=module)
     log_method = getattr(bound_logger, level.lower())
     log_method(build_log_message(event, **fields))

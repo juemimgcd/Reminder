@@ -12,6 +12,7 @@ __pycache__/
 venv/
 /env/
 .pytest_cache/
+.pytest_tmp_*/
 pytest-cache-files-*/
 .mypy_cache/
 .ruff_cache/
@@ -38,6 +39,7 @@ coverage/
 .vscode/
 *.iml
 .worktrees/
+.superpowers/
 
 # Local data and generated archives
 storage/

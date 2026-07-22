@@ -1,6 +1,9 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+    "integration: requires real PostgreSQL and Redis services",
+]
 
 [tool.ruff]
 line-length = 120
