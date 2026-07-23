@@ -7,8 +7,9 @@ withDefaults(defineProps<{ width?: string; height?: string; rounded?: boolean }>
 </template>
 
 <style scoped>
-.ui-skeleton { display: block; overflow: hidden; background: var(--bg-elevated); border-radius: 0.3rem; }
-.ui-skeleton::after { display: block; width: 36%; height: 100%; content: ""; background: color-mix(in srgb, var(--text-secondary) 10%, transparent); animation: ui-skeleton 1.4s ease-in-out infinite; transform: translateX(-120%); }
-.ui-skeleton--rounded { border-radius: 999px; }
+.ui-skeleton { display: block; overflow: hidden; background: var(--surface-raised); border-radius: calc(var(--radius-control) - 1px); }
+.ui-skeleton::after { display: block; width: 36%; height: 100%; content: ""; background: color-mix(in srgb, var(--content-secondary) 10%, transparent); animation: ui-skeleton 1.4s linear infinite; transform: translateX(-120%); }
+.ui-skeleton--rounded { border-radius: var(--radius-round); }
 @keyframes ui-skeleton { to { transform: translateX(320%); } }
+@media (prefers-reduced-motion: reduce) { .ui-skeleton::after { width: 100%; animation: none; opacity: 0.35; transform: none; } }
 </style>
