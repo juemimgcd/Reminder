@@ -2,7 +2,7 @@
 
 <img src="docs/assets/mneme-logo.svg" alt="Mneme logo" width="220">
 
-# Memoria
+# Reminder
 
 ### The memory Agent at the heart of Mneme
 
@@ -19,15 +19,15 @@ Mneme 的记忆 Agent 本体：让笔记、文档与经历成为可检索、可�
 
 </div>
 
-**Memoria 是 Mneme 的 Agent 本体**，负责检索、记忆治理、回答生成、引用验证与长期记忆演化。**Mneme 是完整项目**，在 Memoria 之外还包含知识库、文档工作台、知识图谱、个人画像、成长分析、Vue 前端与部署运维体系。
+**Reminder 是 Mneme 的 Agent 本体**，负责检索、记忆治理、回答生成、引用验证与长期记忆演化。**Mneme 是完整项目**，在 Reminder 之外还包含知识库、文档工作台、知识图谱、个人画像、成长分析、Vue 前端与部署运维体系。
 
-本仓库同时维护 Mneme 应用与 Memoria Agent，并通过清晰的数据所有权、版本化 HTTP 契约和可恢复异步链路隔离二者职责。
+本仓库同时维护 Mneme 应用与 Reminder Agent，并通过清晰的数据所有权、版本化 HTTP 契约和可恢复异步链路隔离二者职责。
 
-## 为什么是 Memoria
+## 为什么是 Reminder
 
 - **长期记忆，而非一次性上下文**：从对话、文档和显式请求中形成受治理的记忆候选、修订与关系；
 - **答案有来源**：结合 BGE-M3、pgvector、图谱与引用校验，保留回答所使用的证据；
-- **数据边界清晰**：Mneme 与 Memoria 拥有独立数据库，只通过版本化 HTTP 契约通信；
+- **数据边界清晰**：Mneme 与 Reminder 拥有独立数据库，只通过版本化 HTTP 契约通信；
 - **异步链路可恢复**：PostgreSQL Outbox/Inbox、耐久 Agent Run、租约与幂等语义共同处理重试和进程中断；
 - **记忆可以删除与重建**：删除 fence 阻止旧事件“复活”数据，投影和派生状态可安全回填；
 - **从开发到发布完整闭环**：Vue 工作台、FastAPI API、Compose 服务栈、GHCR 版本镜像、监控规则与运维手册均在同一仓库维护。
@@ -52,11 +52,11 @@ Mneme 的记忆 Agent 本体：让笔记、文档与经历成为可检索、可�
 当前版本为 **v0.1.0**，主回答链路已统一为：
 
 ```text
-Mneme -> Memoria API -> DeepSeek
+Mneme -> Reminder API -> DeepSeek
                 \-> BGE-M3 + pgvector
 ```
 
-Memoria 是在线回答的唯一 Agent 运行路径；失败会以可重试错误明确返回，不会在同一请求中静默切换回进程内实现。Milvus 保留为旧 Mneme 向量后端的可选兼容 profile，不是 Memoria 在线问答的必需依赖。
+Reminder 是在线回答的唯一 Agent 运行路径；失败会以可重试错误明确返回，不会在同一请求中静默切换回进程内实现。Milvus 保留为旧 Mneme 向量后端的可选兼容 profile，不是 Reminder 在线问答的必需依赖。
 
 ## 系统架构
 
@@ -65,12 +65,12 @@ flowchart LR
     U["Browser / Vue Workspace"] --> A["Mneme FastAPI"]
     A --> P[("Mneme PostgreSQL")]
     A --> R[("Redis")]
-    A --> M["Memoria API"]
+    A --> M["Reminder API"]
     P --> O["Outbox / Task Records"]
     O --> W["Business Workers"]
     W --> M
     W --> N[("Neo4j Projection")]
-    M --> MP[("Memoria PostgreSQL + pgvector")]
+    M --> MP[("Reminder PostgreSQL + pgvector")]
     M --> D["DeepSeek"]
     M --> E["BGE-M3 Embedding"]
     B["Beat / Heartbeat"] --> R
@@ -83,7 +83,7 @@ flowchart LR
 |---|---|---|
 | Mneme API | 用户、知识库、文档、会话、任务编排与前端托管 | Mneme PostgreSQL |
 | Business Worker | 文档索引、Outbox 投影、Agent Run、自动化与维护任务 | PostgreSQL + Celery |
-| Memoria | 检索、记忆治理、回答生成、引用验证与记忆删除 | Memoria PostgreSQL |
+| Reminder | 检索、记忆治理、回答生成、引用验证与记忆删除 | Reminder PostgreSQL |
 | Redis | Celery broker/result、短期事件流、FIFO 与可续租租约 | 临时协调状态 |
 | Neo4j | 知识图谱读取模型 | 可重建派生状态 |
 | Milvus | 旧 Mneme 向量后端兼容 | 可选 profile |
@@ -91,7 +91,7 @@ flowchart LR
 关键不变量：
 
 - PostgreSQL 的 `agent_runs` 是耐久运行事实源，Redis 只负责短期协调；
-- Mneme 与 Memoria 禁止跨数据库读取或 join；
+- Mneme 与 Reminder 禁止跨数据库读取或 join；
 - Neo4j、Milvus 和其他投影必须可以由主事实重建；
 - 写动作只生成风险分级的审批提案；当前 `apply_enabled=false`，批准后也不会自动修改数据；
 - 日志、指标与删除审计只记录安全 ID、状态、计数和耗时，不记录 Prompt、答案、证据正文、记忆内容或凭据。
@@ -184,7 +184,7 @@ Mneme 使用两层配置：
 |---|---|
 | `DATABASE_URL` | Mneme 主数据库连接 |
 | `JWT_SECRET` | 用户 JWT 签名密钥 |
-| `MEMORY_AGENT_SERVICE_JWT_SECRET` | Mneme 调用 Memoria 的服务身份密钥 |
+| `MEMORY_AGENT_SERVICE_JWT_SECRET` | Mneme 调用 Reminder 的服务身份密钥 |
 | `DEEPSEEK_API_KEY` | 当前默认聊天、记忆提取与回答模型凭据 |
 | `MEMORIA_CONFIG_PATH` | Agent JSON 配置文件位置 |
 | `CELERY_BROKER_URL` / `CELERY_RESULT_BACKEND` | Celery broker 与结果存储 |
@@ -252,7 +252,7 @@ python -m alembic upgrade head
 
 - PostgreSQL/pgvector、Redis 与 Neo4j；
 - Mneme migration、API、business worker 与 beat；
-- Memoria database init、migration、API 与 worker；
+- Reminder database init、migration、API 与 worker；
 - 可选的 Milvus、etcd 与 MinIO `vector` profile。
 
 仅兼容旧 Mneme Milvus 向量后端时启用：
@@ -277,7 +277,7 @@ docker compose exec -T app python -m app.mneme.memoria.cli.operations
 
 ### 版本发布与回滚
 
-Git tag `vMAJOR.MINOR.PATCH` 会触发 GitHub Actions 完成后端、前端、集成测试与确定性 Memoria 评测，随后发布版本化 GHCR 镜像。
+Git tag `vMAJOR.MINOR.PATCH` 会触发 GitHub Actions 完成后端、前端、集成测试与确定性 Reminder 评测，随后发布版本化 GHCR 镜像。
 
 ```bash
 docker login ghcr.io
@@ -299,7 +299,7 @@ IMAGE_TAG=v0.0.9 bash deploy/release-image.sh
 
 Mneme 使用按事件 envelope 排序的删除 fence，确保迟到或重放的旧事件不能重新写入已经删除的文档、知识库或会话数据。投影回填复用在线 DTO 与 Outbox 契约，并使用原子 checkpoint 支持安全续跑。
 
-预览 Mneme 到 Memoria 的投影回填：
+预览 Mneme 到 Reminder 的投影回填：
 
 ```bash
 python -m app.mneme.memoria.cli.export_projection \
@@ -319,7 +319,7 @@ python -m app.mneme.memoria.cli.export_projection \
   --checkpoint var/memory-agent-backfill.json
 ```
 
-只读检查 Memoria 投影状态：
+只读检查 Reminder 投影状态：
 
 ```bash
 python -m app.mneme.memoria.server.cli.backfill \
@@ -347,7 +347,7 @@ python -m app.mneme.memoria.server.cli.embedding_backfill --documents --batch-si
 `MEMORY_AGENT_EMBEDDING_SPARSE_ENABLED=true` 并运行上述 document backfill。任一 owner/KB
 仍有活动 chunk 缺少 sparse 向量时，检索会继续使用原有 dense + keyword 路径。
 
-完整删除、重建和恢复流程见[部署指南中的 Memoria operations](deploy/DEPLOY.md#memoria-rebuild-and-deletion-operations)。
+完整删除、重建和恢复流程见[部署指南中的 Reminder operations](deploy/DEPLOY.md#memoria-rebuild-and-deletion-operations)。
 
 ## 项目结构
 
@@ -384,7 +384,7 @@ python -m ruff check app main.py tests
 python -m pytest -q -p no:cacheprovider -m "not integration"
 ```
 
-确定性 Memoria 评测：
+确定性 Reminder 评测：
 
 ```bash
 python -m app.mneme.memoria.server.eval.runner \
@@ -422,10 +422,10 @@ CI 会分别执行前端、后端和集成检查；只有三个阶段全部通�
 | [Runtime Contracts](docs/runtime-contracts.md) | 耐久运行、事件、Outbox、Evidence、Tool 与错误不变量 |
 | [Current State](docs/current-state.md) | 已完成能力、当前风险与下一阶段计划 |
 | [Answer Modes](docs/answer-modes.md) | 知识库、记忆、画像、分析与通用回答模式 |
-| [Memoria Module](docs/memoria-module.md) | Memoria Agent 模块边界与集成方式 |
+| [Reminder Module](docs/memoria-module.md) | Reminder Agent 模块边界与集成方式 |
 | [Exception Boundaries](docs/exception-boundaries.md) | 异常分类、传播与恢复约束 |
 | [Operations Runbook](docs/operations-runbook.md) | 监控、告警、备份、恢复与故障处理 |
-| [Deployment](deploy/DEPLOY.md) | 生产部署、发布、回滚及 Memoria 运维 |
+| [Deployment](deploy/DEPLOY.md) | 生产部署、发布、回滚及 Reminder 运维 |
 
 规范路径：[docs/architecture.md](docs/architecture.md)、[docs/runtime-contracts.md](docs/runtime-contracts.md)、[docs/current-state.md](docs/current-state.md)。
 
@@ -433,7 +433,7 @@ CI 会分别执行前端、后端和集成检查；只有三个阶段全部通�
 
 欢迎通过 [Issues](https://github.com/juemimgcd/Reminder/issues) 报告问题或提出建议。提交 Pull Request 前，请运行与改动范围对应的质量检查，并保持以下边界：
 
-- 不跨越 Mneme 与 Memoria 的数据库所有权；
+- 不跨越 Mneme 与 Reminder 的数据库所有权；
 - 不以进程内快捷路径替代耐久队列、Outbox 或审批；
 - 不在日志、指标或错误响应中暴露内容与凭据；
 - 所有派生状态必须保持可重建。
