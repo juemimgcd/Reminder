@@ -423,6 +423,8 @@ CI 会分别执行前端、后端和集成检查；只有三个阶段全部通�
 | [Current State](docs/current-state.md) | 已完成能力、当前风险与下一阶段计划 |
 | [Answer Modes](docs/answer-modes.md) | 知识库、记忆、画像、分析与通用回答模式 |
 | [Reminder Module](docs/memoria-module.md) | Reminder Agent 模块边界与集成方式 |
+| [Feishu Wiki MCP](docs/feishu-wiki-mcp.md) | 指定飞书知识库的只读目录、搜索与原文读取 |
+| [Confluence MCP](docs/confluence-mcp.md) | 指定 Confluence Cloud 空间的只读页面列表、搜索与正文读取 |
 | [Exception Boundaries](docs/exception-boundaries.md) | 异常分类、传播与恢复约束 |
 | [Operations Runbook](docs/operations-runbook.md) | 监控、告警、备份、恢复与故障处理 |
 | [Deployment](deploy/DEPLOY.md) | 生产部署、发布、回滚及 Reminder 运维 |
