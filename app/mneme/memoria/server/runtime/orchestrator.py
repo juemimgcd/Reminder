@@ -21,6 +21,7 @@ from app.mneme.memoria.server.multi_agent.executor import BoundedMultiAgentExecu
 from app.mneme.memoria.server.observability.context import observation_context, safe_log
 from app.mneme.memoria.server.repositories.runs import AnswerRunRepository
 from app.mneme.memoria.server.retrieval.contracts import RetrievedEvidence
+from app.mneme.memoria.server.runtime.citations import citation_coverage_satisfied
 from app.mneme.memoria.server.runtime.contracts import (
     AnswerRunData,
     GenerationRequest,
@@ -248,13 +249,9 @@ class MemoryAgent:
         evidence = await self._retriever.retrieve(
             retrieval_request(request, plan, expansion_index=0)
         )
-        expansion_count = 0
-        if not evidence and plan.max_expansions == 1:
-            expansion_count = 1
-            evidence = await self._retriever.retrieve(
-                retrieval_request(request, plan, expansion_index=1)
-            )
-        return evidence, expansion_count, None
+        # A second identical lookup cannot repair an empty result. The single
+        # Agent chooses a new query/source during generation instead.
+        return evidence, 0, None
 
     async def run(
         self,
@@ -608,6 +605,16 @@ class MemoryAgent:
                         generated,
                         evidence,
                     )
+                    if not citation_coverage_satisfied(generated, citation_result.citations):
+                        # Scope and quote filtering may remove a requirement's last
+                        # supporting citation after the model has declared coverage.
+                        generated = generated.model_copy(update={"answer": INSUFFICIENT_EVIDENCE_ANSWER})
+                        citation_result = citation_result.model_copy(update={
+                            "citations": [],
+                            "confidence": min(citation_result.confidence, 0.25),
+                            "insufficient_evidence": True,
+                            "uncertainty": "The validated citations do not cover every evidence requirement.",
+                        })
             except TimeoutError:
                 code = "AGENT_CITATION_TIMEOUT"
                 await self._record_failure(

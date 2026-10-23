@@ -62,6 +62,7 @@ class MemoryAgentSettings(BaseSettings):
     ANSWER_REASONING_TOTAL_OUTPUT_TOKENS: int = Field(default=3600, ge=100, le=16000)
     ANSWER_TOOL_MAX_CALLS: int = Field(default=4, ge=0, le=12)
     ANSWER_TOOL_OBSERVATION_MAX_CHARS: int = Field(default=2000, ge=200, le=8000)
+    ANSWER_TOOL_TIMEOUT_SECONDS: float = Field(default=8, gt=0, le=60)
     ANSWER_RUN_STALE_SECONDS: int = Field(default=180, ge=30, le=86400)
     ANSWER_RUN_RECOVERY_BATCH_SIZE: int = Field(default=100, ge=1, le=1000)
     MULTI_AGENT_FEATURE_ENABLED: bool = True
