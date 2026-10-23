@@ -5,6 +5,7 @@ Read tools inherit retrieval scope, while write tools remain proposal-only at th
 
 from __future__ import annotations
 
+import asyncio
 import json
 from dataclasses import dataclass
 from typing import Any, Literal
@@ -12,6 +13,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from app.mneme.memoria.actions import WRITE_ACTION_CATALOG
+from app.mneme.memoria.server.config import settings
 from app.mneme.memoria.server.retrieval.contracts import RetrievedEvidence
 from app.mneme.memoria.server.runtime.contracts import (
     RetrievalPlan,
@@ -156,6 +158,14 @@ class ScopedToolExecutor:
                 status="rejected",
                 message="tool is outside the selected answer-mode scope",
             )
+        if set(request.arguments) - {"query", "top_k"}:
+            return _terminal_execution(
+                tool_call_id=tool_call_id,
+                name=request.name,
+                risk_level=definition.risk_level,
+                status="rejected",
+                message="read tools accept only query and top_k; scope is server-controlled",
+            )
         query = request.arguments.get("query")
         if not isinstance(query, str) or not query.strip():
             return _terminal_execution(
@@ -217,8 +227,53 @@ class ScopedToolExecutor:
         }
         return ToolExecution(
             trace=trace,
-            observation={**trace, "message": "scoped evidence search completed"},
+            observation={
+                **trace,
+                "message": "scoped evidence search completed",
+                "evidence_ids": [item.evidence_id for item in bounded],
+            },
             evidence=bounded,
+        )
+
+
+def read_call_key(request: ToolRequest, *, context: ToolExecutionContext) -> tuple[str, str, int] | None:
+    """Deduplicate equivalent searches within one run without persisting queries."""
+    query = request.arguments.get("query")
+    if request.name not in READ_TOOL_DEFINITIONS or not isinstance(query, str):
+        return None
+    top_k = request.arguments.get("top_k", context.top_k)
+    if isinstance(top_k, bool) or not isinstance(top_k, int):
+        top_k = context.top_k
+    return request.name, " ".join(query.strip()[:8000].split()), max(1, min(top_k, context.top_k, 10))
+
+
+def repeated_search_execution(request: ToolRequest, *, tool_call_id: str) -> ToolExecution:
+    return _terminal_execution(
+        tool_call_id=tool_call_id,
+        name=request.name,
+        risk_level="read",
+        status="rejected",
+        message="identical search already completed; rewrite the query or use another allowed source",
+    )
+
+
+async def execute_with_timeout(
+    executor: ScopedToolExecutor,
+    request: ToolRequest,
+    *,
+    context: ToolExecutionContext,
+    tool_call_id: str,
+) -> ToolExecution:
+    try:
+        async with asyncio.timeout(settings.ANSWER_TOOL_TIMEOUT_SECONDS):
+            return await executor.execute(request, context=context, tool_call_id=tool_call_id)
+    except TimeoutError:
+        return _terminal_execution(
+            tool_call_id=tool_call_id,
+            name=request.name,
+            risk_level="read" if request.name in READ_TOOL_DEFINITIONS else "unknown",
+            status="failed",
+            message="tool timed out; no evidence was retrieved",
         )
 
 
@@ -241,8 +296,15 @@ def budget_exceeded_execution(request: ToolRequest, *, tool_call_id: str) -> Too
 
 
 def bounded_observations(observations: list[dict[str, Any]], *, max_chars: int) -> str:
-    encoded = json.dumps(observations, ensure_ascii=False, separators=(",", ":"))
-    return encoded[: max(0, max_chars)]
+    selected: list[dict[str, Any]] = []
+    encoded = ""
+    for item in reversed(observations):
+        candidate = json.dumps([item, *selected], ensure_ascii=False, separators=(",", ":"))
+        if len(candidate) > max_chars:
+            continue
+        selected.insert(0, item)
+        encoded = candidate
+    return encoded
 
 
 def _action_proposal(request: ToolRequest, *, tool_call_id: str) -> ToolExecution:

@@ -149,6 +149,21 @@ runtime uses the original bounded conversation context rather than sending an em
 
 ## Model calls and fallback
 
+- Private single-agent answers use the [bounded Agentic RAG workflow](agentic-rag.md):
+  initial hybrid retrieval, an ephemeral evidence-requirement assessment, and optional scoped
+  searches to fill gaps. A complete answer can finish on the first model call.
+- Missing requirements cannot disappear across steps. Evidence references must be visible in the
+  current prompt, and final citations must cover every supported requirement. The model still
+  judges semantic relevance; identifier validation is not an entailment guarantee.
+- Coverage uses the same ID/quote validation during planning and final delivery. Ephemeral
+  evidence-ID groups survive to the final filter; losing a group's last citation forces abstention.
+- Model retries and provider fallback share token, tool-call and step budgets. Responses that
+  fail schema validation are charged too. Explicit HTTP errors without completions consume calls
+  and time, without charging the requested maximum output as generated tokens. Missing usage is
+  flagged; transport failures with unknown outcomes are charged conservatively. Retries reserve
+  the last call for a configured fallback. Monetary cost is not calculated from token usage.
+- Read-tool calls have a configurable timeout, repeated completed searches are rejected, and
+  exhausted runs in any mode fail explicitly if the model has not reached a final answer.
 - Model credentials are internal fields and never appear in public responses or event payloads.
 - Each reasoning loop has bounded model-call, prompt-token, completion-token, tool-call and step
   budgets.

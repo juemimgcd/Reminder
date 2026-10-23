@@ -76,6 +76,7 @@ class ReasoningConfig(_ConfigModel):
 class ToolConfig(_ConfigModel):
     max_calls: int = Field(default=4, ge=0, le=12)
     observation_max_chars: int = Field(default=2000, ge=200, le=8000)
+    timeout_seconds: float = Field(default=8, gt=0, le=60)
 
 
 class MultiAgentConfig(_ConfigModel):
@@ -203,6 +204,7 @@ def memory_agent_settings(config: MemoriaConfig) -> dict[str, Any]:
         "ANSWER_REASONING_TOTAL_OUTPUT_TOKENS": agent.reasoning.total_output_tokens,
         "ANSWER_TOOL_MAX_CALLS": agent.tools.max_calls,
         "ANSWER_TOOL_OBSERVATION_MAX_CHARS": agent.tools.observation_max_chars,
+        "ANSWER_TOOL_TIMEOUT_SECONDS": agent.tools.timeout_seconds,
         "MULTI_AGENT_FEATURE_ENABLED": agent.multi_agent.enabled,
         "MULTI_AGENT_ROLLOUT_PERCENT": agent.multi_agent.rollout_percent,
         "MULTI_AGENT_ALLOWED_MODES": ",".join(agent.multi_agent.allowed_modes),

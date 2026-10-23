@@ -113,6 +113,7 @@ class GeneratedAnswer(BaseModel):
     model_attempts: list[dict[str, Any]] = Field(default_factory=list)
     tool_calls: list[dict[str, Any]] = Field(default_factory=list)
     tool_evidence: list[RetrievedEvidence] = Field(default_factory=list, exclude=True, repr=False)
+    required_citation_groups: list[list[str]] = Field(default_factory=list, exclude=True, repr=False)
     selected_provider: str | None = None
     selected_model: str | None = None
     fallback_used: bool = False
